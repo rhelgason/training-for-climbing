@@ -1,8 +1,10 @@
 import type {
   AssessmentRecord,
+  CheckinRecord,
   GoalPatch,
   GoalRecord,
   NewAssessment,
+  NewCheckin,
   NewGoal,
   NewSession,
   SessionRecord,
@@ -39,6 +41,12 @@ export interface Repository {
   listSessions(): Promise<SessionRecord[]>;
   getSession(id: string): Promise<SessionRecord | null>;
   deleteSession(id: string): Promise<void>;
+
+  // --- Energy-Emotion check-ins ---
+  saveCheckin(input: NewCheckin): Promise<CheckinRecord>;
+  /** Newest first (by reading time). */
+  listCheckins(): Promise<CheckinRecord[]>;
+  deleteCheckin(id: string): Promise<void>;
 
   // --- Usage events (analytics) ---
   recordEvent(event: Omit<UsageEventRecord, 'id'>): Promise<void>;

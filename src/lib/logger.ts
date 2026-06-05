@@ -54,6 +54,7 @@ export type UsageEvent =
   | { name: 'program_built'; props: { tier: string; areaCount: number } }
   | { name: 'session_logged'; props: { areaCount: number } }
   | { name: 'session_deleted'; props?: Record<string, never> }
+  | { name: 'checkin_logged'; props: { quadrant: string } }
   | { name: 'benchmark_recorded'; props: { testId: string } };
 
 export type EventSink = (event: {

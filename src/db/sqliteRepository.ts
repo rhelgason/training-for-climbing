@@ -8,9 +8,11 @@ import type { Responses } from '../features/assess/scoring';
 import type { Repository } from './repository';
 import type {
   AssessmentRecord,
+  CheckinRecord,
   GoalPatch,
   GoalRecord,
   NewAssessment,
+  NewCheckin,
   NewGoal,
   NewSession,
   SessionRecord,
@@ -42,6 +44,15 @@ interface SessionRow {
   date: number;
   focus_areas: string;
   notes: string | null;
+}
+
+interface CheckinRow {
+  id: string;
+  created_at: number;
+  time: number;
+  energy: number;
+  emotion: number;
+  note: string | null;
 }
 
 interface GoalRow {
@@ -103,6 +114,14 @@ export class SqliteRepository implements Repository {
         focus_areas TEXT NOT NULL,
         notes TEXT
       );
+      CREATE TABLE IF NOT EXISTS checkins (
+        id TEXT PRIMARY KEY NOT NULL,
+        created_at INTEGER NOT NULL,
+        time INTEGER NOT NULL,
+        energy INTEGER NOT NULL,
+        emotion INTEGER NOT NULL,
+        note TEXT
+      );
       CREATE TABLE IF NOT EXISTS events (
         id TEXT PRIMARY KEY NOT NULL,
         name TEXT NOT NULL,
@@ -112,6 +131,7 @@ export class SqliteRepository implements Repository {
       CREATE INDEX IF NOT EXISTS idx_assessments_created_at ON assessments (created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_goals_created_at ON goals (created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_sessions_date ON sessions (date DESC);
+      CREATE INDEX IF NOT EXISTS idx_checkins_time ON checkins (time DESC);
       CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events (timestamp DESC);
     `);
     log.info('SQLite repository initialised');
@@ -264,6 +284,38 @@ export class SqliteRepository implements Repository {
     await this.getDb().runAsync(`DELETE FROM sessions WHERE id = ?`, id);
   }
 
+  async saveCheckin(input: NewCheckin): Promise<CheckinRecord> {
+    const record: CheckinRecord = {
+      id: newId(),
+      createdAt: input.createdAt ?? Date.now(),
+      time: input.time,
+      energy: input.energy,
+      emotion: input.emotion,
+      note: input.note,
+    };
+    await this.getDb().runAsync(
+      `INSERT INTO checkins (id, created_at, time, energy, emotion, note) VALUES (?, ?, ?, ?, ?, ?)`,
+      record.id,
+      record.createdAt,
+      record.time,
+      record.energy,
+      record.emotion,
+      record.note ?? null,
+    );
+    return record;
+  }
+
+  async listCheckins(): Promise<CheckinRecord[]> {
+    const rows = await this.getDb().getAllAsync<CheckinRow>(
+      `SELECT * FROM checkins ORDER BY time DESC`,
+    );
+    return rows.map(rowToCheckin);
+  }
+
+  async deleteCheckin(id: string): Promise<void> {
+    await this.getDb().runAsync(`DELETE FROM checkins WHERE id = ?`, id);
+  }
+
   async recordEvent(event: Omit<UsageEventRecord, 'id'>): Promise<void> {
     await this.getDb().runAsync(
       `INSERT INTO events (id, name, props, timestamp) VALUES (?, ?, ?, ?)`,
@@ -323,6 +375,17 @@ function rowToSession(row: SessionRow): SessionRecord {
     date: row.date,
     focusAreas: safeParse<HierarchyAreaId[]>(row.focus_areas, []),
     notes: row.notes ?? undefined,
+  };
+}
+
+function rowToCheckin(row: CheckinRow): CheckinRecord {
+  return {
+    id: row.id,
+    createdAt: row.created_at,
+    time: row.time,
+    energy: row.energy,
+    emotion: row.emotion,
+    note: row.note ?? undefined,
   };
 }
 

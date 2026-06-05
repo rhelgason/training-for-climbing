@@ -2,9 +2,11 @@ import { newId } from '../lib/ids';
 import type { Repository } from './repository';
 import type {
   AssessmentRecord,
+  CheckinRecord,
   GoalPatch,
   GoalRecord,
   NewAssessment,
+  NewCheckin,
   NewGoal,
   NewSession,
   SessionRecord,
@@ -19,6 +21,7 @@ export class InMemoryRepository implements Repository {
   private assessments: AssessmentRecord[] = [];
   private goals: GoalRecord[] = [];
   private sessions: SessionRecord[] = [];
+  private checkins: CheckinRecord[] = [];
   private events: UsageEventRecord[] = [];
 
   async init(): Promise<void> {
@@ -105,6 +108,27 @@ export class InMemoryRepository implements Repository {
 
   async deleteSession(id: string): Promise<void> {
     this.sessions = this.sessions.filter((s) => s.id !== id);
+  }
+
+  async saveCheckin(input: NewCheckin): Promise<CheckinRecord> {
+    const record: CheckinRecord = {
+      id: newId(),
+      createdAt: input.createdAt ?? Date.now(),
+      time: input.time,
+      energy: input.energy,
+      emotion: input.emotion,
+      note: input.note,
+    };
+    this.checkins.push(record);
+    return record;
+  }
+
+  async listCheckins(): Promise<CheckinRecord[]> {
+    return [...this.checkins].sort((a, b) => b.time - a.time);
+  }
+
+  async deleteCheckin(id: string): Promise<void> {
+    this.checkins = this.checkins.filter((c) => c.id !== id);
   }
 
   async recordEvent(event: Omit<UsageEventRecord, 'id'>): Promise<void> {
