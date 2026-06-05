@@ -7,6 +7,7 @@ import {
   determineWeakestArea,
   evaluate,
   getFlaggedWeaknesses,
+  groupFlaggedByArea,
   isBalanced,
   isComplete,
   maxScoresByArea,
@@ -116,6 +117,20 @@ describe('getFlaggedWeaknesses', () => {
 
   it('returns nothing when all answers are strong', () => {
     expect(getFlaggedWeaknesses(uniform(5))).toHaveLength(0);
+  });
+});
+
+describe('groupFlaggedByArea', () => {
+  it('groups flagged items by triad area in canonical order, omitting empties', () => {
+    // q3 physical, q2 technical, q1 mental all flagged.
+    const groups = groupFlaggedByArea(getFlaggedWeaknesses(withOverrides(5, { 1: 0, 2: 1, 3: 2 })));
+    expect(groups.map((g) => g.area)).toEqual(['mental', 'technical', 'physical']);
+    expect(groups.every((g) => g.items.length === 1)).toBe(true);
+  });
+
+  it('omits areas with no flagged items', () => {
+    const groups = groupFlaggedByArea(getFlaggedWeaknesses(withOverrides(5, { 2: 1 })));
+    expect(groups.map((g) => g.area)).toEqual(['technical']);
   });
 });
 

@@ -119,6 +119,23 @@ export function getFlaggedWeaknesses(responses: Responses): FlaggedWeakness[] {
     .sort((a, b) => a.rating - b.rating || a.question.id - b.question.id);
 }
 
+export interface FlaggedGroup {
+  area: TriadArea;
+  items: FlaggedWeakness[];
+}
+
+/**
+ * Flagged weaknesses grouped by triad area, in canonical triad order, with
+ * empty areas omitted. The book says to "sort and group them according to the
+ * aspects of the performance triad."
+ */
+export function groupFlaggedByArea(flagged: FlaggedWeakness[]): FlaggedGroup[] {
+  return TRIAD_AREAS.map((area) => ({
+    area,
+    items: flagged.filter((f) => f.question.triad === area),
+  })).filter((group) => group.items.length > 0);
+}
+
 /** Full result bundle for a completed (or partial) set of responses. */
 export function evaluate(responses: Responses): AssessmentResult {
   const scores = computeTriadScores(responses);

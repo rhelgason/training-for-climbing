@@ -12,7 +12,7 @@ import type { AssessmentRecord } from '../../db';
 import { useRepository } from '../../providers/RepositoryProvider';
 import type { AssessStackParamList } from '../../navigation/types';
 import { colors, fontSize, spacing } from '../../theme';
-import { evaluate } from './scoring';
+import { evaluate, groupFlaggedByArea } from './scoring';
 
 type Props = NativeStackScreenProps<AssessStackParamList, 'Results'>;
 
@@ -85,14 +85,18 @@ export function ResultsScreen({ navigation, route }: Props) {
           strategies that address them.
         </Text>
       )}
-      {result.flagged.map(({ question, rating }) => (
-        <Card key={question.id} style={styles.flag}>
-          <View style={styles.flagHeader}>
-            <Text style={styles.flagArea}>{TRIAD_LABELS[question.triad]}</Text>
-            <Text style={styles.flagScore}>rated {rating}/5</Text>
-          </View>
-          <Text style={styles.flagPrompt}>{question.prompt}</Text>
-        </Card>
+      {groupFlaggedByArea(result.flagged).map((group) => (
+        <View key={group.area} style={styles.flagGroup}>
+          <Text style={styles.flagGroupTitle}>{TRIAD_LABELS[group.area]}</Text>
+          {group.items.map(({ question, rating }) => (
+            <Card key={question.id} style={styles.flag}>
+              <View style={styles.flagHeader}>
+                <Text style={styles.flagScore}>rated {rating}/5</Text>
+              </View>
+              <Text style={styles.flagPrompt}>{question.prompt}</Text>
+            </Card>
+          ))}
+        </View>
       ))}
 
       <View style={styles.actions}>
@@ -132,9 +136,17 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     marginBottom: spacing.md,
   },
+  flagGroup: { marginBottom: spacing.md },
+  flagGroupTitle: {
+    color: colors.primary,
+    fontSize: fontSize.sm,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: spacing.sm,
+  },
   flag: { marginBottom: spacing.sm },
-  flagHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.xs },
-  flagArea: { color: colors.primary, fontSize: fontSize.sm, fontWeight: '700' },
+  flagHeader: { flexDirection: 'row', justifyContent: 'flex-end', marginBottom: spacing.xs },
   flagScore: { color: colors.warning, fontSize: fontSize.sm },
   flagPrompt: { color: colors.text, fontSize: fontSize.md, lineHeight: 22 },
   actions: { marginTop: spacing.lg, gap: spacing.md },
