@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports -- platform-conditional lazy load of the native SQLite module */
 import { Platform } from 'react-native';
 
 import { log } from '../lib/logger';
