@@ -42,7 +42,7 @@ src/
   content/      # book-derived data: self-assessment, fitness tests, glossary
   features/
     assess/     # Self-Assessment flow, scoring logic (pure, tested), results, history
-    plan/       # (roadmap) goals & periodized program builder
+    plan/       # goals (CRUD) + program builder, with tested logic
     train/      # (roadmap) session logger, exercise library, check-ins
     review/     # glossary browser, chapter summaries (roadmap)
   db/           # Repository interface + InMemory + SQLite implementations
@@ -65,7 +65,13 @@ src/
 
 ## Status
 
-Phase 1 (MVP) is in place: the **Self-Assessment** — 30 questions → Mental/Technical/Physical
-triad scoring, weakest-area callout, flagged weaknesses with coaching tips and chapter
-references, saved attempts, and a history/trend view — plus a searchable **Glossary**. Plan and
-Train are stubbed with their roadmaps. See the plan file for the full phased roadmap.
+- **Phase 1 — Assess (done):** the **Self-Assessment** — 30 questions → Mental/Technical/Physical
+  triad scoring, weakest-area callout, flagged weaknesses with coaching tips and chapter
+  references, saved attempts, and a history/trend view — plus a searchable **Glossary**.
+- **Phase 2 — Plan (done):** **Goals** across short/medium/long horizons (each with a mission,
+  a "what I'll give up", an optional deadline, and a triad link) with add/edit/complete/delete,
+  and a **Program builder** that turns an ability tier + chosen focus areas into an ordered
+  session plan with rest guidance.
+- **Next:** Phase 3 — Train (session logger, exercise library, energy/emotion check-in).
+
+Train is stubbed with its roadmap. See the plan file for the full phased roadmap.
