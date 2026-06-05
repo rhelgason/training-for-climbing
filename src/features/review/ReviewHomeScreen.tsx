@@ -1,0 +1,62 @@
+import React from 'react';
+import { StyleSheet, Text } from 'react-native';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+
+import { Button } from '../../components/Button';
+import { Card } from '../../components/Card';
+import { Screen } from '../../components/Screen';
+import { GLOSSARY } from '../../content/glossary';
+import type { ReviewStackParamList } from '../../navigation/types';
+import { colors, fontSize, spacing } from '../../theme';
+
+type Props = NativeStackScreenProps<ReviewStackParamList, 'ReviewHome'>;
+
+export function ReviewHomeScreen({ navigation }: Props) {
+  return (
+    <Screen>
+      <Text style={styles.title}>Review</Text>
+      <Text style={styles.subtitle}>
+        Refresh the concepts behind your training as you read the book.
+      </Text>
+
+      <Card style={styles.card}>
+        <Text style={styles.cardTitle}>Glossary</Text>
+        <Text style={styles.cardBody}>
+          {GLOSSARY.length} key climbing and training terms, searchable.
+        </Text>
+        <Button
+          label="Open glossary"
+          onPress={() => navigation.navigate('Glossary')}
+          style={styles.action}
+        />
+      </Card>
+
+      <Card style={styles.card}>
+        <Text style={styles.cardTitle}>Chapter summaries</Text>
+        <Text style={styles.cardBody}>
+          Concise refreshers for Mental, Technique, Nutrition, Recovery, and Injury — coming in a
+          later phase.
+        </Text>
+      </Card>
+    </Screen>
+  );
+}
+
+const styles = StyleSheet.create({
+  title: { color: colors.text, fontSize: fontSize.xxl, fontWeight: '700' },
+  subtitle: {
+    color: colors.textMuted,
+    fontSize: fontSize.md,
+    marginTop: spacing.sm,
+    lineHeight: 22,
+  },
+  card: { marginTop: spacing.lg },
+  cardTitle: { color: colors.text, fontSize: fontSize.lg, fontWeight: '600' },
+  cardBody: {
+    color: colors.textMuted,
+    fontSize: fontSize.md,
+    marginTop: spacing.xs,
+    lineHeight: 22,
+  },
+  action: { marginTop: spacing.md },
+});
