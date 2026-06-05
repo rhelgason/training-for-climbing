@@ -6,6 +6,7 @@ import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { Screen } from '../../components/Screen';
 import { TriadBars } from '../../components/TriadBars';
+import { WEAKNESS_THRESHOLD } from '../../content/selfAssessment';
 import { TRIAD_LABELS } from '../../content/types';
 import type { AssessmentRecord } from '../../db';
 import { useRepository } from '../../providers/RepositoryProvider';
@@ -74,21 +75,23 @@ export function ResultsScreen({ navigation, route }: Props) {
 
       <Text style={styles.sectionTitle}>
         {result.flagged.length > 0
-          ? `Targets to train (${result.flagged.length})`
-          : 'No flagged weaknesses — nicely done!'}
+          ? `Weak spots — rated ${WEAKNESS_THRESHOLD} or lower (${result.flagged.length})`
+          : `No statements rated ${WEAKNESS_THRESHOLD} or lower — nicely done!`}
       </Text>
+      {result.flagged.length > 0 && (
+        <Text style={styles.flagIntro}>
+          Each of these is a specific element holding you back. Focus your short- and medium-term
+          goals on the five or six lowest-scoring items, and look to the book for the exercises and
+          strategies that address them.
+        </Text>
+      )}
       {result.flagged.map(({ question, rating }) => (
         <Card key={question.id} style={styles.flag}>
           <View style={styles.flagHeader}>
             <Text style={styles.flagArea}>{TRIAD_LABELS[question.triad]}</Text>
-            <Text style={styles.flagScore}>scored {rating}/5</Text>
+            <Text style={styles.flagScore}>rated {rating}/5</Text>
           </View>
           <Text style={styles.flagPrompt}>{question.prompt}</Text>
-          <Text style={styles.flagTip}>{question.tip}</Text>
-          <Text style={styles.flagRef}>
-            Revisit chapter{question.chapterRefs.length > 1 ? 's' : ''}{' '}
-            {question.chapterRefs.join(', ')}
-          </Text>
         </Card>
       ))}
 
@@ -123,22 +126,16 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
     marginBottom: spacing.sm,
   },
+  flagIntro: {
+    color: colors.textMuted,
+    fontSize: fontSize.sm,
+    lineHeight: 20,
+    marginBottom: spacing.md,
+  },
   flag: { marginBottom: spacing.sm },
   flagHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.xs },
   flagArea: { color: colors.primary, fontSize: fontSize.sm, fontWeight: '700' },
   flagScore: { color: colors.warning, fontSize: fontSize.sm },
   flagPrompt: { color: colors.text, fontSize: fontSize.md, lineHeight: 22 },
-  flagTip: {
-    color: colors.textMuted,
-    fontSize: fontSize.sm,
-    marginTop: spacing.sm,
-    lineHeight: 20,
-  },
-  flagRef: {
-    color: colors.textMuted,
-    fontSize: fontSize.sm,
-    marginTop: spacing.sm,
-    fontStyle: 'italic',
-  },
   actions: { marginTop: spacing.lg, gap: spacing.md },
 });

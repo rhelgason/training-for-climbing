@@ -41,10 +41,10 @@ describe('content integrity', () => {
     expect(questionCountByArea()).toEqual({ mental: 10, technical: 10, physical: 10 });
   });
 
-  it('gives every question a tip and at least one chapter reference', () => {
+  it('follows the book’s Mental → Technical → Physical cycle by question number', () => {
+    const cycle = ['mental', 'technical', 'physical'] as const;
     for (const q of SELF_ASSESSMENT_QUESTIONS) {
-      expect(q.tip.length).toBeGreaterThan(0);
-      expect(q.chapterRefs.length).toBeGreaterThan(0);
+      expect(q.triad).toBe(cycle[(q.id - 1) % 3]);
     }
   });
 });

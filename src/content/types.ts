@@ -26,10 +26,6 @@ export interface AssessmentQuestion {
   prompt: string;
   /** Which triad column this question contributes to (book Figure 2.1). */
   triad: TriadArea;
-  /** Paraphrased coaching tip for a low score (book Appendix C). */
-  tip: string;
-  /** Chapter(s) to revisit for this weakness. */
-  chapterRefs: number[];
 }
 
 /** A single physical benchmark in the Fitness Evaluation (Appendix D). */
