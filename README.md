@@ -72,12 +72,12 @@ src/
   a "what I'll give up", an optional deadline, and a triad link) with add/edit/complete/delete,
   and a **Program builder** that turns an ability tier + chosen focus areas into an ordered
   session plan with rest guidance.
-- **Phase 3 — Train (in progress):** a **training log** — record sessions (when, focus areas
-  from the 5-step hierarchy, notes), see recent history, and a **rest/streak indicator** that
-  warns at 3+ consecutive days (Hörst's overtraining caution). Still to come this phase:
-  the **Energy-Emotion Levels** check-in and the **exercise library** (both need 3rd-edition
-  specifics transcribed from the paperback).
-- **Next:** the daily "what should I work on today" recommendation, synthesizing weakest area +
-  goals + recent training.
+- **Phase 3 — Train (done):** a **training log** (sessions: when, focus areas, notes) with a
+  **rest/streak indicator** (warns at 3+ days in a row), the **Energy-Emotion Levels** check-in
+  (energy 0–10 × emotion −5..+5 → quadrants + an hourly line chart), and a browsable
+  **exercise library** (Ch 6–7).
+- **Today recommendation:** the Train tab opens with a **"Today"** card that synthesizes your
+  weakest triad area + active goals + recent training into a faithful suggestion (rest after 3
+  days in a row; otherwise target your weakest area; take the assessment first if you haven't).
 
 See the plan file for the full phased roadmap.
