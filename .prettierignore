@@ -1,0 +1,9 @@
+node_modules/
+.expo/
+dist/
+web-build/
+coverage/
+ios/
+android/
+package-lock.json
+*.pdf
