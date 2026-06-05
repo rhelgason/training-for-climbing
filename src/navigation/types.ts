@@ -17,6 +17,8 @@ export type PlanStackParamList = {
 export type TrainStackParamList = {
   TrainHome: undefined;
   SessionForm: undefined;
+  EnergyEmotion: undefined;
+  CheckinForm: undefined;
 };
 
 export type ReviewStackParamList = {

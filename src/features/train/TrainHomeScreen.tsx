@@ -72,6 +72,12 @@ export function TrainHomeScreen({ navigation }: Props) {
         onPress={() => navigation.navigate('SessionForm')}
         style={styles.add}
       />
+      <Button
+        label="Energy & emotion check-in"
+        variant="secondary"
+        onPress={() => navigation.navigate('EnergyEmotion')}
+        style={styles.secondaryAction}
+      />
 
       <Text style={styles.sectionTitle}>Recent</Text>
       {sessions.length === 0 ? (
@@ -113,6 +119,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   add: { marginTop: spacing.lg },
+  secondaryAction: { marginTop: spacing.sm },
   sectionTitle: {
     color: colors.text,
     fontSize: fontSize.lg,
