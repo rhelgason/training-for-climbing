@@ -43,7 +43,7 @@ src/
   features/
     assess/     # Self-Assessment flow, scoring logic (pure, tested), results, history
     plan/       # goals (CRUD) + program builder, with tested logic
-    train/      # (roadmap) session logger, exercise library, check-ins
+    train/      # session log + rest/streak awareness, with tested logic
     review/     # glossary browser, chapter summaries (roadmap)
   db/           # Repository interface + InMemory + SQLite implementations
   lib/          # logger + structured usage events, ids
@@ -72,6 +72,12 @@ src/
   a "what I'll give up", an optional deadline, and a triad link) with add/edit/complete/delete,
   and a **Program builder** that turns an ability tier + chosen focus areas into an ordered
   session plan with rest guidance.
-- **Next:** Phase 3 — Train (session logger, exercise library, energy/emotion check-in).
+- **Phase 3 — Train (in progress):** a **training log** — record sessions (when, focus areas
+  from the 5-step hierarchy, notes), see recent history, and a **rest/streak indicator** that
+  warns at 3+ consecutive days (Hörst's overtraining caution). Still to come this phase:
+  the **Energy-Emotion Levels** check-in and the **exercise library** (both need 3rd-edition
+  specifics transcribed from the paperback).
+- **Next:** the daily "what should I work on today" recommendation, synthesizing weakest area +
+  goals + recent training.
 
-Train is stubbed with its roadmap. See the plan file for the full phased roadmap.
+See the plan file for the full phased roadmap.
