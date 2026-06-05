@@ -47,3 +47,31 @@ export interface GlossaryEntry {
   term: string;
   definition: string;
 }
+
+/** Display grouping for exercises (book Chapters 6–7). */
+export type ExerciseCategory =
+  | 'finger-forearm'
+  | 'pull'
+  | 'power'
+  | 'endurance'
+  | 'core'
+  | 'antagonist'
+  | 'flexibility';
+
+export const EXERCISE_CATEGORY_LABELS: Record<ExerciseCategory, string> = {
+  'finger-forearm': 'Finger & forearm',
+  pull: 'Pull muscles',
+  power: 'Power',
+  endurance: 'Endurance',
+  core: 'Core',
+  antagonist: 'Antagonist',
+  flexibility: 'Flexibility',
+};
+
+/** A training exercise from the book's conditioning chapters. */
+export interface Exercise {
+  id: string;
+  name: string;
+  category: ExerciseCategory;
+  description: string;
+}
