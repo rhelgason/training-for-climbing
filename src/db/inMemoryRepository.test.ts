@@ -1,5 +1,5 @@
 import { InMemoryRepository } from './inMemoryRepository';
-import type { NewAssessment } from './types';
+import type { NewAssessment, NewGoal } from './types';
 
 function sampleAssessment(overrides: Partial<NewAssessment> = {}): NewAssessment {
   return {
@@ -43,6 +43,32 @@ describe('InMemoryRepository', () => {
     const saved = await repo.saveAssessment(input);
     input.responses[1] = 0;
     expect(saved.responses[1]).toBe(5);
+  });
+
+  it('saves a goal with defaults and lists newest-first', async () => {
+    const repo = new InMemoryRepository();
+    const newGoal: NewGoal = { horizon: 'medium', title: 'Redpoint my first 5.11' };
+    const older = await repo.saveGoal({ ...newGoal, createdAt: 1000 });
+    const newer = await repo.saveGoal({ ...newGoal, createdAt: 2000, title: 'Send the project' });
+    expect(older.status).toBe('active');
+    const list = await repo.listGoals();
+    expect(list.map((g) => g.id)).toEqual([newer.id, older.id]);
+  });
+
+  it('updates a goal and returns null for unknown ids', async () => {
+    const repo = new InMemoryRepository();
+    const goal = await repo.saveGoal({ horizon: 'short', title: 'Focus on footwork today' });
+    const updated = await repo.updateGoal(goal.id, { status: 'done', completedAt: 5 });
+    expect(updated).toMatchObject({ status: 'done', completedAt: 5 });
+    expect(await repo.updateGoal('nope', { status: 'done' })).toBeNull();
+  });
+
+  it('deletes a goal', async () => {
+    const repo = new InMemoryRepository();
+    const goal = await repo.saveGoal({ horizon: 'long', title: 'Climb 5.13' });
+    await repo.deleteGoal(goal.id);
+    expect(await repo.getGoal(goal.id)).toBeNull();
+    expect(await repo.listGoals()).toHaveLength(0);
   });
 
   it('records and lists usage events newest-first with limit', async () => {

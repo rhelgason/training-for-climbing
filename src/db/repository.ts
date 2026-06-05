@@ -1,4 +1,11 @@
-import type { AssessmentRecord, NewAssessment, UsageEventRecord } from './types';
+import type {
+  AssessmentRecord,
+  GoalPatch,
+  GoalRecord,
+  NewAssessment,
+  NewGoal,
+  UsageEventRecord,
+} from './types';
 
 /**
  * Persistence boundary for the whole app. Feature code depends on this
@@ -14,6 +21,15 @@ export interface Repository {
   /** Newest first. */
   listAssessments(): Promise<AssessmentRecord[]>;
   getAssessment(id: string): Promise<AssessmentRecord | null>;
+
+  // --- Goals ---
+  saveGoal(input: NewGoal): Promise<GoalRecord>;
+  /** Newest first. */
+  listGoals(): Promise<GoalRecord[]>;
+  getGoal(id: string): Promise<GoalRecord | null>;
+  /** Returns the updated record, or null if the id does not exist. */
+  updateGoal(id: string, patch: GoalPatch): Promise<GoalRecord | null>;
+  deleteGoal(id: string): Promise<void>;
 
   // --- Usage events (analytics) ---
   recordEvent(event: Omit<UsageEventRecord, 'id'>): Promise<void>;
