@@ -1,0 +1,88 @@
+{
+  "name": "training-for-climbing",
+  "version": "0.1.0",
+  "main": "index.ts",
+  "dependencies": {
+    "@react-navigation/bottom-tabs": "^7.16.2",
+    "@react-navigation/native": "^7.2.5",
+    "@react-navigation/native-stack": "^7.16.0",
+    "babel-preset-expo": "~56.0.0",
+    "drizzle-orm": "^0.45.2",
+    "expo": "~56.0.8",
+    "expo-crypto": "~56.0.4",
+    "expo-sqlite": "~56.0.4",
+    "expo-status-bar": "~56.0.4",
+    "react": "19.2.3",
+    "react-native": "0.85.3",
+    "react-native-logs": "^5.6.0",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-screens": "4.25.2",
+    "react-native-svg": "15.15.4",
+    "zustand": "^5.0.14"
+  },
+  "devDependencies": {
+    "@testing-library/react-native": "^14.0.0",
+    "@types/jest": "^29.5.12",
+    "@types/react": "~19.2.2",
+    "drizzle-kit": "^0.31.10",
+    "eslint": "^9.39.4",
+    "eslint-config-expo": "^56.0.4",
+    "eslint-config-prettier": "^10.1.8",
+    "husky": "^9.1.7",
+    "jest": "^29.7.0",
+    "jest-expo": "^56.0.4",
+    "lint-staged": "^17.0.7",
+    "prettier": "^3.8.3",
+    "react-test-renderer": "19.2.3",
+    "typescript": "~6.0.3"
+  },
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "jest",
+    "test:coverage": "jest --coverage",
+    "ci": "npm run typecheck && npm run lint && npm run test:coverage",
+    "prepare": "husky"
+  },
+  "jest": {
+    "preset": "jest-expo",
+    "watchman": false,
+    "setupFilesAfterEnv": [
+      "<rootDir>/jest.setup.ts"
+    ],
+    "transformIgnorePatterns": [
+      "node_modules/(?!((jest-)?react-native|@react-native(-community)?|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@unimodules/.*|unimodules|sentry-expo|native-base|react-native-svg|react-native-logs))"
+    ],
+    "collectCoverageFrom": [
+      "src/**/*.{ts,tsx}",
+      "!src/**/*.d.ts",
+      "!src/**/__tests__/**",
+      "!src/**/*.test.{ts,tsx}"
+    ],
+    "coverageThreshold": {
+      "global": {
+        "statements": 20,
+        "branches": 20,
+        "functions": 20,
+        "lines": 20
+      }
+    }
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md,js}": [
+      "prettier --write"
+    ]
+  },
+  "private": true
+}

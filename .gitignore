@@ -1,0 +1,42 @@
+# === Source book (copyrighted — never commit) ===
+*.pdf
+training-for-climbing.pdf
+
+# === Node / JS ===
+node_modules/
+npm-debug.*
+yarn-error.log
+.pnp.*
+
+# === Expo / React Native ===
+.expo/
+.expo-shared/
+dist/
+web-build/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# === Native builds ===
+ios/
+android/
+*.ipa
+*.apk
+*.aab
+
+# === Env / secrets ===
+.env
+.env.*
+!.env.example
+
+# === Testing / coverage ===
+coverage/
+
+# === Editor / OS ===
+.DS_Store
+.idea/
+.vscode/
+*.log
