@@ -5,7 +5,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { AssessStack } from './AssessStack';
 import { PlanStack } from './PlanStack';
 import { ReviewStack } from './ReviewStack';
-import { TrainScreen } from '../features/train/TrainScreen';
+import { TrainStack } from './TrainStack';
 import type { RootTabParamList } from './types';
 import { colors } from '../theme';
 
@@ -33,7 +33,7 @@ export function RootTabs() {
     >
       <Tab.Screen name="Assess" component={AssessStack} />
       <Tab.Screen name="Plan" component={PlanStack} />
-      <Tab.Screen name="Train" component={TrainScreen} />
+      <Tab.Screen name="Train" component={TrainStack} />
       <Tab.Screen name="Review" component={ReviewStack} />
     </Tab.Navigator>
   );

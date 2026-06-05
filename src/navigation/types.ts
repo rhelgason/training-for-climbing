@@ -14,6 +14,11 @@ export type PlanStackParamList = {
   ProgramBuilder: undefined;
 };
 
+export type TrainStackParamList = {
+  TrainHome: undefined;
+  SessionForm: undefined;
+};
+
 export type ReviewStackParamList = {
   ReviewHome: undefined;
   Glossary: undefined;
@@ -22,6 +27,6 @@ export type ReviewStackParamList = {
 export type RootTabParamList = {
   Assess: NavigatorScreenParams<AssessStackParamList>;
   Plan: NavigatorScreenParams<PlanStackParamList>;
-  Train: undefined;
+  Train: NavigatorScreenParams<TrainStackParamList>;
   Review: NavigatorScreenParams<ReviewStackParamList>;
 };
