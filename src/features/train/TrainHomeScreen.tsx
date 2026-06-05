@@ -12,7 +12,7 @@ import { now } from '../../lib/clock';
 import { useRepository } from '../../providers/RepositoryProvider';
 import type { TrainStackParamList } from '../../navigation/types';
 import { colors, fontSize, spacing } from '../../theme';
-import { currentStreak, restRecommended } from './log';
+import { buildDailyRecommendation, type DailyRecommendation } from '../today/recommend';
 
 type Props = NativeStackScreenProps<TrainStackParamList, 'TrainHome'>;
 
@@ -28,43 +28,57 @@ function formatDate(ms: number): string {
   });
 }
 
+interface LoadState {
+  sessions: SessionRecord[];
+  recommendation: DailyRecommendation;
+}
+
 export function TrainHomeScreen({ navigation }: Props) {
   const repo = useRepository();
-  const [sessions, setSessions] = useState<SessionRecord[] | null>(null);
+  const [state, setState] = useState<LoadState | null>(null);
 
   useFocusEffect(
     useCallback(() => {
       let on = true;
-      repo.listSessions().then((s) => {
-        if (on) setSessions(s);
-      });
+      Promise.all([repo.listSessions(), repo.listAssessments(), repo.listGoals()]).then(
+        ([sessions, assessments, goals]) => {
+          if (!on) return;
+          const recommendation = buildDailyRecommendation({
+            weakestArea: assessments[0]?.weakestArea ?? null,
+            goals,
+            sessions,
+            nowMs: now(),
+          });
+          setState({ sessions, recommendation });
+        },
+      );
       return () => {
         on = false;
       };
     }, [repo]),
   );
 
-  if (sessions === null) return <Screen />;
-
-  const streak = currentStreak(sessions, now());
-  const shouldRest = restRecommended(streak);
+  if (state === null) return <Screen />;
+  const { sessions, recommendation: rec } = state;
 
   return (
     <Screen>
       <Text style={styles.title}>Train</Text>
-      <Text style={styles.subtitle}>
-        Keep a training notebook. Logging your days lets you spot patterns and avoid overtraining.
-      </Text>
 
-      <Card style={[styles.streakCard, shouldRest && styles.streakWarn]}>
-        <Text style={styles.streakValue}>
-          {streak === 0 ? 'Rested today' : `${streak}-day streak`}
-        </Text>
-        <Text style={styles.streakNote}>
-          {shouldRest
-            ? 'You’ve trained 3+ days in a row — Hörst warns this risks overtraining. Consider a rest day.'
-            : 'Climbing or training 3–4 days in a row risks overtraining; build in rest days.'}
-        </Text>
+      <Card style={[styles.todayCard, rec.kind === 'rest' && styles.restCard]}>
+        <Text style={styles.todayLabel}>Today</Text>
+        <Text style={styles.todayHeadline}>{rec.headline}</Text>
+        <Text style={styles.todayDetail}>{rec.detail}</Text>
+        {rec.goalReminders.length > 0 && (
+          <View style={styles.goals}>
+            <Text style={styles.goalsLabel}>Keep in mind</Text>
+            {rec.goalReminders.map((g) => (
+              <Text key={g} style={styles.goalItem}>
+                • {g}
+              </Text>
+            ))}
+          </View>
+        )}
       </Card>
 
       <Button
@@ -109,21 +123,30 @@ export function TrainHomeScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   title: { color: colors.text, fontSize: fontSize.xxl, fontWeight: '700' },
-  subtitle: {
-    color: colors.textMuted,
-    fontSize: fontSize.md,
-    marginTop: spacing.sm,
-    lineHeight: 22,
-  },
-  streakCard: { marginTop: spacing.lg },
-  streakWarn: { borderColor: colors.warning },
-  streakValue: { color: colors.text, fontSize: fontSize.lg, fontWeight: '700' },
-  streakNote: {
+  todayCard: { marginTop: spacing.md, borderColor: colors.primary },
+  restCard: { borderColor: colors.warning },
+  todayLabel: {
     color: colors.textMuted,
     fontSize: fontSize.sm,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  todayHeadline: {
+    color: colors.text,
+    fontSize: fontSize.lg,
+    fontWeight: '700',
     marginTop: spacing.xs,
+  },
+  todayDetail: {
+    color: colors.textMuted,
+    fontSize: fontSize.sm,
+    marginTop: spacing.sm,
     lineHeight: 20,
   },
+  goals: { marginTop: spacing.md },
+  goalsLabel: { color: colors.textMuted, fontSize: fontSize.sm, fontWeight: '600' },
+  goalItem: { color: colors.text, fontSize: fontSize.sm, marginTop: spacing.xs },
   add: { marginTop: spacing.lg },
   secondaryAction: { marginTop: spacing.sm },
   sectionTitle: {
