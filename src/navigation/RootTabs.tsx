@@ -3,8 +3,8 @@ import { Text } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 
 import { AssessStack } from './AssessStack';
+import { PlanStack } from './PlanStack';
 import { ReviewStack } from './ReviewStack';
-import { PlanScreen } from '../features/plan/PlanScreen';
 import { TrainScreen } from '../features/train/TrainScreen';
 import type { RootTabParamList } from './types';
 import { colors } from '../theme';
@@ -32,7 +32,7 @@ export function RootTabs() {
       })}
     >
       <Tab.Screen name="Assess" component={AssessStack} />
-      <Tab.Screen name="Plan" component={PlanScreen} />
+      <Tab.Screen name="Plan" component={PlanStack} />
       <Tab.Screen name="Train" component={TrainScreen} />
       <Tab.Screen name="Review" component={ReviewStack} />
     </Tab.Navigator>

@@ -7,6 +7,13 @@ export type AssessStackParamList = {
   History: undefined;
 };
 
+export type PlanStackParamList = {
+  PlanHome: undefined;
+  Goals: undefined;
+  GoalForm: { goalId?: string } | undefined;
+  ProgramBuilder: undefined;
+};
+
 export type ReviewStackParamList = {
   ReviewHome: undefined;
   Glossary: undefined;
@@ -14,7 +21,7 @@ export type ReviewStackParamList = {
 
 export type RootTabParamList = {
   Assess: NavigatorScreenParams<AssessStackParamList>;
-  Plan: undefined;
+  Plan: NavigatorScreenParams<PlanStackParamList>;
   Train: undefined;
   Review: NavigatorScreenParams<ReviewStackParamList>;
 };

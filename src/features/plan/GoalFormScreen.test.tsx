@@ -1,0 +1,73 @@
+import React from 'react';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+
+import { InMemoryRepository } from '../../db/inMemoryRepository';
+import { RepositoryProvider } from '../../providers/RepositoryProvider';
+import { GoalFormScreen } from './GoalFormScreen';
+
+const initialMetrics = {
+  frame: { x: 0, y: 0, width: 390, height: 844 },
+  insets: { top: 47, left: 0, right: 0, bottom: 34 },
+};
+
+type Nav = Parameters<typeof GoalFormScreen>[0]['navigation'];
+type Route = Parameters<typeof GoalFormScreen>[0]['route'];
+
+function renderForm(repo: InMemoryRepository, navigation: Partial<Nav>) {
+  return render(
+    <SafeAreaProvider initialMetrics={initialMetrics}>
+      <RepositoryProvider repository={repo}>
+        <GoalFormScreen
+          navigation={navigation as unknown as Nav}
+          route={{ key: 'g', name: 'GoalForm', params: undefined } as unknown as Route}
+        />
+      </RepositoryProvider>
+    </SafeAreaProvider>,
+  );
+}
+
+describe('GoalFormScreen', () => {
+  it('creates a goal with the chosen horizon and title', async () => {
+    const repo = new InMemoryRepository();
+    const goBack = jest.fn();
+    const view = await renderForm(repo, { goBack, setOptions: jest.fn() });
+
+    await waitFor(() => expect(view.getByText('Goal')).toBeTruthy());
+
+    await act(async () => {
+      fireEvent.press(view.getByTestId('horizon-long'));
+      fireEvent.changeText(view.getByTestId('goal-title'), 'Climb my first 5.13');
+      fireEvent.press(view.getByTestId('triad-physical'));
+    });
+
+    await act(async () => {
+      fireEvent.press(view.getByText('Save goal'));
+    });
+
+    await waitFor(() => expect(goBack).toHaveBeenCalled());
+    const goals = await repo.listGoals();
+    expect(goals).toHaveLength(1);
+    expect(goals[0]).toMatchObject({
+      horizon: 'long',
+      title: 'Climb my first 5.13',
+      triadArea: 'physical',
+      status: 'active',
+    });
+  });
+
+  it('refuses to save without a title', async () => {
+    const repo = new InMemoryRepository();
+    const goBack = jest.fn();
+    const view = await renderForm(repo, { goBack, setOptions: jest.fn() });
+
+    await waitFor(() => expect(view.getByText('Goal')).toBeTruthy());
+
+    await act(async () => {
+      fireEvent.press(view.getByText('Save goal'));
+    });
+
+    expect(goBack).not.toHaveBeenCalled();
+    expect(await repo.listGoals()).toHaveLength(0);
+  });
+});
