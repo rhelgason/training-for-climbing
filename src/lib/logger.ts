@@ -49,6 +49,9 @@ export type UsageEvent =
   | { name: 'assessment_viewed_history'; props?: Record<string, never> }
   | { name: 'glossary_searched'; props: { query: string; resultCount: number } }
   | { name: 'goal_created'; props: { horizon: string } }
+  | { name: 'goal_completed'; props: { horizon: string } }
+  | { name: 'goal_deleted'; props: { horizon: string } }
+  | { name: 'program_built'; props: { tier: string; areaCount: number } }
   | { name: 'session_logged'; props: { exerciseCount: number } }
   | { name: 'benchmark_recorded'; props: { testId: string } };
 
