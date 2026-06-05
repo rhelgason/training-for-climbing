@@ -4,6 +4,8 @@ import type {
   GoalRecord,
   NewAssessment,
   NewGoal,
+  NewSession,
+  SessionRecord,
   UsageEventRecord,
 } from './types';
 
@@ -30,6 +32,13 @@ export interface Repository {
   /** Returns the updated record, or null if the id does not exist. */
   updateGoal(id: string, patch: GoalPatch): Promise<GoalRecord | null>;
   deleteGoal(id: string): Promise<void>;
+
+  // --- Training sessions ---
+  saveSession(input: NewSession): Promise<SessionRecord>;
+  /** Newest first (by session date). */
+  listSessions(): Promise<SessionRecord[]>;
+  getSession(id: string): Promise<SessionRecord | null>;
+  deleteSession(id: string): Promise<void>;
 
   // --- Usage events (analytics) ---
   recordEvent(event: Omit<UsageEventRecord, 'id'>): Promise<void>;

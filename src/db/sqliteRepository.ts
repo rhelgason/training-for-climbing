@@ -3,7 +3,7 @@ import * as SQLite from 'expo-sqlite';
 import { log } from '../lib/logger';
 import { newId } from '../lib/ids';
 import type { TriadArea } from '../content/types';
-import type { GoalHorizon, GoalStatus } from '../content/planning';
+import type { GoalHorizon, GoalStatus, HierarchyAreaId } from '../content/planning';
 import type { Responses } from '../features/assess/scoring';
 import type { Repository } from './repository';
 import type {
@@ -12,6 +12,8 @@ import type {
   GoalRecord,
   NewAssessment,
   NewGoal,
+  NewSession,
+  SessionRecord,
   UsageEventRecord,
 } from './types';
 
@@ -32,6 +34,14 @@ interface EventRow {
   name: string;
   props: string;
   timestamp: number;
+}
+
+interface SessionRow {
+  id: string;
+  created_at: number;
+  date: number;
+  focus_areas: string;
+  notes: string | null;
 }
 
 interface GoalRow {
@@ -86,6 +96,13 @@ export class SqliteRepository implements Repository {
         status TEXT NOT NULL,
         completed_at INTEGER
       );
+      CREATE TABLE IF NOT EXISTS sessions (
+        id TEXT PRIMARY KEY NOT NULL,
+        created_at INTEGER NOT NULL,
+        date INTEGER NOT NULL,
+        focus_areas TEXT NOT NULL,
+        notes TEXT
+      );
       CREATE TABLE IF NOT EXISTS events (
         id TEXT PRIMARY KEY NOT NULL,
         name TEXT NOT NULL,
@@ -94,6 +111,7 @@ export class SqliteRepository implements Repository {
       );
       CREATE INDEX IF NOT EXISTS idx_assessments_created_at ON assessments (created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_goals_created_at ON goals (created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_sessions_date ON sessions (date DESC);
       CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events (timestamp DESC);
     `);
     log.info('SQLite repository initialised');
@@ -208,6 +226,44 @@ export class SqliteRepository implements Repository {
     await this.getDb().runAsync(`DELETE FROM goals WHERE id = ?`, id);
   }
 
+  async saveSession(input: NewSession): Promise<SessionRecord> {
+    const record: SessionRecord = {
+      id: newId(),
+      createdAt: input.createdAt ?? Date.now(),
+      date: input.date,
+      focusAreas: [...input.focusAreas],
+      notes: input.notes,
+    };
+    await this.getDb().runAsync(
+      `INSERT INTO sessions (id, created_at, date, focus_areas, notes) VALUES (?, ?, ?, ?, ?)`,
+      record.id,
+      record.createdAt,
+      record.date,
+      JSON.stringify(record.focusAreas),
+      record.notes ?? null,
+    );
+    return record;
+  }
+
+  async listSessions(): Promise<SessionRecord[]> {
+    const rows = await this.getDb().getAllAsync<SessionRow>(
+      `SELECT * FROM sessions ORDER BY date DESC`,
+    );
+    return rows.map(rowToSession);
+  }
+
+  async getSession(id: string): Promise<SessionRecord | null> {
+    const row = await this.getDb().getFirstAsync<SessionRow>(
+      `SELECT * FROM sessions WHERE id = ?`,
+      id,
+    );
+    return row ? rowToSession(row) : null;
+  }
+
+  async deleteSession(id: string): Promise<void> {
+    await this.getDb().runAsync(`DELETE FROM sessions WHERE id = ?`, id);
+  }
+
   async recordEvent(event: Omit<UsageEventRecord, 'id'>): Promise<void> {
     await this.getDb().runAsync(
       `INSERT INTO events (id, name, props, timestamp) VALUES (?, ?, ?, ?)`,
@@ -257,6 +313,16 @@ function rowToGoal(row: GoalRow): GoalRecord {
     triadArea: (row.triad_area as TriadArea | null) ?? undefined,
     status: row.status as GoalStatus,
     completedAt: row.completed_at ?? undefined,
+  };
+}
+
+function rowToSession(row: SessionRow): SessionRecord {
+  return {
+    id: row.id,
+    createdAt: row.created_at,
+    date: row.date,
+    focusAreas: safeParse<HierarchyAreaId[]>(row.focus_areas, []),
+    notes: row.notes ?? undefined,
   };
 }
 

@@ -6,6 +6,8 @@ import type {
   GoalRecord,
   NewAssessment,
   NewGoal,
+  NewSession,
+  SessionRecord,
   UsageEventRecord,
 } from './types';
 
@@ -16,6 +18,7 @@ import type {
 export class InMemoryRepository implements Repository {
   private assessments: AssessmentRecord[] = [];
   private goals: GoalRecord[] = [];
+  private sessions: SessionRecord[] = [];
   private events: UsageEventRecord[] = [];
 
   async init(): Promise<void> {
@@ -78,6 +81,30 @@ export class InMemoryRepository implements Repository {
 
   async deleteGoal(id: string): Promise<void> {
     this.goals = this.goals.filter((g) => g.id !== id);
+  }
+
+  async saveSession(input: NewSession): Promise<SessionRecord> {
+    const record: SessionRecord = {
+      id: newId(),
+      createdAt: input.createdAt ?? Date.now(),
+      date: input.date,
+      focusAreas: [...input.focusAreas],
+      notes: input.notes,
+    };
+    this.sessions.push(record);
+    return record;
+  }
+
+  async listSessions(): Promise<SessionRecord[]> {
+    return [...this.sessions].sort((a, b) => b.date - a.date);
+  }
+
+  async getSession(id: string): Promise<SessionRecord | null> {
+    return this.sessions.find((s) => s.id === id) ?? null;
+  }
+
+  async deleteSession(id: string): Promise<void> {
+    this.sessions = this.sessions.filter((s) => s.id !== id);
   }
 
   async recordEvent(event: Omit<UsageEventRecord, 'id'>): Promise<void> {

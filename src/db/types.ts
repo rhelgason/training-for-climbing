@@ -1,6 +1,6 @@
 import type { Responses } from '../features/assess/scoring';
 import type { TriadArea } from '../content/types';
-import type { GoalHorizon, GoalStatus } from '../content/planning';
+import type { GoalHorizon, GoalStatus, HierarchyAreaId } from '../content/planning';
 
 /** A persisted Self-Assessment attempt. */
 export interface AssessmentRecord {
@@ -57,6 +57,19 @@ export type GoalPatch = Partial<
     | 'completedAt'
   >
 >;
+
+/** A logged training session / climbing day (the book's "training notebook"). */
+export interface SessionRecord {
+  id: string;
+  createdAt: number;
+  /** The day the session happened (epoch ms). */
+  date: number;
+  /** Which areas of the 5-step training hierarchy were trained. */
+  focusAreas: HierarchyAreaId[];
+  notes?: string;
+}
+
+export type NewSession = Omit<SessionRecord, 'id' | 'createdAt'> & { createdAt?: number };
 
 /** A persisted usage event (analytics, local-first). */
 export interface UsageEventRecord {

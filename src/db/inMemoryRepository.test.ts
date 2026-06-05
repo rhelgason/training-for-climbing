@@ -1,5 +1,5 @@
 import { InMemoryRepository } from './inMemoryRepository';
-import type { NewAssessment, NewGoal } from './types';
+import type { NewAssessment, NewGoal, NewSession } from './types';
 
 function sampleAssessment(overrides: Partial<NewAssessment> = {}): NewAssessment {
   return {
@@ -69,6 +69,26 @@ describe('InMemoryRepository', () => {
     await repo.deleteGoal(goal.id);
     expect(await repo.getGoal(goal.id)).toBeNull();
     expect(await repo.listGoals()).toHaveLength(0);
+  });
+
+  it('saves sessions, lists them newest-first by date, and deletes', async () => {
+    const repo = new InMemoryRepository();
+    const base: NewSession = { date: 0, focusAreas: ['skill'] };
+    const older = await repo.saveSession({ ...base, date: 1000 });
+    const newer = await repo.saveSession({ ...base, date: 2000, focusAreas: ['skill', 'stamina'] });
+    const list = await repo.listSessions();
+    expect(list.map((s) => s.id)).toEqual([newer.id, older.id]);
+    expect(list[0].focusAreas).toEqual(['skill', 'stamina']);
+    await repo.deleteSession(newer.id);
+    expect((await repo.listSessions()).map((s) => s.id)).toEqual([older.id]);
+  });
+
+  it('copies session focus areas so later input mutation is isolated', async () => {
+    const repo = new InMemoryRepository();
+    const input: NewSession = { date: 1, focusAreas: ['skill'] };
+    const saved = await repo.saveSession(input);
+    input.focusAreas.push('stamina');
+    expect(saved.focusAreas).toEqual(['skill']);
   });
 
   it('records and lists usage events newest-first with limit', async () => {

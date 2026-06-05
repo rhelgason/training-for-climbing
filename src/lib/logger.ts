@@ -52,7 +52,8 @@ export type UsageEvent =
   | { name: 'goal_completed'; props: { horizon: string } }
   | { name: 'goal_deleted'; props: { horizon: string } }
   | { name: 'program_built'; props: { tier: string; areaCount: number } }
-  | { name: 'session_logged'; props: { exerciseCount: number } }
+  | { name: 'session_logged'; props: { areaCount: number } }
+  | { name: 'session_deleted'; props?: Record<string, never> }
   | { name: 'benchmark_recorded'; props: { testId: string } };
 
 export type EventSink = (event: {
