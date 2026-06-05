@@ -19,6 +19,7 @@ export type TrainStackParamList = {
   SessionForm: undefined;
   EnergyEmotion: undefined;
   CheckinForm: undefined;
+  Exercises: undefined;
 };
 
 export type ReviewStackParamList = {

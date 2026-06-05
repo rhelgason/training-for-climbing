@@ -78,6 +78,12 @@ export function TrainHomeScreen({ navigation }: Props) {
         onPress={() => navigation.navigate('EnergyEmotion')}
         style={styles.secondaryAction}
       />
+      <Button
+        label="Exercise library"
+        variant="secondary"
+        onPress={() => navigation.navigate('Exercises')}
+        style={styles.secondaryAction}
+      />
 
       <Text style={styles.sectionTitle}>Recent</Text>
       {sessions.length === 0 ? (

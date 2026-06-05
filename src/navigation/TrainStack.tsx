@@ -5,6 +5,7 @@ import { TrainHomeScreen } from '../features/train/TrainHomeScreen';
 import { SessionFormScreen } from '../features/train/SessionFormScreen';
 import { EnergyEmotionScreen } from '../features/train/EnergyEmotionScreen';
 import { CheckinFormScreen } from '../features/train/CheckinFormScreen';
+import { ExercisesScreen } from '../features/train/ExercisesScreen';
 import type { TrainStackParamList } from './types';
 import { screenOptions } from './options';
 
@@ -28,6 +29,11 @@ export function TrainStack() {
         name="CheckinForm"
         component={CheckinFormScreen}
         options={{ title: 'Check-in' }}
+      />
+      <Stack.Screen
+        name="Exercises"
+        component={ExercisesScreen}
+        options={{ title: 'Exercise library' }}
       />
     </Stack.Navigator>
   );
