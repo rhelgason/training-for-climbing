@@ -41,9 +41,10 @@ npm start          # launch the Expo dev server, then open in Expo Go / a simula
 src/
   content/      # book-derived data: self-assessment, fitness tests, glossary
   features/
-    assess/     # Self-Assessment flow, scoring logic (pure, tested), results, history
-    plan/       # goals (CRUD) + program builder, with tested logic
-    train/      # session log + rest/streak awareness, with tested logic
+    assess/     # Self-Assessment + Fitness Evaluation, with tested logic
+    plan/       # goals + program builder + macrocycle planner, with tested logic
+    train/      # session log, rest/streak, energy-emotion, exercise library
+    today/      # daily "what to work on" recommendation (tested)
     review/     # glossary browser, chapter summaries (roadmap)
   db/           # Repository interface + InMemory + SQLite implementations
   lib/          # logger + structured usage events, ids
@@ -79,5 +80,8 @@ src/
 - **Today recommendation:** the Train tab opens with a **"Today"** card that synthesizes your
   weakest triad area + active goals + recent training into a faithful suggestion (rest after 3
   days in a row; otherwise target your weakest area; take the assessment first if you haven't).
+- **Phase 4 — Track (in progress):** the **Fitness Evaluation** (Appendix D — 10 benchmarks with
+  per-test trend and an annual-retest reminder) and the **Macrocycle planner** (Appendix B —
+  annual training blocks with climbing days pulled from your session log).
 
 See the plan file for the full phased roadmap.
