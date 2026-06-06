@@ -65,6 +65,31 @@ export function countInLastDays(timestamps: number[], nowMs: number, days: numbe
   return timestamps.filter((t) => t >= cutoff && t <= nowMs).length;
 }
 
+export interface MonthBucket {
+  label: string;
+  count: number;
+}
+
+/**
+ * Counts of timestamps bucketed into the last `months` calendar months
+ * (oldest-first), each labelled with its short month name.
+ */
+export function monthlyCounts(timestamps: number[], nowMs: number, months: number): MonthBucket[] {
+  const base = new Date(nowMs);
+  const buckets: MonthBucket[] = [];
+  for (let i = months - 1; i >= 0; i -= 1) {
+    const start = new Date(base.getFullYear(), base.getMonth() - i, 1);
+    const end = new Date(start.getFullYear(), start.getMonth() + 1, 1);
+    const startMs = start.getTime();
+    const endMs = end.getTime();
+    buckets.push({
+      label: start.toLocaleDateString(undefined, { month: 'short' }),
+      count: timestamps.filter((t) => t >= startMs && t < endMs).length,
+    });
+  }
+  return buckets;
+}
+
 export interface TriadPoint {
   date: number;
   mental: number;

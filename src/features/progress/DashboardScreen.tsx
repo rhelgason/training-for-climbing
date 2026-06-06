@@ -5,6 +5,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
+import { LineChart } from '../../components/LineChart';
 import { Screen } from '../../components/Screen';
 import {
   DISCIPLINES,
@@ -22,6 +23,7 @@ import {
   countInLastDays,
   firstTryRate,
   hardestSend,
+  monthlyCounts,
   sendPyramid,
   sendRate,
   triadSeries,
@@ -94,6 +96,13 @@ export function DashboardScreen({ navigation }: Props) {
   const boulderPyramid = sendPyramid(climbs, 'boulder');
   const leadPyramid = sendPyramid(climbs, 'lead');
 
+  const climbsByMonth = monthlyCounts(
+    climbs.map((c) => c.date),
+    nowMs,
+    6,
+  );
+  const maxMonthly = Math.max(...climbsByMonth.map((m) => m.count), 1);
+
   return (
     <Screen>
       <Text style={styles.title}>Progress</Text>
@@ -157,6 +166,26 @@ export function DashboardScreen({ navigation }: Props) {
         </View>
       </Card>
 
+      {climbs.length > 0 && (
+        <>
+          <Text style={styles.sectionTitle}>Climbs per month</Text>
+          <Card>
+            <LineChart
+              series={[
+                {
+                  color: colors.primary,
+                  label: 'climbs',
+                  values: climbsByMonth.map((m) => m.count),
+                },
+              ]}
+              xLabels={climbsByMonth.map((m) => m.label)}
+              yMin={0}
+              yMax={maxMonthly}
+            />
+          </Card>
+        </>
+      )}
+
       {boulderPyramid.length > 0 && (
         <>
           <Text style={styles.sectionTitle}>Boulder pyramid</Text>
@@ -199,6 +228,31 @@ export function DashboardScreen({ navigation }: Props) {
           <Text style={styles.triadMeta}>
             {triad.length} assessment{triad.length === 1 ? '' : 's'} on record
           </Text>
+          {triad.length >= 2 && (
+            <View style={styles.triadChart}>
+              <LineChart
+                yMin={0}
+                yMax={50}
+                series={[
+                  {
+                    color: triadColors.mental,
+                    label: 'Mental',
+                    values: triad.map((p) => p.mental),
+                  },
+                  {
+                    color: triadColors.technical,
+                    label: 'Technical',
+                    values: triad.map((p) => p.technical),
+                  },
+                  {
+                    color: triadColors.physical,
+                    label: 'Physical',
+                    values: triad.map((p) => p.physical),
+                  },
+                ]}
+              />
+            </View>
+          )}
         </Card>
       ) : (
         <Text style={styles.empty}>Take the self-assessment to track your triad over time.</Text>
@@ -269,6 +323,7 @@ const styles = StyleSheet.create({
   pyramidFill: { height: '100%', backgroundColor: colors.primary, borderRadius: radius.sm },
   pyramidCount: { color: colors.textMuted, fontSize: fontSize.sm, width: 20, textAlign: 'right' },
   triadCard: {},
+  triadChart: { marginTop: spacing.md },
   triadRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.xs },
   triadLabel: { fontSize: fontSize.md, fontWeight: '600' },
   triadValue: { color: colors.text, fontSize: fontSize.md },

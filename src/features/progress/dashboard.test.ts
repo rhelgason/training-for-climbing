@@ -4,6 +4,7 @@ import {
   countInLastDays,
   firstTryRate,
   hardestSend,
+  monthlyCounts,
   sendPyramid,
   sendRate,
   triadSeries,
@@ -87,6 +88,20 @@ describe('countInLastDays', () => {
   it('counts timestamps within the window', () => {
     const ts = [NOW, NOW - 5 * DAY, NOW - 40 * DAY];
     expect(countInLastDays(ts, NOW, 30)).toBe(2);
+  });
+});
+
+describe('monthlyCounts', () => {
+  it('buckets timestamps into the last N calendar months, oldest-first', () => {
+    // Anchor at a mid-month moment to avoid boundary ambiguity.
+    const now = new Date(2026, 5, 15).getTime(); // Jun 15, 2026
+    const thisMonth = new Date(2026, 5, 2).getTime();
+    const lastMonth = new Date(2026, 4, 10).getTime();
+    const buckets = monthlyCounts([thisMonth, thisMonth, lastMonth], now, 3);
+    expect(buckets).toHaveLength(3);
+    expect(buckets[buckets.length - 1].count).toBe(2); // current month
+    expect(buckets[buckets.length - 2].count).toBe(1); // previous month
+    expect(buckets[0].count).toBe(0); // two months ago
   });
 });
 
