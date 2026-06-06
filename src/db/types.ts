@@ -1,6 +1,7 @@
 import type { Responses } from '../features/assess/scoring';
 import type { TriadArea } from '../content/types';
 import type { GoalHorizon, GoalStatus, HierarchyAreaId } from '../content/planning';
+import type { ClimbDiscipline, ClimbEnvironment, ClimbOutcome } from '../content/climbing';
 
 /** A persisted Self-Assessment attempt. */
 export interface AssessmentRecord {
@@ -70,6 +71,28 @@ export interface SessionRecord {
 }
 
 export type NewSession = Omit<SessionRecord, 'id' | 'createdAt'> & { createdAt?: number };
+
+/** A logged ascent — what you climbed on a given day. */
+export interface ClimbRecord {
+  id: string;
+  createdAt: number;
+  updatedAt: number;
+  /** The day of the climb (epoch ms). */
+  date: number;
+  environment: ClimbEnvironment;
+  discipline: ClimbDiscipline;
+  /** Grade string within the discipline's scale (e.g. "5.11a" or "V5"). */
+  grade: string;
+  outcome: ClimbOutcome;
+  name?: string;
+  location?: string;
+  notes?: string;
+}
+
+export type NewClimb = Omit<ClimbRecord, 'id' | 'createdAt' | 'updatedAt'> & {
+  createdAt?: number;
+  updatedAt?: number;
+};
 
 /** A period in the annual training macrocycle (Appendix B planner). */
 export interface MacrocyclePeriodRecord {

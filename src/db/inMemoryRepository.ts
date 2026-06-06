@@ -4,6 +4,7 @@ import type {
   AssessmentRecord,
   BenchmarkRecord,
   CheckinRecord,
+  ClimbRecord,
   GoalPatch,
   GoalRecord,
   MacrocyclePeriodPatch,
@@ -11,6 +12,7 @@ import type {
   NewAssessment,
   NewBenchmark,
   NewCheckin,
+  NewClimb,
   NewGoal,
   NewMacrocyclePeriod,
   NewSession,
@@ -26,6 +28,7 @@ export class InMemoryRepository implements Repository {
   private assessments: AssessmentRecord[] = [];
   private goals: GoalRecord[] = [];
   private sessions: SessionRecord[] = [];
+  private climbs: ClimbRecord[] = [];
   private periods: MacrocyclePeriodRecord[] = [];
   private benchmarks: BenchmarkRecord[] = [];
   private checkins: CheckinRecord[] = [];
@@ -115,6 +118,33 @@ export class InMemoryRepository implements Repository {
 
   async deleteSession(id: string): Promise<void> {
     this.sessions = this.sessions.filter((s) => s.id !== id);
+  }
+
+  async saveClimb(input: NewClimb): Promise<ClimbRecord> {
+    const ts = Date.now();
+    const record: ClimbRecord = {
+      id: newId(),
+      createdAt: input.createdAt ?? ts,
+      updatedAt: input.updatedAt ?? ts,
+      date: input.date,
+      environment: input.environment,
+      discipline: input.discipline,
+      grade: input.grade,
+      outcome: input.outcome,
+      name: input.name,
+      location: input.location,
+      notes: input.notes,
+    };
+    this.climbs.push(record);
+    return record;
+  }
+
+  async listClimbs(): Promise<ClimbRecord[]> {
+    return [...this.climbs].sort((a, b) => b.date - a.date);
+  }
+
+  async deleteClimb(id: string): Promise<void> {
+    this.climbs = this.climbs.filter((c) => c.id !== id);
   }
 
   async saveMacrocyclePeriod(input: NewMacrocyclePeriod): Promise<MacrocyclePeriodRecord> {

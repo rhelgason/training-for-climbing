@@ -91,6 +91,29 @@ describe('InMemoryRepository', () => {
     expect(saved.focusAreas).toEqual(['skill']);
   });
 
+  it('saves climbs, lists newest-first by date, sets timestamps, and deletes', async () => {
+    const repo = new InMemoryRepository();
+    const older = await repo.saveClimb({
+      date: 1000,
+      environment: 'indoor',
+      discipline: 'boulder',
+      grade: 'V4',
+      outcome: 'flash',
+    });
+    const newer = await repo.saveClimb({
+      date: 2000,
+      environment: 'outdoor',
+      discipline: 'lead',
+      grade: '5.11a',
+      outcome: 'send',
+    });
+    expect(older.createdAt).toBeGreaterThan(0);
+    expect(older.updatedAt).toBeGreaterThan(0);
+    expect((await repo.listClimbs()).map((c) => c.id)).toEqual([newer.id, older.id]);
+    await repo.deleteClimb(newer.id);
+    expect((await repo.listClimbs()).map((c) => c.id)).toEqual([older.id]);
+  });
+
   it('saves macrocycle periods ordered by start, updates, and deletes', async () => {
     const repo = new InMemoryRepository();
     const b = await repo.saveMacrocyclePeriod({ label: 'Spring', startDate: 200, endDate: 300 });

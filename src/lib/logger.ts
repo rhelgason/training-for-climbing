@@ -56,7 +56,11 @@ export type UsageEvent =
   | { name: 'session_logged'; props: { areaCount: number } }
   | { name: 'session_deleted'; props?: Record<string, never> }
   | { name: 'checkin_logged'; props: { quadrant: string } }
-  | { name: 'benchmark_recorded'; props: { testId: string } };
+  | { name: 'benchmark_recorded'; props: { testId: string } }
+  | {
+      name: 'climb_logged';
+      props: { discipline: string; environment: string; grade: string; outcome: string };
+    };
 
 export type EventSink = (event: {
   name: UsageEvent['name'];

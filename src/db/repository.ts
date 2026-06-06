@@ -2,6 +2,7 @@ import type {
   AssessmentRecord,
   BenchmarkRecord,
   CheckinRecord,
+  ClimbRecord,
   GoalPatch,
   GoalRecord,
   MacrocyclePeriodPatch,
@@ -9,6 +10,7 @@ import type {
   NewAssessment,
   NewBenchmark,
   NewCheckin,
+  NewClimb,
   NewGoal,
   NewMacrocyclePeriod,
   NewSession,
@@ -46,6 +48,12 @@ export interface Repository {
   listSessions(): Promise<SessionRecord[]>;
   getSession(id: string): Promise<SessionRecord | null>;
   deleteSession(id: string): Promise<void>;
+
+  // --- Climbs (logged ascents) ---
+  saveClimb(input: NewClimb): Promise<ClimbRecord>;
+  /** Newest first (by climb date). */
+  listClimbs(): Promise<ClimbRecord[]>;
+  deleteClimb(id: string): Promise<void>;
 
   // --- Macrocycle periods ---
   saveMacrocyclePeriod(input: NewMacrocyclePeriod): Promise<MacrocyclePeriodRecord>;

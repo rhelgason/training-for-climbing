@@ -10,6 +10,7 @@ import type {
   AssessmentRecord,
   BenchmarkRecord,
   CheckinRecord,
+  ClimbRecord,
   GoalPatch,
   GoalRecord,
   MacrocyclePeriodPatch,
@@ -17,12 +18,14 @@ import type {
   NewAssessment,
   NewBenchmark,
   NewCheckin,
+  NewClimb,
   NewGoal,
   NewMacrocyclePeriod,
   NewSession,
   SessionRecord,
   UsageEventRecord,
 } from './types';
+import type { ClimbDiscipline, ClimbEnvironment, ClimbOutcome } from '../content/climbing';
 
 const DB_NAME = 'training-for-climbing.db';
 
@@ -58,6 +61,20 @@ interface CheckinRow {
   energy: number;
   emotion: number;
   note: string | null;
+}
+
+interface ClimbRow {
+  id: string;
+  created_at: number;
+  updated_at: number;
+  date: number;
+  environment: string;
+  discipline: string;
+  grade: string;
+  outcome: string;
+  name: string | null;
+  location: string | null;
+  notes: string | null;
 }
 
 interface MacrocyclePeriodRow {
@@ -139,6 +156,19 @@ export class SqliteRepository implements Repository {
         focus_areas TEXT NOT NULL,
         notes TEXT
       );
+      CREATE TABLE IF NOT EXISTS climbs (
+        id TEXT PRIMARY KEY NOT NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        date INTEGER NOT NULL,
+        environment TEXT NOT NULL,
+        discipline TEXT NOT NULL,
+        grade TEXT NOT NULL,
+        outcome TEXT NOT NULL,
+        name TEXT,
+        location TEXT,
+        notes TEXT
+      );
       CREATE TABLE IF NOT EXISTS macrocycle_periods (
         id TEXT PRIMARY KEY NOT NULL,
         created_at INTEGER NOT NULL,
@@ -174,6 +204,7 @@ export class SqliteRepository implements Repository {
       CREATE INDEX IF NOT EXISTS idx_assessments_created_at ON assessments (created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_goals_created_at ON goals (created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_sessions_date ON sessions (date DESC);
+      CREATE INDEX IF NOT EXISTS idx_climbs_date ON climbs (date DESC);
       CREATE INDEX IF NOT EXISTS idx_macrocycle_start ON macrocycle_periods (start_date ASC);
       CREATE INDEX IF NOT EXISTS idx_benchmarks_date ON benchmarks (date DESC);
       CREATE INDEX IF NOT EXISTS idx_checkins_time ON checkins (time DESC);
@@ -327,6 +358,50 @@ export class SqliteRepository implements Repository {
 
   async deleteSession(id: string): Promise<void> {
     await this.getDb().runAsync(`DELETE FROM sessions WHERE id = ?`, id);
+  }
+
+  async saveClimb(input: NewClimb): Promise<ClimbRecord> {
+    const ts = Date.now();
+    const record: ClimbRecord = {
+      id: newId(),
+      createdAt: input.createdAt ?? ts,
+      updatedAt: input.updatedAt ?? ts,
+      date: input.date,
+      environment: input.environment,
+      discipline: input.discipline,
+      grade: input.grade,
+      outcome: input.outcome,
+      name: input.name,
+      location: input.location,
+      notes: input.notes,
+    };
+    await this.getDb().runAsync(
+      `INSERT INTO climbs (id, created_at, updated_at, date, environment, discipline, grade, outcome, name, location, notes)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      record.id,
+      record.createdAt,
+      record.updatedAt,
+      record.date,
+      record.environment,
+      record.discipline,
+      record.grade,
+      record.outcome,
+      record.name ?? null,
+      record.location ?? null,
+      record.notes ?? null,
+    );
+    return record;
+  }
+
+  async listClimbs(): Promise<ClimbRecord[]> {
+    const rows = await this.getDb().getAllAsync<ClimbRow>(
+      `SELECT * FROM climbs ORDER BY date DESC`,
+    );
+    return rows.map(rowToClimb);
+  }
+
+  async deleteClimb(id: string): Promise<void> {
+    await this.getDb().runAsync(`DELETE FROM climbs WHERE id = ?`, id);
   }
 
   async saveMacrocyclePeriod(input: NewMacrocyclePeriod): Promise<MacrocyclePeriodRecord> {
@@ -524,6 +599,22 @@ function rowToSession(row: SessionRow): SessionRecord {
     createdAt: row.created_at,
     date: row.date,
     focusAreas: safeParse<HierarchyAreaId[]>(row.focus_areas, []),
+    notes: row.notes ?? undefined,
+  };
+}
+
+function rowToClimb(row: ClimbRow): ClimbRecord {
+  return {
+    id: row.id,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    date: row.date,
+    environment: row.environment as ClimbEnvironment,
+    discipline: row.discipline as ClimbDiscipline,
+    grade: row.grade,
+    outcome: row.outcome as ClimbOutcome,
+    name: row.name ?? undefined,
+    location: row.location ?? undefined,
     notes: row.notes ?? undefined,
   };
 }
