@@ -71,6 +71,29 @@ export interface SessionRecord {
 
 export type NewSession = Omit<SessionRecord, 'id' | 'createdAt'> & { createdAt?: number };
 
+/** A period in the annual training macrocycle (Appendix B planner). */
+export interface MacrocyclePeriodRecord {
+  id: string;
+  createdAt: number;
+  /** e.g. "Winter base", "Spring power". */
+  label: string;
+  startDate: number;
+  endDate: number;
+  /** The training emphasis for this block (free text, e.g. "Max strength & power"). */
+  focus?: string;
+  /** The climbing objective / seasonal goal for this block. */
+  objective?: string;
+  notes?: string;
+}
+
+export type NewMacrocyclePeriod = Omit<MacrocyclePeriodRecord, 'id' | 'createdAt'> & {
+  createdAt?: number;
+};
+
+export type MacrocyclePeriodPatch = Partial<
+  Pick<MacrocyclePeriodRecord, 'label' | 'startDate' | 'endDate' | 'focus' | 'objective' | 'notes'>
+>;
+
 /** A recorded Fitness Evaluation benchmark result (Appendix D). */
 export interface BenchmarkRecord {
   id: string;

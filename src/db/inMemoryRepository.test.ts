@@ -91,6 +91,18 @@ describe('InMemoryRepository', () => {
     expect(saved.focusAreas).toEqual(['skill']);
   });
 
+  it('saves macrocycle periods ordered by start, updates, and deletes', async () => {
+    const repo = new InMemoryRepository();
+    const b = await repo.saveMacrocyclePeriod({ label: 'Spring', startDate: 200, endDate: 300 });
+    const a = await repo.saveMacrocyclePeriod({ label: 'Winter', startDate: 100, endDate: 199 });
+    expect((await repo.listMacrocyclePeriods()).map((p) => p.id)).toEqual([a.id, b.id]);
+    const updated = await repo.updateMacrocyclePeriod(a.id, { focus: 'Base' });
+    expect(updated?.focus).toBe('Base');
+    expect(await repo.updateMacrocyclePeriod('nope', { focus: 'x' })).toBeNull();
+    await repo.deleteMacrocyclePeriod(b.id);
+    expect((await repo.listMacrocyclePeriods()).map((p) => p.id)).toEqual([a.id]);
+  });
+
   it('saves benchmarks, lists them newest-first by date, and deletes', async () => {
     const repo = new InMemoryRepository();
     const a = await repo.saveBenchmark({ testId: 'max-pullups', value: 10, date: 1000 });

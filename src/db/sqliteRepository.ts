@@ -12,10 +12,13 @@ import type {
   CheckinRecord,
   GoalPatch,
   GoalRecord,
+  MacrocyclePeriodPatch,
+  MacrocyclePeriodRecord,
   NewAssessment,
   NewBenchmark,
   NewCheckin,
   NewGoal,
+  NewMacrocyclePeriod,
   NewSession,
   SessionRecord,
   UsageEventRecord,
@@ -55,6 +58,17 @@ interface CheckinRow {
   energy: number;
   emotion: number;
   note: string | null;
+}
+
+interface MacrocyclePeriodRow {
+  id: string;
+  created_at: number;
+  label: string;
+  start_date: number;
+  end_date: number;
+  focus: string | null;
+  objective: string | null;
+  notes: string | null;
 }
 
 interface BenchmarkRow {
@@ -125,6 +139,16 @@ export class SqliteRepository implements Repository {
         focus_areas TEXT NOT NULL,
         notes TEXT
       );
+      CREATE TABLE IF NOT EXISTS macrocycle_periods (
+        id TEXT PRIMARY KEY NOT NULL,
+        created_at INTEGER NOT NULL,
+        label TEXT NOT NULL,
+        start_date INTEGER NOT NULL,
+        end_date INTEGER NOT NULL,
+        focus TEXT,
+        objective TEXT,
+        notes TEXT
+      );
       CREATE TABLE IF NOT EXISTS benchmarks (
         id TEXT PRIMARY KEY NOT NULL,
         created_at INTEGER NOT NULL,
@@ -150,6 +174,7 @@ export class SqliteRepository implements Repository {
       CREATE INDEX IF NOT EXISTS idx_assessments_created_at ON assessments (created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_goals_created_at ON goals (created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_sessions_date ON sessions (date DESC);
+      CREATE INDEX IF NOT EXISTS idx_macrocycle_start ON macrocycle_periods (start_date ASC);
       CREATE INDEX IF NOT EXISTS idx_benchmarks_date ON benchmarks (date DESC);
       CREATE INDEX IF NOT EXISTS idx_checkins_time ON checkins (time DESC);
       CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events (timestamp DESC);
@@ -304,6 +329,79 @@ export class SqliteRepository implements Repository {
     await this.getDb().runAsync(`DELETE FROM sessions WHERE id = ?`, id);
   }
 
+  async saveMacrocyclePeriod(input: NewMacrocyclePeriod): Promise<MacrocyclePeriodRecord> {
+    const record: MacrocyclePeriodRecord = {
+      id: newId(),
+      createdAt: input.createdAt ?? Date.now(),
+      label: input.label,
+      startDate: input.startDate,
+      endDate: input.endDate,
+      focus: input.focus,
+      objective: input.objective,
+      notes: input.notes,
+    };
+    await this.getDb().runAsync(
+      `INSERT INTO macrocycle_periods (id, created_at, label, start_date, end_date, focus, objective, notes)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      record.id,
+      record.createdAt,
+      record.label,
+      record.startDate,
+      record.endDate,
+      record.focus ?? null,
+      record.objective ?? null,
+      record.notes ?? null,
+    );
+    return record;
+  }
+
+  async listMacrocyclePeriods(): Promise<MacrocyclePeriodRecord[]> {
+    const rows = await this.getDb().getAllAsync<MacrocyclePeriodRow>(
+      `SELECT * FROM macrocycle_periods ORDER BY start_date ASC`,
+    );
+    return rows.map(rowToPeriod);
+  }
+
+  async getMacrocyclePeriod(id: string): Promise<MacrocyclePeriodRecord | null> {
+    const row = await this.getDb().getFirstAsync<MacrocyclePeriodRow>(
+      `SELECT * FROM macrocycle_periods WHERE id = ?`,
+      id,
+    );
+    return row ? rowToPeriod(row) : null;
+  }
+
+  async updateMacrocyclePeriod(
+    id: string,
+    patch: MacrocyclePeriodPatch,
+  ): Promise<MacrocyclePeriodRecord | null> {
+    const COLUMNS: Record<keyof MacrocyclePeriodPatch, string> = {
+      label: 'label',
+      startDate: 'start_date',
+      endDate: 'end_date',
+      focus: 'focus',
+      objective: 'objective',
+      notes: 'notes',
+    };
+    const sets: string[] = [];
+    const values: SQLite.SQLiteBindValue[] = [];
+    (Object.keys(patch) as (keyof MacrocyclePeriodPatch)[]).forEach((key) => {
+      sets.push(`${COLUMNS[key]} = ?`);
+      values.push(patch[key] ?? null);
+    });
+    if (sets.length > 0) {
+      values.push(id);
+      await this.getDb().runAsync(
+        `UPDATE macrocycle_periods SET ${sets.join(', ')} WHERE id = ?`,
+        ...values,
+      );
+    }
+    return this.getMacrocyclePeriod(id);
+  }
+
+  async deleteMacrocyclePeriod(id: string): Promise<void> {
+    await this.getDb().runAsync(`DELETE FROM macrocycle_periods WHERE id = ?`, id);
+  }
+
   async saveBenchmark(input: NewBenchmark): Promise<BenchmarkRecord> {
     const record: BenchmarkRecord = {
       id: newId(),
@@ -426,6 +524,19 @@ function rowToSession(row: SessionRow): SessionRecord {
     createdAt: row.created_at,
     date: row.date,
     focusAreas: safeParse<HierarchyAreaId[]>(row.focus_areas, []),
+    notes: row.notes ?? undefined,
+  };
+}
+
+function rowToPeriod(row: MacrocyclePeriodRow): MacrocyclePeriodRecord {
+  return {
+    id: row.id,
+    createdAt: row.created_at,
+    label: row.label,
+    startDate: row.start_date,
+    endDate: row.end_date,
+    focus: row.focus ?? undefined,
+    objective: row.objective ?? undefined,
     notes: row.notes ?? undefined,
   };
 }

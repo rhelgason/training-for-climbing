@@ -6,10 +6,13 @@ import type {
   CheckinRecord,
   GoalPatch,
   GoalRecord,
+  MacrocyclePeriodPatch,
+  MacrocyclePeriodRecord,
   NewAssessment,
   NewBenchmark,
   NewCheckin,
   NewGoal,
+  NewMacrocyclePeriod,
   NewSession,
   SessionRecord,
   UsageEventRecord,
@@ -23,6 +26,7 @@ export class InMemoryRepository implements Repository {
   private assessments: AssessmentRecord[] = [];
   private goals: GoalRecord[] = [];
   private sessions: SessionRecord[] = [];
+  private periods: MacrocyclePeriodRecord[] = [];
   private benchmarks: BenchmarkRecord[] = [];
   private checkins: CheckinRecord[] = [];
   private events: UsageEventRecord[] = [];
@@ -111,6 +115,43 @@ export class InMemoryRepository implements Repository {
 
   async deleteSession(id: string): Promise<void> {
     this.sessions = this.sessions.filter((s) => s.id !== id);
+  }
+
+  async saveMacrocyclePeriod(input: NewMacrocyclePeriod): Promise<MacrocyclePeriodRecord> {
+    const record: MacrocyclePeriodRecord = {
+      id: newId(),
+      createdAt: input.createdAt ?? Date.now(),
+      label: input.label,
+      startDate: input.startDate,
+      endDate: input.endDate,
+      focus: input.focus,
+      objective: input.objective,
+      notes: input.notes,
+    };
+    this.periods.push(record);
+    return record;
+  }
+
+  async listMacrocyclePeriods(): Promise<MacrocyclePeriodRecord[]> {
+    return [...this.periods].sort((a, b) => a.startDate - b.startDate);
+  }
+
+  async getMacrocyclePeriod(id: string): Promise<MacrocyclePeriodRecord | null> {
+    return this.periods.find((p) => p.id === id) ?? null;
+  }
+
+  async updateMacrocyclePeriod(
+    id: string,
+    patch: MacrocyclePeriodPatch,
+  ): Promise<MacrocyclePeriodRecord | null> {
+    const period = this.periods.find((p) => p.id === id);
+    if (!period) return null;
+    Object.assign(period, patch);
+    return period;
+  }
+
+  async deleteMacrocyclePeriod(id: string): Promise<void> {
+    this.periods = this.periods.filter((p) => p.id !== id);
   }
 
   async saveBenchmark(input: NewBenchmark): Promise<BenchmarkRecord> {

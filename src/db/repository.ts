@@ -4,10 +4,13 @@ import type {
   CheckinRecord,
   GoalPatch,
   GoalRecord,
+  MacrocyclePeriodPatch,
+  MacrocyclePeriodRecord,
   NewAssessment,
   NewBenchmark,
   NewCheckin,
   NewGoal,
+  NewMacrocyclePeriod,
   NewSession,
   SessionRecord,
   UsageEventRecord,
@@ -43,6 +46,17 @@ export interface Repository {
   listSessions(): Promise<SessionRecord[]>;
   getSession(id: string): Promise<SessionRecord | null>;
   deleteSession(id: string): Promise<void>;
+
+  // --- Macrocycle periods ---
+  saveMacrocyclePeriod(input: NewMacrocyclePeriod): Promise<MacrocyclePeriodRecord>;
+  /** Ordered by start date ascending. */
+  listMacrocyclePeriods(): Promise<MacrocyclePeriodRecord[]>;
+  getMacrocyclePeriod(id: string): Promise<MacrocyclePeriodRecord | null>;
+  updateMacrocyclePeriod(
+    id: string,
+    patch: MacrocyclePeriodPatch,
+  ): Promise<MacrocyclePeriodRecord | null>;
+  deleteMacrocyclePeriod(id: string): Promise<void>;
 
   // --- Fitness Evaluation benchmarks ---
   saveBenchmark(input: NewBenchmark): Promise<BenchmarkRecord>;

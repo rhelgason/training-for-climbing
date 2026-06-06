@@ -52,6 +52,7 @@ export type UsageEvent =
   | { name: 'goal_completed'; props: { horizon: string } }
   | { name: 'goal_deleted'; props: { horizon: string } }
   | { name: 'program_built'; props: { tier: string; areaCount: number } }
+  | { name: 'macrocycle_period_created'; props?: Record<string, never> }
   | { name: 'session_logged'; props: { areaCount: number } }
   | { name: 'session_deleted'; props?: Record<string, never> }
   | { name: 'checkin_logged'; props: { quadrant: string } }
