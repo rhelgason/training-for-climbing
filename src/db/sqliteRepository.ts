@@ -8,10 +8,12 @@ import type { Responses } from '../features/assess/scoring';
 import type { Repository } from './repository';
 import type {
   AssessmentRecord,
+  BenchmarkRecord,
   CheckinRecord,
   GoalPatch,
   GoalRecord,
   NewAssessment,
+  NewBenchmark,
   NewCheckin,
   NewGoal,
   NewSession,
@@ -53,6 +55,15 @@ interface CheckinRow {
   energy: number;
   emotion: number;
   note: string | null;
+}
+
+interface BenchmarkRow {
+  id: string;
+  created_at: number;
+  test_id: string;
+  side: string | null;
+  value: number;
+  date: number;
 }
 
 interface GoalRow {
@@ -114,6 +125,14 @@ export class SqliteRepository implements Repository {
         focus_areas TEXT NOT NULL,
         notes TEXT
       );
+      CREATE TABLE IF NOT EXISTS benchmarks (
+        id TEXT PRIMARY KEY NOT NULL,
+        created_at INTEGER NOT NULL,
+        test_id TEXT NOT NULL,
+        side TEXT,
+        value REAL NOT NULL,
+        date INTEGER NOT NULL
+      );
       CREATE TABLE IF NOT EXISTS checkins (
         id TEXT PRIMARY KEY NOT NULL,
         created_at INTEGER NOT NULL,
@@ -131,6 +150,7 @@ export class SqliteRepository implements Repository {
       CREATE INDEX IF NOT EXISTS idx_assessments_created_at ON assessments (created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_goals_created_at ON goals (created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_sessions_date ON sessions (date DESC);
+      CREATE INDEX IF NOT EXISTS idx_benchmarks_date ON benchmarks (date DESC);
       CREATE INDEX IF NOT EXISTS idx_checkins_time ON checkins (time DESC);
       CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events (timestamp DESC);
     `);
@@ -284,6 +304,38 @@ export class SqliteRepository implements Repository {
     await this.getDb().runAsync(`DELETE FROM sessions WHERE id = ?`, id);
   }
 
+  async saveBenchmark(input: NewBenchmark): Promise<BenchmarkRecord> {
+    const record: BenchmarkRecord = {
+      id: newId(),
+      createdAt: input.createdAt ?? Date.now(),
+      testId: input.testId,
+      side: input.side,
+      value: input.value,
+      date: input.date,
+    };
+    await this.getDb().runAsync(
+      `INSERT INTO benchmarks (id, created_at, test_id, side, value, date) VALUES (?, ?, ?, ?, ?, ?)`,
+      record.id,
+      record.createdAt,
+      record.testId,
+      record.side ?? null,
+      record.value,
+      record.date,
+    );
+    return record;
+  }
+
+  async listBenchmarks(): Promise<BenchmarkRecord[]> {
+    const rows = await this.getDb().getAllAsync<BenchmarkRow>(
+      `SELECT * FROM benchmarks ORDER BY date DESC`,
+    );
+    return rows.map(rowToBenchmark);
+  }
+
+  async deleteBenchmark(id: string): Promise<void> {
+    await this.getDb().runAsync(`DELETE FROM benchmarks WHERE id = ?`, id);
+  }
+
   async saveCheckin(input: NewCheckin): Promise<CheckinRecord> {
     const record: CheckinRecord = {
       id: newId(),
@@ -375,6 +427,17 @@ function rowToSession(row: SessionRow): SessionRecord {
     date: row.date,
     focusAreas: safeParse<HierarchyAreaId[]>(row.focus_areas, []),
     notes: row.notes ?? undefined,
+  };
+}
+
+function rowToBenchmark(row: BenchmarkRow): BenchmarkRecord {
+  return {
+    id: row.id,
+    createdAt: row.created_at,
+    testId: row.test_id,
+    side: (row.side as 'left' | 'right' | null) ?? undefined,
+    value: row.value,
+    date: row.date,
   };
 }
 

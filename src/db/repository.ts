@@ -1,9 +1,11 @@
 import type {
   AssessmentRecord,
+  BenchmarkRecord,
   CheckinRecord,
   GoalPatch,
   GoalRecord,
   NewAssessment,
+  NewBenchmark,
   NewCheckin,
   NewGoal,
   NewSession,
@@ -41,6 +43,12 @@ export interface Repository {
   listSessions(): Promise<SessionRecord[]>;
   getSession(id: string): Promise<SessionRecord | null>;
   deleteSession(id: string): Promise<void>;
+
+  // --- Fitness Evaluation benchmarks ---
+  saveBenchmark(input: NewBenchmark): Promise<BenchmarkRecord>;
+  /** Newest first (by test date). */
+  listBenchmarks(): Promise<BenchmarkRecord[]>;
+  deleteBenchmark(id: string): Promise<void>;
 
   // --- Energy-Emotion check-ins ---
   saveCheckin(input: NewCheckin): Promise<CheckinRecord>;

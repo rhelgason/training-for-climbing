@@ -71,6 +71,22 @@ export interface SessionRecord {
 
 export type NewSession = Omit<SessionRecord, 'id' | 'createdAt'> & { createdAt?: number };
 
+/** A recorded Fitness Evaluation benchmark result (Appendix D). */
+export interface BenchmarkRecord {
+  id: string;
+  createdAt: number;
+  /** Which test (matches FitnessTest.id in content/fitnessEvaluation). */
+  testId: string;
+  /** For bilateral tests (e.g. one-arm lock-off); omitted otherwise. */
+  side?: 'left' | 'right';
+  /** The recorded result in the test's unit. */
+  value: number;
+  /** The day the test was performed (epoch ms). */
+  date: number;
+}
+
+export type NewBenchmark = Omit<BenchmarkRecord, 'id' | 'createdAt'> & { createdAt?: number };
+
 /**
  * An Energy-Emotion reading (Appendix B chart). Energy on a 0–10 axis,
  * emotion on a −5..+5 axis; logged through the day to spot patterns.

@@ -2,10 +2,12 @@ import { newId } from '../lib/ids';
 import type { Repository } from './repository';
 import type {
   AssessmentRecord,
+  BenchmarkRecord,
   CheckinRecord,
   GoalPatch,
   GoalRecord,
   NewAssessment,
+  NewBenchmark,
   NewCheckin,
   NewGoal,
   NewSession,
@@ -21,6 +23,7 @@ export class InMemoryRepository implements Repository {
   private assessments: AssessmentRecord[] = [];
   private goals: GoalRecord[] = [];
   private sessions: SessionRecord[] = [];
+  private benchmarks: BenchmarkRecord[] = [];
   private checkins: CheckinRecord[] = [];
   private events: UsageEventRecord[] = [];
 
@@ -108,6 +111,27 @@ export class InMemoryRepository implements Repository {
 
   async deleteSession(id: string): Promise<void> {
     this.sessions = this.sessions.filter((s) => s.id !== id);
+  }
+
+  async saveBenchmark(input: NewBenchmark): Promise<BenchmarkRecord> {
+    const record: BenchmarkRecord = {
+      id: newId(),
+      createdAt: input.createdAt ?? Date.now(),
+      testId: input.testId,
+      side: input.side,
+      value: input.value,
+      date: input.date,
+    };
+    this.benchmarks.push(record);
+    return record;
+  }
+
+  async listBenchmarks(): Promise<BenchmarkRecord[]> {
+    return [...this.benchmarks].sort((a, b) => b.date - a.date);
+  }
+
+  async deleteBenchmark(id: string): Promise<void> {
+    this.benchmarks = this.benchmarks.filter((b) => b.id !== id);
   }
 
   async saveCheckin(input: NewCheckin): Promise<CheckinRecord> {

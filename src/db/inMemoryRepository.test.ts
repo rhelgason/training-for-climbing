@@ -91,6 +91,15 @@ describe('InMemoryRepository', () => {
     expect(saved.focusAreas).toEqual(['skill']);
   });
 
+  it('saves benchmarks, lists them newest-first by date, and deletes', async () => {
+    const repo = new InMemoryRepository();
+    const a = await repo.saveBenchmark({ testId: 'max-pullups', value: 10, date: 1000 });
+    const b = await repo.saveBenchmark({ testId: 'max-pullups', value: 13, date: 2000 });
+    expect((await repo.listBenchmarks()).map((x) => x.id)).toEqual([b.id, a.id]);
+    await repo.deleteBenchmark(b.id);
+    expect((await repo.listBenchmarks()).map((x) => x.id)).toEqual([a.id]);
+  });
+
   it('saves check-ins, lists them newest-first by time, and deletes', async () => {
     const repo = new InMemoryRepository();
     const a = await repo.saveCheckin({ time: 1000, energy: 7, emotion: 3 });
