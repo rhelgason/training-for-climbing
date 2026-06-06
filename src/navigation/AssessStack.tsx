@@ -5,6 +5,8 @@ import { AssessHomeScreen } from '../features/assess/AssessHomeScreen';
 import { AssessmentScreen } from '../features/assess/AssessmentScreen';
 import { ResultsScreen } from '../features/assess/ResultsScreen';
 import { HistoryScreen } from '../features/assess/HistoryScreen';
+import { FitnessScreen } from '../features/assess/FitnessScreen';
+import { FitnessFormScreen } from '../features/assess/FitnessFormScreen';
 import type { AssessStackParamList } from './types';
 import { screenOptions } from './options';
 
@@ -21,6 +23,16 @@ export function AssessStack() {
       />
       <Stack.Screen name="Results" component={ResultsScreen} options={{ title: 'Results' }} />
       <Stack.Screen name="History" component={HistoryScreen} options={{ title: 'History' }} />
+      <Stack.Screen
+        name="Fitness"
+        component={FitnessScreen}
+        options={{ title: 'Fitness evaluation' }}
+      />
+      <Stack.Screen
+        name="FitnessForm"
+        component={FitnessFormScreen}
+        options={{ title: 'Record evaluation' }}
+      />
     </Stack.Navigator>
   );
 }

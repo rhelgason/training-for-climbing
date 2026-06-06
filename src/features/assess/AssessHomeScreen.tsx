@@ -55,6 +55,12 @@ export function AssessHomeScreen({ navigation }: Props) {
           onPress={() => navigation.navigate('History')}
           style={styles.secondaryAction}
         />
+        <Button
+          label="Fitness evaluation"
+          variant="secondary"
+          onPress={() => navigation.navigate('Fitness')}
+          style={styles.secondaryAction}
+        />
       </View>
     </Screen>
   );

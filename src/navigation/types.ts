@@ -5,6 +5,8 @@ export type AssessStackParamList = {
   Assessment: undefined;
   Results: { assessmentId: string };
   History: undefined;
+  Fitness: undefined;
+  FitnessForm: undefined;
 };
 
 export type PlanStackParamList = {
