@@ -1,0 +1,107 @@
+import type { AssessmentRecord, ClimbRecord } from '../../db/types';
+import type { ClimbDiscipline, ClimbEnvironment, ClimbOutcome } from '../../content/climbing';
+import {
+  countInLastDays,
+  firstTryRate,
+  hardestSend,
+  sendPyramid,
+  sendRate,
+  triadSeries,
+} from './dashboard';
+
+const DAY = 24 * 60 * 60 * 1000;
+const NOW = 1000 * DAY;
+
+function climb(
+  partial: Partial<ClimbRecord> & {
+    discipline: ClimbDiscipline;
+    grade: string;
+    outcome: ClimbOutcome;
+  },
+): ClimbRecord {
+  return {
+    id: partial.id ?? `${partial.grade}-${partial.outcome}`,
+    createdAt: 0,
+    updatedAt: 0,
+    date: partial.date ?? NOW,
+    environment: partial.environment ?? ('indoor' as ClimbEnvironment),
+    ...partial,
+  };
+}
+
+describe('hardestSend', () => {
+  it('returns the highest-ranked sent climb of a discipline', () => {
+    const climbs = [
+      climb({ discipline: 'boulder', grade: 'V3', outcome: 'send' }),
+      climb({ discipline: 'boulder', grade: 'V6', outcome: 'flash' }),
+      climb({ discipline: 'boulder', grade: 'V8', outcome: 'attempt' }), // not a send
+      climb({ discipline: 'lead', grade: '5.12a', outcome: 'send' }),
+    ];
+    expect(hardestSend(climbs, 'boulder')?.grade).toBe('V6');
+  });
+
+  it('returns null when there are no sends in that discipline', () => {
+    expect(
+      hardestSend([climb({ discipline: 'boulder', grade: 'V5', outcome: 'attempt' })], 'boulder'),
+    ).toBeNull();
+    expect(hardestSend([], 'lead')).toBeNull();
+  });
+});
+
+describe('sendPyramid', () => {
+  it('counts sent grades hardest-first', () => {
+    const climbs = [
+      climb({ id: '1', discipline: 'boulder', grade: 'V2', outcome: 'send' }),
+      climb({ id: '2', discipline: 'boulder', grade: 'V2', outcome: 'flash' }),
+      climb({ id: '3', discipline: 'boulder', grade: 'V4', outcome: 'send' }),
+      climb({ id: '4', discipline: 'boulder', grade: 'V4', outcome: 'attempt' }), // excluded
+    ];
+    expect(sendPyramid(climbs, 'boulder')).toEqual([
+      { grade: 'V4', count: 1 },
+      { grade: 'V2', count: 2 },
+    ]);
+  });
+});
+
+describe('rates', () => {
+  it('sendRate is sends over total', () => {
+    const climbs = [
+      climb({ discipline: 'lead', grade: '5.10a', outcome: 'send' }),
+      climb({ discipline: 'lead', grade: '5.10b', outcome: 'attempt' }),
+    ];
+    expect(sendRate(climbs)).toBe(0.5);
+    expect(sendRate([])).toBe(0);
+  });
+
+  it('firstTryRate is onsight/flash over sends', () => {
+    const climbs = [
+      climb({ id: 'a', discipline: 'boulder', grade: 'V1', outcome: 'flash' }),
+      climb({ id: 'b', discipline: 'boulder', grade: 'V1', outcome: 'send' }),
+    ];
+    expect(firstTryRate(climbs)).toBe(0.5);
+    expect(firstTryRate([])).toBe(0);
+  });
+});
+
+describe('countInLastDays', () => {
+  it('counts timestamps within the window', () => {
+    const ts = [NOW, NOW - 5 * DAY, NOW - 40 * DAY];
+    expect(countInLastDays(ts, NOW, 30)).toBe(2);
+  });
+});
+
+describe('triadSeries', () => {
+  it('returns triad scores oldest-first', () => {
+    const a = (id: string, createdAt: number, mental: number): AssessmentRecord => ({
+      id,
+      createdAt,
+      responses: {},
+      mental,
+      technical: 30,
+      physical: 30,
+      weakestArea: 'mental',
+    });
+    const series = triadSeries([a('2', 2000, 40), a('1', 1000, 35)]);
+    expect(series.map((p) => p.mental)).toEqual([35, 40]);
+  });
+});
