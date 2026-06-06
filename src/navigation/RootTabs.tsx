@@ -4,6 +4,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 
 import { AssessStack } from './AssessStack';
 import { PlanStack } from './PlanStack';
+import { ProgressStack } from './ProgressStack';
 import { ReviewStack } from './ReviewStack';
 import { TrainStack } from './TrainStack';
 import type { RootTabParamList } from './types';
@@ -15,6 +16,7 @@ const ICONS: Record<keyof RootTabParamList, string> = {
   Assess: '🎯',
   Plan: '🗺️',
   Train: '💪',
+  Progress: '📈',
   Review: '📖',
 };
 
@@ -34,6 +36,7 @@ export function RootTabs() {
       <Tab.Screen name="Assess" component={AssessStack} />
       <Tab.Screen name="Plan" component={PlanStack} />
       <Tab.Screen name="Train" component={TrainStack} />
+      <Tab.Screen name="Progress" component={ProgressStack} />
       <Tab.Screen name="Review" component={ReviewStack} />
     </Tab.Navigator>
   );

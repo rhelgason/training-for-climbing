@@ -26,6 +26,12 @@ export type TrainStackParamList = {
   Exercises: undefined;
 };
 
+export type ProgressStackParamList = {
+  Dashboard: undefined;
+  Climbs: undefined;
+  ClimbForm: undefined;
+};
+
 export type ReviewStackParamList = {
   ReviewHome: undefined;
   Glossary: undefined;
@@ -35,5 +41,6 @@ export type RootTabParamList = {
   Assess: NavigatorScreenParams<AssessStackParamList>;
   Plan: NavigatorScreenParams<PlanStackParamList>;
   Train: NavigatorScreenParams<TrainStackParamList>;
+  Progress: NavigatorScreenParams<ProgressStackParamList>;
   Review: NavigatorScreenParams<ReviewStackParamList>;
 };
