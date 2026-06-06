@@ -45,6 +45,8 @@ src/
     plan/       # goals + program builder + macrocycle planner, with tested logic
     train/      # session log, rest/streak, energy-emotion, exercise library
     today/      # daily "what to work on" recommendation (tested)
+    progress/   # climb logging + dashboard aggregations (tested)
+    sync/       # backend-agnostic snapshot sync engine + Supabase remote
     review/     # glossary browser, chapter summaries (roadmap)
   db/           # Repository interface + InMemory + SQLite implementations
   lib/          # logger + structured usage events, ids
@@ -64,6 +66,31 @@ src/
 - **CI:** `.github/workflows/ci.yml` runs typecheck + lint + format check + tests on every
   push/PR and must stay green.
 
+## Cloud sync (optional)
+
+The app is local-first and works fully offline. Cloud sync is opt-in via Supabase and uses a
+**snapshot + last-write-wins** model (the whole dataset is merged per record by `updatedAt`).
+
+1. Create a Supabase project and add a snapshots table:
+
+   ```sql
+   create table snapshots (
+     user_id uuid primary key references auth.users (id) on delete cascade,
+     data jsonb not null,
+     updated_at timestamptz not null default now()
+   );
+   alter table snapshots enable row level security;
+   create policy "own snapshot" on snapshots
+     for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+   ```
+
+2. Copy `.env.example` to `.env` and set `EXPO_PUBLIC_SUPABASE_URL` and
+   `EXPO_PUBLIC_SUPABASE_ANON_KEY`, then restart.
+3. In the app: **Review → Cloud sync**, sign in via email magic link, and tap **Sync now**.
+
+The merge engine (`src/features/sync/`) is backend-agnostic and unit-tested with an in-memory
+remote. **v1 limitation:** deletes don't propagate across devices yet (no tombstones).
+
 ## Status
 
 - **Phase 1 — Assess (done):** the **Self-Assessment** — 30 questions → Mental/Technical/Physical
@@ -80,8 +107,12 @@ src/
 - **Today recommendation:** the Train tab opens with a **"Today"** card that synthesizes your
   weakest triad area + active goals + recent training into a faithful suggestion (rest after 3
   days in a row; otherwise target your weakest area; take the assessment first if you haven't).
-- **Phase 4 — Track (in progress):** the **Fitness Evaluation** (Appendix D — 10 benchmarks with
+- **Phase 4 — Track (done):** the **Fitness Evaluation** (Appendix D — 10 benchmarks with
   per-test trend and an annual-retest reminder) and the **Macrocycle planner** (Appendix B —
   annual training blocks with climbing days pulled from your session log).
+- **Progress tab (done):** log ascents (indoor/outdoor, boulder/lead/top-rope, grade, outcome)
+  and a dashboard — personal bests, send pyramids, send/onsight rates, 30-day volume, and the
+  triad trend.
+- **Cloud sync (done):** optional Supabase snapshot sync (see above).
 
 See the plan file for the full phased roadmap.
