@@ -1,10 +1,7 @@
 /**
- * Exercise library — derived from Eric J. Hörst, *Training for Climbing*,
- * Chapters 6 (general conditioning) and 7 (climbing-specific exercises).
- *
- * ⚠️ Derived from the earlier-edition PDF, not the user's 3rd-edition paperback.
- * Exercise names follow the book; the brief descriptions are paraphrased.
- * Verify specifics (especially set/rep prescriptions) against the 3rd edition.
+ * Exercise library — Eric J. Hörst, *Training for Climbing*, Chapters 6 (general
+ * conditioning) and 7 (climbing-specific exercises). Names follow the book; the
+ * brief descriptions are paraphrased.
  */
 import type { Exercise } from './types';
 

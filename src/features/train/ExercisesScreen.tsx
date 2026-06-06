@@ -45,9 +45,7 @@ export function ExercisesScreen() {
         </Card>
       ))}
 
-      <Text style={styles.footnote}>
-        Derived from an earlier edition; verify specifics against your 3rd-edition copy.
-      </Text>
+      <Text style={styles.footnote}>From Training for Climbing, Chapters 6–7.</Text>
     </Screen>
   );
 }
