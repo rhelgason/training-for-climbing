@@ -13,6 +13,7 @@ function period(partial: Partial<MacrocyclePeriodRecord>): MacrocyclePeriodRecor
   return {
     id: partial.id ?? 'p',
     createdAt: 0,
+    updatedAt: 0,
     label: partial.label ?? 'Block',
     startDate: partial.startDate ?? 0,
     endDate: partial.endDate ?? DAY,

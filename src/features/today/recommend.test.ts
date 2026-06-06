@@ -12,6 +12,7 @@ function goal(partial: Partial<GoalRecord>): GoalRecord {
   return {
     id: partial.id ?? 'g',
     createdAt: 0,
+    updatedAt: 0,
     horizon: partial.horizon ?? 'medium',
     title: partial.title ?? 'Goal',
     status: partial.status ?? 'active',
