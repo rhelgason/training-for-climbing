@@ -15,6 +15,7 @@ import type {
   NewMacrocyclePeriod,
   NewSession,
   SessionRecord,
+  Snapshot,
   UsageEventRecord,
 } from './types';
 
@@ -77,6 +78,12 @@ export interface Repository {
   /** Newest first (by reading time). */
   listCheckins(): Promise<CheckinRecord[]>;
   deleteCheckin(id: string): Promise<void>;
+
+  // --- Cloud sync ---
+  /** Full export of all syncable data (excludes analytics events). */
+  exportSnapshot(): Promise<Snapshot>;
+  /** Upsert every record in the snapshot by id (used after a sync merge). */
+  applySnapshot(snapshot: Snapshot): Promise<void>;
 
   // --- Usage events (analytics) ---
   recordEvent(event: Omit<UsageEventRecord, 'id'>): Promise<void>;

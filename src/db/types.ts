@@ -24,6 +24,8 @@ export type NewAssessment = Omit<AssessmentRecord, 'id' | 'createdAt'> & {
 export interface GoalRecord {
   id: string;
   createdAt: number;
+  /** Bumped on every edit; used for last-write-wins cloud sync. */
+  updatedAt: number;
   horizon: GoalHorizon;
   /** The precise goal statement. */
   title: string;
@@ -40,9 +42,13 @@ export interface GoalRecord {
   completedAt?: number;
 }
 
-export type NewGoal = Omit<GoalRecord, 'id' | 'createdAt' | 'status' | 'completedAt'> & {
+export type NewGoal = Omit<
+  GoalRecord,
+  'id' | 'createdAt' | 'updatedAt' | 'status' | 'completedAt'
+> & {
   status?: GoalStatus;
   createdAt?: number;
+  updatedAt?: number;
 };
 
 export type GoalPatch = Partial<
@@ -98,6 +104,8 @@ export type NewClimb = Omit<ClimbRecord, 'id' | 'createdAt' | 'updatedAt'> & {
 export interface MacrocyclePeriodRecord {
   id: string;
   createdAt: number;
+  /** Bumped on every edit; used for last-write-wins cloud sync. */
+  updatedAt: number;
   /** e.g. "Winter base", "Spring power". */
   label: string;
   startDate: number;
@@ -109,8 +117,9 @@ export interface MacrocyclePeriodRecord {
   notes?: string;
 }
 
-export type NewMacrocyclePeriod = Omit<MacrocyclePeriodRecord, 'id' | 'createdAt'> & {
+export type NewMacrocyclePeriod = Omit<MacrocyclePeriodRecord, 'id' | 'createdAt' | 'updatedAt'> & {
   createdAt?: number;
+  updatedAt?: number;
 };
 
 export type MacrocyclePeriodPatch = Partial<
@@ -150,6 +159,21 @@ export interface CheckinRecord {
 }
 
 export type NewCheckin = Omit<CheckinRecord, 'id' | 'createdAt'> & { createdAt?: number };
+
+/**
+ * A full export of the user's data for cloud sync. Excludes analytics events
+ * (local-only). Every table is keyed by `id` and carries a comparable
+ * timestamp (`updatedAt` where present, else `createdAt`) for last-write-wins.
+ */
+export interface Snapshot {
+  assessments: AssessmentRecord[];
+  goals: GoalRecord[];
+  sessions: SessionRecord[];
+  climbs: ClimbRecord[];
+  periods: MacrocyclePeriodRecord[];
+  benchmarks: BenchmarkRecord[];
+  checkins: CheckinRecord[];
+}
 
 /** A persisted usage event (analytics, local-first). */
 export interface UsageEventRecord {

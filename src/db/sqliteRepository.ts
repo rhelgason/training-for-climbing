@@ -23,6 +23,7 @@ import type {
   NewMacrocyclePeriod,
   NewSession,
   SessionRecord,
+  Snapshot,
   UsageEventRecord,
 } from './types';
 import type { ClimbDiscipline, ClimbEnvironment, ClimbOutcome } from '../content/climbing';
@@ -80,6 +81,7 @@ interface ClimbRow {
 interface MacrocyclePeriodRow {
   id: string;
   created_at: number;
+  updated_at: number;
   label: string;
   start_date: number;
   end_date: number;
@@ -100,6 +102,7 @@ interface BenchmarkRow {
 interface GoalRow {
   id: string;
   created_at: number;
+  updated_at: number;
   horizon: string;
   title: string;
   mission: string | null;
@@ -140,6 +143,7 @@ export class SqliteRepository implements Repository {
       CREATE TABLE IF NOT EXISTS goals (
         id TEXT PRIMARY KEY NOT NULL,
         created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
         horizon TEXT NOT NULL,
         title TEXT NOT NULL,
         mission TEXT,
@@ -172,6 +176,7 @@ export class SqliteRepository implements Repository {
       CREATE TABLE IF NOT EXISTS macrocycle_periods (
         id TEXT PRIMARY KEY NOT NULL,
         created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
         label TEXT NOT NULL,
         start_date INTEGER NOT NULL,
         end_date INTEGER NOT NULL,
@@ -253,9 +258,12 @@ export class SqliteRepository implements Repository {
   }
 
   async saveGoal(input: NewGoal): Promise<GoalRecord> {
+    const ts = Date.now();
+    const createdAt = input.createdAt ?? ts;
     const record: GoalRecord = {
       id: newId(),
-      createdAt: input.createdAt ?? Date.now(),
+      createdAt,
+      updatedAt: input.updatedAt ?? createdAt,
       horizon: input.horizon,
       title: input.title,
       mission: input.mission,
@@ -266,10 +274,11 @@ export class SqliteRepository implements Repository {
       completedAt: undefined,
     };
     await this.getDb().runAsync(
-      `INSERT INTO goals (id, created_at, horizon, title, mission, sacrifice, target_date, triad_area, status, completed_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO goals (id, created_at, updated_at, horizon, title, mission, sacrifice, target_date, triad_area, status, completed_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       record.id,
       record.createdAt,
+      record.updatedAt,
       record.horizon,
       record.title,
       record.mission ?? null,
@@ -305,16 +314,16 @@ export class SqliteRepository implements Repository {
       status: 'status',
       completedAt: 'completed_at',
     };
-    const sets: string[] = [];
-    const values: SQLite.SQLiteBindValue[] = [];
+    const existing = await this.getGoal(id);
+    if (!existing) return null;
+    const sets: string[] = ['updated_at = ?'];
+    const values: SQLite.SQLiteBindValue[] = [Math.max(Date.now(), existing.updatedAt + 1)];
     (Object.keys(patch) as (keyof GoalPatch)[]).forEach((key) => {
       sets.push(`${COLUMNS[key]} = ?`);
       values.push(patch[key] ?? null);
     });
-    if (sets.length > 0) {
-      values.push(id);
-      await this.getDb().runAsync(`UPDATE goals SET ${sets.join(', ')} WHERE id = ?`, ...values);
-    }
+    values.push(id);
+    await this.getDb().runAsync(`UPDATE goals SET ${sets.join(', ')} WHERE id = ?`, ...values);
     return this.getGoal(id);
   }
 
@@ -405,9 +414,12 @@ export class SqliteRepository implements Repository {
   }
 
   async saveMacrocyclePeriod(input: NewMacrocyclePeriod): Promise<MacrocyclePeriodRecord> {
+    const ts = Date.now();
+    const createdAt = input.createdAt ?? ts;
     const record: MacrocyclePeriodRecord = {
       id: newId(),
-      createdAt: input.createdAt ?? Date.now(),
+      createdAt,
+      updatedAt: input.updatedAt ?? createdAt,
       label: input.label,
       startDate: input.startDate,
       endDate: input.endDate,
@@ -416,10 +428,11 @@ export class SqliteRepository implements Repository {
       notes: input.notes,
     };
     await this.getDb().runAsync(
-      `INSERT INTO macrocycle_periods (id, created_at, label, start_date, end_date, focus, objective, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO macrocycle_periods (id, created_at, updated_at, label, start_date, end_date, focus, objective, notes)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       record.id,
       record.createdAt,
+      record.updatedAt,
       record.label,
       record.startDate,
       record.endDate,
@@ -457,19 +470,19 @@ export class SqliteRepository implements Repository {
       objective: 'objective',
       notes: 'notes',
     };
-    const sets: string[] = [];
-    const values: SQLite.SQLiteBindValue[] = [];
+    const existing = await this.getMacrocyclePeriod(id);
+    if (!existing) return null;
+    const sets: string[] = ['updated_at = ?'];
+    const values: SQLite.SQLiteBindValue[] = [Math.max(Date.now(), existing.updatedAt + 1)];
     (Object.keys(patch) as (keyof MacrocyclePeriodPatch)[]).forEach((key) => {
       sets.push(`${COLUMNS[key]} = ?`);
       values.push(patch[key] ?? null);
     });
-    if (sets.length > 0) {
-      values.push(id);
-      await this.getDb().runAsync(
-        `UPDATE macrocycle_periods SET ${sets.join(', ')} WHERE id = ?`,
-        ...values,
-      );
-    }
+    values.push(id);
+    await this.getDb().runAsync(
+      `UPDATE macrocycle_periods SET ${sets.join(', ')} WHERE id = ?`,
+      ...values,
+    );
     return this.getMacrocyclePeriod(id);
   }
 
@@ -541,6 +554,121 @@ export class SqliteRepository implements Repository {
     await this.getDb().runAsync(`DELETE FROM checkins WHERE id = ?`, id);
   }
 
+  async exportSnapshot(): Promise<Snapshot> {
+    const [assessments, goals, sessions, climbs, periods, benchmarks, checkins] = await Promise.all(
+      [
+        this.listAssessments(),
+        this.listGoals(),
+        this.listSessions(),
+        this.listClimbs(),
+        this.listMacrocyclePeriods(),
+        this.listBenchmarks(),
+        this.listCheckins(),
+      ],
+    );
+    return { assessments, goals, sessions, climbs, periods, benchmarks, checkins };
+  }
+
+  async applySnapshot(snapshot: Snapshot): Promise<void> {
+    const db = this.getDb();
+    await db.withTransactionAsync(async () => {
+      for (const a of snapshot.assessments) {
+        await db.runAsync(
+          `INSERT OR REPLACE INTO assessments (id, created_at, responses, mental, technical, physical, weakest_area)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          a.id,
+          a.createdAt,
+          JSON.stringify(a.responses),
+          a.mental,
+          a.technical,
+          a.physical,
+          a.weakestArea,
+        );
+      }
+      for (const g of snapshot.goals) {
+        await db.runAsync(
+          `INSERT OR REPLACE INTO goals (id, created_at, updated_at, horizon, title, mission, sacrifice, target_date, triad_area, status, completed_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          g.id,
+          g.createdAt,
+          g.updatedAt,
+          g.horizon,
+          g.title,
+          g.mission ?? null,
+          g.sacrifice ?? null,
+          g.targetDate ?? null,
+          g.triadArea ?? null,
+          g.status,
+          g.completedAt ?? null,
+        );
+      }
+      for (const s of snapshot.sessions) {
+        await db.runAsync(
+          `INSERT OR REPLACE INTO sessions (id, created_at, date, focus_areas, notes) VALUES (?, ?, ?, ?, ?)`,
+          s.id,
+          s.createdAt,
+          s.date,
+          JSON.stringify(s.focusAreas),
+          s.notes ?? null,
+        );
+      }
+      for (const c of snapshot.climbs) {
+        await db.runAsync(
+          `INSERT OR REPLACE INTO climbs (id, created_at, updated_at, date, environment, discipline, grade, outcome, name, location, notes)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          c.id,
+          c.createdAt,
+          c.updatedAt,
+          c.date,
+          c.environment,
+          c.discipline,
+          c.grade,
+          c.outcome,
+          c.name ?? null,
+          c.location ?? null,
+          c.notes ?? null,
+        );
+      }
+      for (const p of snapshot.periods) {
+        await db.runAsync(
+          `INSERT OR REPLACE INTO macrocycle_periods (id, created_at, updated_at, label, start_date, end_date, focus, objective, notes)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          p.id,
+          p.createdAt,
+          p.updatedAt,
+          p.label,
+          p.startDate,
+          p.endDate,
+          p.focus ?? null,
+          p.objective ?? null,
+          p.notes ?? null,
+        );
+      }
+      for (const b of snapshot.benchmarks) {
+        await db.runAsync(
+          `INSERT OR REPLACE INTO benchmarks (id, created_at, test_id, side, value, date) VALUES (?, ?, ?, ?, ?, ?)`,
+          b.id,
+          b.createdAt,
+          b.testId,
+          b.side ?? null,
+          b.value,
+          b.date,
+        );
+      }
+      for (const c of snapshot.checkins) {
+        await db.runAsync(
+          `INSERT OR REPLACE INTO checkins (id, created_at, time, energy, emotion, note) VALUES (?, ?, ?, ?, ?, ?)`,
+          c.id,
+          c.createdAt,
+          c.time,
+          c.energy,
+          c.emotion,
+          c.note ?? null,
+        );
+      }
+    });
+  }
+
   async recordEvent(event: Omit<UsageEventRecord, 'id'>): Promise<void> {
     await this.getDb().runAsync(
       `INSERT INTO events (id, name, props, timestamp) VALUES (?, ?, ?, ?)`,
@@ -582,6 +710,7 @@ function rowToGoal(row: GoalRow): GoalRecord {
   return {
     id: row.id,
     createdAt: row.created_at,
+    updatedAt: row.updated_at,
     horizon: row.horizon as GoalHorizon,
     title: row.title,
     mission: row.mission ?? undefined,
@@ -623,6 +752,7 @@ function rowToPeriod(row: MacrocyclePeriodRow): MacrocyclePeriodRecord {
   return {
     id: row.id,
     createdAt: row.created_at,
+    updatedAt: row.updated_at,
     label: row.label,
     startDate: row.start_date,
     endDate: row.end_date,

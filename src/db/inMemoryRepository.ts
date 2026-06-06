@@ -17,6 +17,7 @@ import type {
   NewMacrocyclePeriod,
   NewSession,
   SessionRecord,
+  Snapshot,
   UsageEventRecord,
 } from './types';
 
@@ -61,9 +62,12 @@ export class InMemoryRepository implements Repository {
   }
 
   async saveGoal(input: NewGoal): Promise<GoalRecord> {
+    const ts = Date.now();
+    const createdAt = input.createdAt ?? ts;
     const record: GoalRecord = {
       id: newId(),
-      createdAt: input.createdAt ?? Date.now(),
+      createdAt,
+      updatedAt: input.updatedAt ?? createdAt,
       horizon: input.horizon,
       title: input.title,
       mission: input.mission,
@@ -88,7 +92,9 @@ export class InMemoryRepository implements Repository {
   async updateGoal(id: string, patch: GoalPatch): Promise<GoalRecord | null> {
     const goal = this.goals.find((g) => g.id === id);
     if (!goal) return null;
-    Object.assign(goal, patch);
+    // Monotonic: an edit is always strictly newer than the version it edited,
+    // so last-write-wins sync is unambiguous even within the same millisecond.
+    Object.assign(goal, patch, { updatedAt: Math.max(Date.now(), goal.updatedAt + 1) });
     return goal;
   }
 
@@ -148,9 +154,12 @@ export class InMemoryRepository implements Repository {
   }
 
   async saveMacrocyclePeriod(input: NewMacrocyclePeriod): Promise<MacrocyclePeriodRecord> {
+    const ts = Date.now();
+    const createdAt = input.createdAt ?? ts;
     const record: MacrocyclePeriodRecord = {
       id: newId(),
-      createdAt: input.createdAt ?? Date.now(),
+      createdAt,
+      updatedAt: input.updatedAt ?? createdAt,
       label: input.label,
       startDate: input.startDate,
       endDate: input.endDate,
@@ -176,7 +185,7 @@ export class InMemoryRepository implements Repository {
   ): Promise<MacrocyclePeriodRecord | null> {
     const period = this.periods.find((p) => p.id === id);
     if (!period) return null;
-    Object.assign(period, patch);
+    Object.assign(period, patch, { updatedAt: Math.max(Date.now(), period.updatedAt + 1) });
     return period;
   }
 
@@ -224,6 +233,33 @@ export class InMemoryRepository implements Repository {
 
   async deleteCheckin(id: string): Promise<void> {
     this.checkins = this.checkins.filter((c) => c.id !== id);
+  }
+
+  async exportSnapshot(): Promise<Snapshot> {
+    return {
+      assessments: [...this.assessments],
+      goals: [...this.goals],
+      sessions: [...this.sessions],
+      climbs: [...this.climbs],
+      periods: [...this.periods],
+      benchmarks: [...this.benchmarks],
+      checkins: [...this.checkins],
+    };
+  }
+
+  async applySnapshot(snapshot: Snapshot): Promise<void> {
+    const upsert = <T extends { id: string }>(list: T[], incoming: T[]): T[] => {
+      const byId = new Map(list.map((r) => [r.id, r]));
+      for (const r of incoming) byId.set(r.id, r);
+      return [...byId.values()];
+    };
+    this.assessments = upsert(this.assessments, snapshot.assessments);
+    this.goals = upsert(this.goals, snapshot.goals);
+    this.sessions = upsert(this.sessions, snapshot.sessions);
+    this.climbs = upsert(this.climbs, snapshot.climbs);
+    this.periods = upsert(this.periods, snapshot.periods);
+    this.benchmarks = upsert(this.benchmarks, snapshot.benchmarks);
+    this.checkins = upsert(this.checkins, snapshot.checkins);
   }
 
   async recordEvent(event: Omit<UsageEventRecord, 'id'>): Promise<void> {
