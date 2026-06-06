@@ -31,7 +31,7 @@ describe('ClimbFormScreen', () => {
   it('logs a climb with the selected attributes', async () => {
     const repo = new InMemoryRepository();
     const goBack = jest.fn();
-    const view = await renderForm(repo, { goBack });
+    const view = await renderForm(repo, { goBack, setOptions: jest.fn() });
 
     await waitFor(() => expect(view.getByText('Grade')).toBeTruthy());
 
@@ -65,7 +65,7 @@ describe('ClimbFormScreen', () => {
   it('requires a grade before saving', async () => {
     const repo = new InMemoryRepository();
     const goBack = jest.fn();
-    const view = await renderForm(repo, { goBack });
+    const view = await renderForm(repo, { goBack, setOptions: jest.fn() });
 
     await waitFor(() => expect(view.getByText('Grade')).toBeTruthy());
 

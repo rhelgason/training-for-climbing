@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, StyleSheet, Text, TextInput } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
@@ -47,9 +47,13 @@ const OUTCOME_OPTIONS: ChipOption<ClimbOutcome>[] = OUTCOMES.map((o) => ({
   value: o,
 }));
 
-export function ClimbFormScreen({ navigation }: Props) {
+export function ClimbFormScreen({ navigation, route }: Props) {
   const repo = useRepository();
+  const climbId = route.params?.climbId;
+  const editing = Boolean(climbId);
+
   const [when, setWhen] = useState<WhenChoice>('today');
+  const [existingDate, setExistingDate] = useState<number | null>(null);
   const [environment, setEnvironment] = useState<ClimbEnvironment>('indoor');
   const [discipline, setDiscipline] = useState<ClimbDiscipline>('boulder');
   const [grade, setGrade] = useState<string | null>(null);
@@ -58,6 +62,22 @@ export function ClimbFormScreen({ navigation }: Props) {
   const [location, setLocation] = useState('');
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    navigation.setOptions({ title: editing ? 'Edit climb' : 'Log climb' });
+    if (!climbId) return;
+    repo.getClimb(climbId).then((c) => {
+      if (!c) return;
+      setExistingDate(c.date);
+      setEnvironment(c.environment);
+      setDiscipline(c.discipline);
+      setGrade(c.grade);
+      setOutcome(c.outcome);
+      setName(c.name ?? '');
+      setLocation(c.location ?? '');
+      setNotes(c.notes ?? '');
+    });
+  }, [climbId, editing, navigation, repo]);
 
   const gradeOptions = useMemo<ChipOption<string>[]>(
     () => gradesForDiscipline(discipline).map((g) => ({ label: g, value: g })),
@@ -76,8 +96,7 @@ export function ClimbFormScreen({ navigation }: Props) {
     }
     setSaving(true);
     try {
-      await repo.saveClimb({
-        date: now() - WHEN_OFFSET_DAYS[when] * MS_PER_DAY,
+      const fields = {
         environment,
         discipline,
         grade,
@@ -85,18 +104,35 @@ export function ClimbFormScreen({ navigation }: Props) {
         name: name.trim() || undefined,
         location: location.trim() || undefined,
         notes: notes.trim() || undefined,
-      });
-      trackEvent('climb_logged', { discipline, environment, grade, outcome });
+      };
+      if (climbId) {
+        await repo.updateClimb(climbId, fields);
+      } else {
+        await repo.saveClimb({ ...fields, date: now() - WHEN_OFFSET_DAYS[when] * MS_PER_DAY });
+        trackEvent('climb_logged', { discipline, environment, grade, outcome });
+      }
       navigation.goBack();
     } finally {
       setSaving(false);
     }
   };
 
+  const formatDate = (ms: number) =>
+    new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+
   return (
     <Screen>
       <Text style={styles.label}>When</Text>
-      <OptionChips options={WHEN_OPTIONS} selected={when} onSelect={setWhen} testIDPrefix="when" />
+      {editing ? (
+        <Text style={styles.dateText}>{existingDate ? formatDate(existingDate) : '—'}</Text>
+      ) : (
+        <OptionChips
+          options={WHEN_OPTIONS}
+          selected={when}
+          onSelect={setWhen}
+          testIDPrefix="when"
+        />
+      )}
 
       <Text style={styles.label}>Where</Text>
       <OptionChips
@@ -159,7 +195,7 @@ export function ClimbFormScreen({ navigation }: Props) {
       />
 
       <Button
-        label={saving ? 'Saving…' : 'Log climb'}
+        label={saving ? 'Saving…' : editing ? 'Save changes' : 'Log climb'}
         onPress={onSave}
         disabled={saving}
         style={styles.save}
@@ -187,5 +223,6 @@ const styles = StyleSheet.create({
     fontSize: fontSize.md,
   },
   multiline: { minHeight: 64, textAlignVertical: 'top' },
+  dateText: { color: colors.text, fontSize: fontSize.md },
   save: { marginTop: spacing.xl },
 });

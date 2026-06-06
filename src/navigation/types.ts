@@ -29,7 +29,7 @@ export type TrainStackParamList = {
 export type ProgressStackParamList = {
   Dashboard: undefined;
   Climbs: undefined;
-  ClimbForm: undefined;
+  ClimbForm: { climbId?: string } | undefined;
 };
 
 export type ReviewStackParamList = {

@@ -66,9 +66,13 @@ export function ClimbsScreen({ navigation }: Props) {
         <Text style={styles.empty}>No climbs logged yet.</Text>
       ) : (
         <>
-          <Text style={styles.hint}>Long-press a climb to delete it.</Text>
+          <Text style={styles.hint}>Tap to edit · long-press to delete.</Text>
           {climbs.map((c) => (
-            <Pressable key={c.id} onLongPress={() => remove(c)}>
+            <Pressable
+              key={c.id}
+              onPress={() => navigation.navigate('ClimbForm', { climbId: c.id })}
+              onLongPress={() => remove(c)}
+            >
               <Card style={styles.climb}>
                 <View style={styles.row}>
                   <Text style={styles.grade}>{c.grade}</Text>
