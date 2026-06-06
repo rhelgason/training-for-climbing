@@ -14,6 +14,8 @@ export type PlanStackParamList = {
   Goals: undefined;
   GoalForm: { goalId?: string } | undefined;
   ProgramBuilder: undefined;
+  Macrocycle: undefined;
+  MacrocycleForm: { periodId?: string } | undefined;
 };
 
 export type TrainStackParamList = {

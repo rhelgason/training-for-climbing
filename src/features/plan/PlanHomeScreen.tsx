@@ -58,6 +58,16 @@ export function PlanHomeScreen({ navigation }: Props) {
           </Text>
         </Card>
       </Pressable>
+
+      <Pressable onPress={() => navigation.navigate('Macrocycle')}>
+        <Card style={styles.card}>
+          <Text style={styles.cardTitle}>Macrocycle</Text>
+          <Text style={styles.cardBody}>
+            Plan your training year in blocks (base, power, peak, rest) and track climbing days
+            against each.
+          </Text>
+        </Card>
+      </Pressable>
     </Screen>
   );
 }

@@ -5,6 +5,8 @@ import { PlanHomeScreen } from '../features/plan/PlanHomeScreen';
 import { GoalsScreen } from '../features/plan/GoalsScreen';
 import { GoalFormScreen } from '../features/plan/GoalFormScreen';
 import { ProgramBuilderScreen } from '../features/plan/ProgramBuilderScreen';
+import { MacrocycleScreen } from '../features/plan/MacrocycleScreen';
+import { MacrocycleFormScreen } from '../features/plan/MacrocycleFormScreen';
 import type { PlanStackParamList } from './types';
 import { screenOptions } from './options';
 
@@ -20,6 +22,16 @@ export function PlanStack() {
         name="ProgramBuilder"
         component={ProgramBuilderScreen}
         options={{ title: 'Program builder' }}
+      />
+      <Stack.Screen
+        name="Macrocycle"
+        component={MacrocycleScreen}
+        options={{ title: 'Macrocycle' }}
+      />
+      <Stack.Screen
+        name="MacrocycleForm"
+        component={MacrocycleFormScreen}
+        options={{ title: 'New period' }}
       />
     </Stack.Navigator>
   );
