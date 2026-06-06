@@ -3,6 +3,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import { ReviewHomeScreen } from '../features/review/ReviewHomeScreen';
 import { GlossaryScreen } from '../features/review/GlossaryScreen';
+import { SyncScreen } from '../features/sync/SyncScreen';
 import type { ReviewStackParamList } from './types';
 import { screenOptions } from './options';
 
@@ -13,6 +14,7 @@ export function ReviewStack() {
     <Stack.Navigator screenOptions={screenOptions}>
       <Stack.Screen name="ReviewHome" component={ReviewHomeScreen} options={{ title: 'Review' }} />
       <Stack.Screen name="Glossary" component={GlossaryScreen} options={{ title: 'Glossary' }} />
+      <Stack.Screen name="Sync" component={SyncScreen} options={{ title: 'Cloud sync' }} />
     </Stack.Navigator>
   );
 }

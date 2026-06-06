@@ -32,6 +32,17 @@ export function ReviewHomeScreen({ navigation }: Props) {
       </Card>
 
       <Card style={styles.card}>
+        <Text style={styles.cardTitle}>Cloud sync</Text>
+        <Text style={styles.cardBody}>Back up your data and sync it across devices.</Text>
+        <Button
+          label="Open cloud sync"
+          variant="secondary"
+          onPress={() => navigation.navigate('Sync')}
+          style={styles.action}
+        />
+      </Card>
+
+      <Card style={styles.card}>
         <Text style={styles.cardTitle}>Chapter summaries</Text>
         <Text style={styles.cardBody}>
           Concise refreshers for Mental, Technique, Nutrition, Recovery, and Injury — coming in a

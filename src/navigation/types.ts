@@ -35,6 +35,7 @@ export type ProgressStackParamList = {
 export type ReviewStackParamList = {
   ReviewHome: undefined;
   Glossary: undefined;
+  Sync: undefined;
 };
 
 export type RootTabParamList = {
