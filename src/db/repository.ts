@@ -9,6 +9,7 @@ import type {
   MacrocyclePeriodRecord,
   NewAssessment,
   NewBenchmark,
+  ClimbPatch,
   NewCheckin,
   NewClimb,
   NewGoal,
@@ -54,6 +55,8 @@ export interface Repository {
   saveClimb(input: NewClimb): Promise<ClimbRecord>;
   /** Newest first (by climb date). */
   listClimbs(): Promise<ClimbRecord[]>;
+  getClimb(id: string): Promise<ClimbRecord | null>;
+  updateClimb(id: string, patch: ClimbPatch): Promise<ClimbRecord | null>;
   deleteClimb(id: string): Promise<void>;
 
   // --- Macrocycle periods ---

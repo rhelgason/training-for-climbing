@@ -100,6 +100,13 @@ export type NewClimb = Omit<ClimbRecord, 'id' | 'createdAt' | 'updatedAt'> & {
   updatedAt?: number;
 };
 
+export type ClimbPatch = Partial<
+  Pick<
+    ClimbRecord,
+    'date' | 'environment' | 'discipline' | 'grade' | 'outcome' | 'name' | 'location' | 'notes'
+  >
+>;
+
 /** A period in the annual training macrocycle (Appendix B planner). */
 export interface MacrocyclePeriodRecord {
   id: string;

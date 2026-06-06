@@ -114,6 +114,22 @@ describe('InMemoryRepository', () => {
     expect((await repo.listClimbs()).map((c) => c.id)).toEqual([older.id]);
   });
 
+  it('updates a climb and bumps updatedAt', async () => {
+    const repo = new InMemoryRepository();
+    const climb = await repo.saveClimb({
+      date: 1,
+      environment: 'indoor',
+      discipline: 'boulder',
+      grade: 'V3',
+      outcome: 'attempt',
+    });
+    const before = climb.updatedAt;
+    const updated = await repo.updateClimb(climb.id, { grade: 'V4', outcome: 'send' });
+    expect(updated).toMatchObject({ grade: 'V4', outcome: 'send' });
+    expect(updated!.updatedAt).toBeGreaterThan(before);
+    expect(await repo.updateClimb('nope', { grade: 'V5' })).toBeNull();
+  });
+
   it('saves macrocycle periods ordered by start, updates, and deletes', async () => {
     const repo = new InMemoryRepository();
     const b = await repo.saveMacrocyclePeriod({ label: 'Spring', startDate: 200, endDate: 300 });

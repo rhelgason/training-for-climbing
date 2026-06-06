@@ -4,6 +4,7 @@ import type {
   AssessmentRecord,
   BenchmarkRecord,
   CheckinRecord,
+  ClimbPatch,
   ClimbRecord,
   GoalPatch,
   GoalRecord,
@@ -157,6 +158,17 @@ export class InMemoryRepository implements Repository {
 
   async listClimbs(): Promise<ClimbRecord[]> {
     return [...this.climbs].sort((a, b) => b.date - a.date);
+  }
+
+  async getClimb(id: string): Promise<ClimbRecord | null> {
+    return this.climbs.find((c) => c.id === id) ?? null;
+  }
+
+  async updateClimb(id: string, patch: ClimbPatch): Promise<ClimbRecord | null> {
+    const climb = this.climbs.find((c) => c.id === id);
+    if (!climb) return null;
+    Object.assign(climb, patch, { updatedAt: Math.max(Date.now(), climb.updatedAt + 1) });
+    return climb;
   }
 
   async deleteClimb(id: string): Promise<void> {

@@ -10,6 +10,7 @@ import type {
   AssessmentRecord,
   BenchmarkRecord,
   CheckinRecord,
+  ClimbPatch,
   ClimbRecord,
   GoalPatch,
   GoalRecord,
@@ -443,6 +444,35 @@ export class SqliteRepository implements Repository {
       `SELECT * FROM climbs ORDER BY date DESC`,
     );
     return rows.map(rowToClimb);
+  }
+
+  async getClimb(id: string): Promise<ClimbRecord | null> {
+    const row = await this.getDb().getFirstAsync<ClimbRow>(`SELECT * FROM climbs WHERE id = ?`, id);
+    return row ? rowToClimb(row) : null;
+  }
+
+  async updateClimb(id: string, patch: ClimbPatch): Promise<ClimbRecord | null> {
+    const COLUMNS: Record<keyof ClimbPatch, string> = {
+      date: 'date',
+      environment: 'environment',
+      discipline: 'discipline',
+      grade: 'grade',
+      outcome: 'outcome',
+      name: 'name',
+      location: 'location',
+      notes: 'notes',
+    };
+    const existing = await this.getClimb(id);
+    if (!existing) return null;
+    const sets: string[] = ['updated_at = ?'];
+    const values: SQLite.SQLiteBindValue[] = [Math.max(Date.now(), existing.updatedAt + 1)];
+    (Object.keys(patch) as (keyof ClimbPatch)[]).forEach((key) => {
+      sets.push(`${COLUMNS[key]} = ?`);
+      values.push(patch[key] ?? null);
+    });
+    values.push(id);
+    await this.getDb().runAsync(`UPDATE climbs SET ${sets.join(', ')} WHERE id = ?`, ...values);
+    return this.getClimb(id);
   }
 
   async deleteClimb(id: string): Promise<void> {
