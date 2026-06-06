@@ -160,10 +160,28 @@ export interface CheckinRecord {
 
 export type NewCheckin = Omit<CheckinRecord, 'id' | 'createdAt'> & { createdAt?: number };
 
+/** Syncable tables, used as tombstone keys. */
+export type SyncTable =
+  | 'assessments'
+  | 'goals'
+  | 'sessions'
+  | 'climbs'
+  | 'periods'
+  | 'benchmarks'
+  | 'checkins';
+
+/** Records that a record was deleted, so deletions propagate during sync. */
+export interface TombstoneRecord {
+  table: SyncTable;
+  id: string;
+  deletedAt: number;
+}
+
 /**
  * A full export of the user's data for cloud sync. Excludes analytics events
  * (local-only). Every table is keyed by `id` and carries a comparable
- * timestamp (`updatedAt` where present, else `createdAt`) for last-write-wins.
+ * timestamp (`updatedAt` where present, else `createdAt`) for last-write-wins;
+ * `tombstones` carry deletions.
  */
 export interface Snapshot {
   assessments: AssessmentRecord[];
@@ -173,6 +191,7 @@ export interface Snapshot {
   periods: MacrocyclePeriodRecord[];
   benchmarks: BenchmarkRecord[];
   checkins: CheckinRecord[];
+  tombstones: TombstoneRecord[];
 }
 
 /** A persisted usage event (analytics, local-first). */

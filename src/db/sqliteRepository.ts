@@ -24,11 +24,24 @@ import type {
   NewSession,
   SessionRecord,
   Snapshot,
+  SyncTable,
+  TombstoneRecord,
   UsageEventRecord,
 } from './types';
 import type { ClimbDiscipline, ClimbEnvironment, ClimbOutcome } from '../content/climbing';
 
 const DB_NAME = 'training-for-climbing.db';
+
+/** Map a logical sync table to its physical SQLite table name. */
+const SQL_TABLE: Record<SyncTable, string> = {
+  assessments: 'assessments',
+  goals: 'goals',
+  sessions: 'sessions',
+  climbs: 'climbs',
+  periods: 'macrocycle_periods',
+  benchmarks: 'benchmarks',
+  checkins: 'checkins',
+};
 
 interface AssessmentRow {
   id: string;
@@ -45,6 +58,12 @@ interface EventRow {
   name: string;
   props: string;
   timestamp: number;
+}
+
+interface TombstoneRow {
+  table_name: string;
+  id: string;
+  deleted_at: number;
 }
 
 interface SessionRow {
@@ -126,6 +145,15 @@ export class SqliteRepository implements Repository {
     return this.db;
   }
 
+  private async recordTombstone(table: SyncTable, id: string): Promise<void> {
+    await this.getDb().runAsync(
+      `INSERT OR REPLACE INTO tombstones (table_name, id, deleted_at) VALUES (?, ?, ?)`,
+      table,
+      id,
+      Date.now(),
+    );
+  }
+
   async init(): Promise<void> {
     if (this.db) return;
     this.db = await SQLite.openDatabaseAsync(DB_NAME);
@@ -199,6 +227,12 @@ export class SqliteRepository implements Repository {
         energy INTEGER NOT NULL,
         emotion INTEGER NOT NULL,
         note TEXT
+      );
+      CREATE TABLE IF NOT EXISTS tombstones (
+        table_name TEXT NOT NULL,
+        id TEXT NOT NULL,
+        deleted_at INTEGER NOT NULL,
+        PRIMARY KEY (table_name, id)
       );
       CREATE TABLE IF NOT EXISTS events (
         id TEXT PRIMARY KEY NOT NULL,
@@ -329,6 +363,7 @@ export class SqliteRepository implements Repository {
 
   async deleteGoal(id: string): Promise<void> {
     await this.getDb().runAsync(`DELETE FROM goals WHERE id = ?`, id);
+    await this.recordTombstone('goals', id);
   }
 
   async saveSession(input: NewSession): Promise<SessionRecord> {
@@ -367,6 +402,7 @@ export class SqliteRepository implements Repository {
 
   async deleteSession(id: string): Promise<void> {
     await this.getDb().runAsync(`DELETE FROM sessions WHERE id = ?`, id);
+    await this.recordTombstone('sessions', id);
   }
 
   async saveClimb(input: NewClimb): Promise<ClimbRecord> {
@@ -411,6 +447,7 @@ export class SqliteRepository implements Repository {
 
   async deleteClimb(id: string): Promise<void> {
     await this.getDb().runAsync(`DELETE FROM climbs WHERE id = ?`, id);
+    await this.recordTombstone('climbs', id);
   }
 
   async saveMacrocyclePeriod(input: NewMacrocyclePeriod): Promise<MacrocyclePeriodRecord> {
@@ -488,6 +525,7 @@ export class SqliteRepository implements Repository {
 
   async deleteMacrocyclePeriod(id: string): Promise<void> {
     await this.getDb().runAsync(`DELETE FROM macrocycle_periods WHERE id = ?`, id);
+    await this.recordTombstone('periods', id);
   }
 
   async saveBenchmark(input: NewBenchmark): Promise<BenchmarkRecord> {
@@ -520,6 +558,7 @@ export class SqliteRepository implements Repository {
 
   async deleteBenchmark(id: string): Promise<void> {
     await this.getDb().runAsync(`DELETE FROM benchmarks WHERE id = ?`, id);
+    await this.recordTombstone('benchmarks', id);
   }
 
   async saveCheckin(input: NewCheckin): Promise<CheckinRecord> {
@@ -552,11 +591,12 @@ export class SqliteRepository implements Repository {
 
   async deleteCheckin(id: string): Promise<void> {
     await this.getDb().runAsync(`DELETE FROM checkins WHERE id = ?`, id);
+    await this.recordTombstone('checkins', id);
   }
 
   async exportSnapshot(): Promise<Snapshot> {
-    const [assessments, goals, sessions, climbs, periods, benchmarks, checkins] = await Promise.all(
-      [
+    const [assessments, goals, sessions, climbs, periods, benchmarks, checkins, tombRows] =
+      await Promise.all([
         this.listAssessments(),
         this.listGoals(),
         this.listSessions(),
@@ -564,9 +604,14 @@ export class SqliteRepository implements Repository {
         this.listMacrocyclePeriods(),
         this.listBenchmarks(),
         this.listCheckins(),
-      ],
-    );
-    return { assessments, goals, sessions, climbs, periods, benchmarks, checkins };
+        this.getDb().getAllAsync<TombstoneRow>(`SELECT * FROM tombstones`),
+      ]);
+    const tombstones: TombstoneRecord[] = tombRows.map((t) => ({
+      table: t.table_name as SyncTable,
+      id: t.id,
+      deletedAt: t.deleted_at,
+    }));
+    return { assessments, goals, sessions, climbs, periods, benchmarks, checkins, tombstones };
   }
 
   async applySnapshot(snapshot: Snapshot): Promise<void> {
@@ -664,6 +709,19 @@ export class SqliteRepository implements Repository {
           c.energy,
           c.emotion,
           c.note ?? null,
+        );
+      }
+      // Apply deletions, then persist the tombstones.
+      for (const t of snapshot.tombstones) {
+        await db.runAsync(`DELETE FROM ${SQL_TABLE[t.table]} WHERE id = ?`, t.id);
+        await db.runAsync(
+          `INSERT OR REPLACE INTO tombstones (table_name, id, deleted_at)
+           VALUES (?, ?, MAX(?, COALESCE((SELECT deleted_at FROM tombstones WHERE table_name = ? AND id = ?), 0)))`,
+          t.table,
+          t.id,
+          t.deletedAt,
+          t.table,
+          t.id,
         );
       }
     });

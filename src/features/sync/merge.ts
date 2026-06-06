@@ -5,10 +5,11 @@
  * `updatedAt` where a record has one (goals, periods, climbs) and `createdAt`
  * otherwise (append-only records). On a tie, the second argument wins.
  *
- * Note (v1 limitation): this never removes records, so a delete on one device
- * is not propagated to another (no tombstones yet).
+ * Deletions propagate via tombstones: a record is dropped when a tombstone for
+ * its id is at least as new as the record. A record re-created/edited after its
+ * deletion (newer timestamp) wins and supersedes the tombstone.
  */
-import type { Snapshot } from '../../db/types';
+import type { Snapshot, SyncTable, TombstoneRecord } from '../../db/types';
 
 export function emptySnapshot(): Snapshot {
   return {
@@ -19,6 +20,7 @@ export function emptySnapshot(): Snapshot {
     periods: [],
     benchmarks: [],
     checkins: [],
+    tombstones: [],
   };
 }
 
@@ -39,14 +41,56 @@ export function mergeLists<T extends { id: string; createdAt: number; updatedAt?
   return [...byId.values()];
 }
 
+export function mergeTombstones(a: TombstoneRecord[], b: TombstoneRecord[]): TombstoneRecord[] {
+  const byKey = new Map<string, TombstoneRecord>();
+  for (const t of [...a, ...b]) {
+    const key = `${t.table}:${t.id}`;
+    const existing = byKey.get(key);
+    if (!existing || t.deletedAt > existing.deletedAt) byKey.set(key, t);
+  }
+  return [...byKey.values()];
+}
+
 export function mergeSnapshots(a: Snapshot, b: Snapshot): Snapshot {
-  return {
-    assessments: mergeLists(a.assessments, b.assessments),
-    goals: mergeLists(a.goals, b.goals),
-    sessions: mergeLists(a.sessions, b.sessions),
-    climbs: mergeLists(a.climbs, b.climbs),
-    periods: mergeLists(a.periods, b.periods),
-    benchmarks: mergeLists(a.benchmarks, b.benchmarks),
-    checkins: mergeLists(a.checkins, b.checkins),
+  const tombstones = mergeTombstones(a.tombstones, b.tombstones);
+  const deletedAtFor = new Map(tombstones.map((t) => [`${t.table}:${t.id}`, t.deletedAt]));
+
+  function survive<T extends { id: string; createdAt: number; updatedAt?: number }>(
+    table: SyncTable,
+    listA: T[],
+    listB: T[],
+  ): T[] {
+    return mergeLists(listA, listB).filter((r) => {
+      const deletedAt = deletedAtFor.get(`${table}:${r.id}`);
+      return deletedAt === undefined || timestamp(r) > deletedAt;
+    });
+  }
+
+  const merged: Snapshot = {
+    assessments: survive('assessments', a.assessments, b.assessments),
+    goals: survive('goals', a.goals, b.goals),
+    sessions: survive('sessions', a.sessions, b.sessions),
+    climbs: survive('climbs', a.climbs, b.climbs),
+    periods: survive('periods', a.periods, b.periods),
+    benchmarks: survive('benchmarks', a.benchmarks, b.benchmarks),
+    checkins: survive('checkins', a.checkins, b.checkins),
+    tombstones,
   };
+
+  // Drop tombstones superseded by a record that survived (re-created/edited).
+  const surviving = new Set<string>();
+  for (const [table, list] of [
+    ['assessments', merged.assessments],
+    ['goals', merged.goals],
+    ['sessions', merged.sessions],
+    ['climbs', merged.climbs],
+    ['periods', merged.periods],
+    ['benchmarks', merged.benchmarks],
+    ['checkins', merged.checkins],
+  ] as const) {
+    for (const r of list) surviving.add(`${table}:${r.id}`);
+  }
+  merged.tombstones = tombstones.filter((t) => !surviving.has(`${t.table}:${t.id}`));
+
+  return merged;
 }

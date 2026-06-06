@@ -33,6 +33,25 @@ describe('runSync', () => {
     expect(onB[0].title).toBe('Send 5.11');
   });
 
+  it('propagates a delete from one device to another', async () => {
+    const remote = new InMemoryRemoteStore();
+    const deviceA = new InMemoryRepository();
+    const deviceB = new InMemoryRepository();
+
+    const goal = await deviceA.saveGoal({ horizon: 'short', title: 'Temp' });
+    await runSync(deviceA, remote);
+    await runSync(deviceB, remote);
+    expect(await deviceB.listGoals()).toHaveLength(1);
+
+    // Delete on A, sync both — B should lose the goal.
+    await deviceA.deleteGoal(goal.id);
+    await runSync(deviceA, remote);
+    await runSync(deviceB, remote);
+
+    expect(await deviceA.listGoals()).toHaveLength(0);
+    expect(await deviceB.listGoals()).toHaveLength(0);
+  });
+
   it('applies last-write-wins for edits made on another device', async () => {
     const remote = new InMemoryRemoteStore();
     const deviceA = new InMemoryRepository();

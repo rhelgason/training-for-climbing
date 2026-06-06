@@ -18,6 +18,8 @@ import type {
   NewSession,
   SessionRecord,
   Snapshot,
+  SyncTable,
+  TombstoneRecord,
   UsageEventRecord,
 } from './types';
 
@@ -33,10 +35,16 @@ export class InMemoryRepository implements Repository {
   private periods: MacrocyclePeriodRecord[] = [];
   private benchmarks: BenchmarkRecord[] = [];
   private checkins: CheckinRecord[] = [];
+  private tombstones: TombstoneRecord[] = [];
   private events: UsageEventRecord[] = [];
 
   async init(): Promise<void> {
     // no-op
+  }
+
+  private tombstone(table: SyncTable, id: string): void {
+    this.tombstones = this.tombstones.filter((t) => !(t.table === table && t.id === id));
+    this.tombstones.push({ table, id, deletedAt: Date.now() });
   }
 
   async saveAssessment(input: NewAssessment): Promise<AssessmentRecord> {
@@ -100,6 +108,7 @@ export class InMemoryRepository implements Repository {
 
   async deleteGoal(id: string): Promise<void> {
     this.goals = this.goals.filter((g) => g.id !== id);
+    this.tombstone('goals', id);
   }
 
   async saveSession(input: NewSession): Promise<SessionRecord> {
@@ -124,6 +133,7 @@ export class InMemoryRepository implements Repository {
 
   async deleteSession(id: string): Promise<void> {
     this.sessions = this.sessions.filter((s) => s.id !== id);
+    this.tombstone('sessions', id);
   }
 
   async saveClimb(input: NewClimb): Promise<ClimbRecord> {
@@ -151,6 +161,7 @@ export class InMemoryRepository implements Repository {
 
   async deleteClimb(id: string): Promise<void> {
     this.climbs = this.climbs.filter((c) => c.id !== id);
+    this.tombstone('climbs', id);
   }
 
   async saveMacrocyclePeriod(input: NewMacrocyclePeriod): Promise<MacrocyclePeriodRecord> {
@@ -191,6 +202,7 @@ export class InMemoryRepository implements Repository {
 
   async deleteMacrocyclePeriod(id: string): Promise<void> {
     this.periods = this.periods.filter((p) => p.id !== id);
+    this.tombstone('periods', id);
   }
 
   async saveBenchmark(input: NewBenchmark): Promise<BenchmarkRecord> {
@@ -212,6 +224,7 @@ export class InMemoryRepository implements Repository {
 
   async deleteBenchmark(id: string): Promise<void> {
     this.benchmarks = this.benchmarks.filter((b) => b.id !== id);
+    this.tombstone('benchmarks', id);
   }
 
   async saveCheckin(input: NewCheckin): Promise<CheckinRecord> {
@@ -233,6 +246,7 @@ export class InMemoryRepository implements Repository {
 
   async deleteCheckin(id: string): Promise<void> {
     this.checkins = this.checkins.filter((c) => c.id !== id);
+    this.tombstone('checkins', id);
   }
 
   async exportSnapshot(): Promise<Snapshot> {
@@ -244,6 +258,7 @@ export class InMemoryRepository implements Repository {
       periods: [...this.periods],
       benchmarks: [...this.benchmarks],
       checkins: [...this.checkins],
+      tombstones: [...this.tombstones],
     };
   }
 
@@ -260,6 +275,25 @@ export class InMemoryRepository implements Repository {
     this.periods = upsert(this.periods, snapshot.periods);
     this.benchmarks = upsert(this.benchmarks, snapshot.benchmarks);
     this.checkins = upsert(this.checkins, snapshot.checkins);
+
+    // Apply deletions, then remember the tombstones.
+    const removals: Record<SyncTable, (id: string) => void> = {
+      assessments: (id) => (this.assessments = this.assessments.filter((r) => r.id !== id)),
+      goals: (id) => (this.goals = this.goals.filter((r) => r.id !== id)),
+      sessions: (id) => (this.sessions = this.sessions.filter((r) => r.id !== id)),
+      climbs: (id) => (this.climbs = this.climbs.filter((r) => r.id !== id)),
+      periods: (id) => (this.periods = this.periods.filter((r) => r.id !== id)),
+      benchmarks: (id) => (this.benchmarks = this.benchmarks.filter((r) => r.id !== id)),
+      checkins: (id) => (this.checkins = this.checkins.filter((r) => r.id !== id)),
+    };
+    for (const t of snapshot.tombstones) {
+      removals[t.table](t.id);
+      const existing = this.tombstones.find((x) => x.table === t.table && x.id === t.id);
+      if (!existing || t.deletedAt > existing.deletedAt) {
+        this.tombstones = this.tombstones.filter((x) => !(x.table === t.table && x.id === t.id));
+        this.tombstones.push({ ...t });
+      }
+    }
   }
 
   async recordEvent(event: Omit<UsageEventRecord, 'id'>): Promise<void> {

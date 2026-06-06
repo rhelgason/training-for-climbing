@@ -1,5 +1,5 @@
-import type { GoalRecord, SessionRecord, Snapshot } from '../../db/types';
-import { emptySnapshot, mergeLists, mergeSnapshots } from './merge';
+import type { GoalRecord, SessionRecord, Snapshot, TombstoneRecord } from '../../db/types';
+import { emptySnapshot, mergeLists, mergeSnapshots, mergeTombstones } from './merge';
 
 function goal(id: string, createdAt: number, updatedAt: number, title: string): GoalRecord {
   return { id, createdAt, updatedAt, horizon: 'medium', title, status: 'active' };
@@ -35,6 +35,18 @@ describe('mergeLists', () => {
   });
 });
 
+function tomb(id: string, deletedAt: number): TombstoneRecord {
+  return { table: 'goals', id, deletedAt };
+}
+
+describe('mergeTombstones', () => {
+  it('unions by table+id keeping the latest deletedAt', () => {
+    const merged = mergeTombstones([tomb('g', 100)], [tomb('g', 200)]);
+    expect(merged).toHaveLength(1);
+    expect(merged[0].deletedAt).toBe(200);
+  });
+});
+
 describe('mergeSnapshots', () => {
   it('merges every table', () => {
     const a: Snapshot = { ...emptySnapshot(), goals: [goal('g', 1, 1, 'a')] };
@@ -42,5 +54,21 @@ describe('mergeSnapshots', () => {
     const merged = mergeSnapshots(a, b);
     expect(merged.goals).toHaveLength(1);
     expect(merged.sessions).toHaveLength(1);
+  });
+
+  it('removes a record when a tombstone is newer than it', () => {
+    const a: Snapshot = { ...emptySnapshot(), goals: [goal('g', 100, 100, 'kept?')] };
+    const b: Snapshot = { ...emptySnapshot(), tombstones: [tomb('g', 200)] };
+    const merged = mergeSnapshots(a, b);
+    expect(merged.goals).toHaveLength(0);
+    expect(merged.tombstones).toHaveLength(1);
+  });
+
+  it('keeps a record re-created after its deletion and drops the tombstone', () => {
+    const a: Snapshot = { ...emptySnapshot(), goals: [goal('g', 300, 300, 'recreated')] };
+    const b: Snapshot = { ...emptySnapshot(), tombstones: [tomb('g', 200)] };
+    const merged = mergeSnapshots(a, b);
+    expect(merged.goals).toHaveLength(1);
+    expect(merged.tombstones).toHaveLength(0);
   });
 });
