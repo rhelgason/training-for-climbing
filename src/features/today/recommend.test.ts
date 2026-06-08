@@ -1,11 +1,11 @@
-import type { GoalRecord, SessionRecord } from '../../db/types';
+import type { GoalRecord } from '../../db/types';
 import { buildDailyRecommendation, type DailyInput } from './recommend';
 
 const DAY = 24 * 60 * 60 * 1000;
 const NOW = 1000 * DAY + DAY / 2;
 
-function session(dayOffset: number): SessionRecord {
-  return { id: `s${dayOffset}`, createdAt: 0, date: NOW + dayOffset * DAY, focusAreas: ['skill'] };
+function trainDates(...dayOffsets: number[]): number[] {
+  return dayOffsets.map((o) => NOW + o * DAY);
 }
 
 function goal(partial: Partial<GoalRecord>): GoalRecord {
@@ -21,14 +21,12 @@ function goal(partial: Partial<GoalRecord>): GoalRecord {
 }
 
 function input(overrides: Partial<DailyInput> = {}): DailyInput {
-  return { weakestArea: 'physical', goals: [], sessions: [], nowMs: NOW, ...overrides };
+  return { weakestArea: 'physical', goals: [], trainingDates: [], nowMs: NOW, ...overrides };
 }
 
 describe('buildDailyRecommendation', () => {
   it('recommends rest after 3 consecutive training days', () => {
-    const rec = buildDailyRecommendation(
-      input({ sessions: [session(0), session(-1), session(-2)] }),
-    );
+    const rec = buildDailyRecommendation(input({ trainingDates: trainDates(0, -1, -2) }));
     expect(rec.kind).toBe('rest');
     expect(rec.streak).toBe(3);
   });
@@ -48,7 +46,7 @@ describe('buildDailyRecommendation', () => {
 
   it('rest takes priority over a known weakest area', () => {
     const rec = buildDailyRecommendation(
-      input({ weakestArea: 'technical', sessions: [session(0), session(-1), session(-2)] }),
+      input({ weakestArea: 'technical', trainingDates: trainDates(0, -1, -2) }),
     );
     expect(rec.kind).toBe('rest');
   });

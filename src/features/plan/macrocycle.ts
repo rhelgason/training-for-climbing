@@ -1,5 +1,5 @@
 /** Pure helpers for the macrocycle planner. No I/O — unit-testable. */
-import type { MacrocyclePeriodRecord, SessionRecord } from '../../db/types';
+import type { MacrocyclePeriodRecord } from '../../db/types';
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -36,15 +36,11 @@ export function currentPeriod(
   return periods.find((p) => nowMs >= p.startDate && nowMs <= p.endDate) ?? null;
 }
 
-/** Count of distinct calendar days within [start, end] on which a session was logged. */
-export function trainingDaysInRange(
-  sessions: SessionRecord[],
-  startMs: number,
-  endMs: number,
-): number {
+/** Count of distinct calendar days within [start, end] among the given training dates. */
+export function trainingDaysInRange(dates: number[], startMs: number, endMs: number): number {
   const days = new Set<number>();
-  for (const s of sessions) {
-    if (s.date >= startMs && s.date <= endMs) days.add(Math.floor(s.date / MS_PER_DAY));
+  for (const d of dates) {
+    if (d >= startMs && d <= endMs) days.add(Math.floor(d / MS_PER_DAY));
   }
   return days.size;
 }

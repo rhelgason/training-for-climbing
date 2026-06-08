@@ -14,8 +14,9 @@ import {
   type ClimbDiscipline,
 } from '../../content/climbing';
 import { TRIAD_LABELS } from '../../content/types';
-import type { AssessmentRecord, ClimbRecord, SessionRecord } from '../../db/types';
+import type { AssessmentRecord, ClimbRecord, JournalEntry } from '../../db/types';
 import { now } from '../../lib/clock';
+import { trainingDates } from '../train/log';
 import { useRepository } from '../../providers/RepositoryProvider';
 import type { ProgressStackParamList } from '../../navigation/types';
 import { colors, fontSize, radius, spacing, triadColors } from '../../theme';
@@ -34,7 +35,7 @@ type Props = NativeStackScreenProps<ProgressStackParamList, 'Dashboard'>;
 
 interface LoadState {
   climbs: ClimbRecord[];
-  sessions: SessionRecord[];
+  journals: JournalEntry[];
   assessments: AssessmentRecord[];
 }
 
@@ -70,9 +71,9 @@ export function DashboardScreen({ navigation }: Props) {
   useFocusEffect(
     useCallback(() => {
       let on = true;
-      Promise.all([repo.listClimbs(), repo.listSessions(), repo.listAssessments()]).then(
-        ([climbs, sessions, assessments]) => {
-          if (on) setState({ climbs, sessions, assessments });
+      Promise.all([repo.listClimbs(), repo.listJournals(), repo.listAssessments()]).then(
+        ([climbs, journals, assessments]) => {
+          if (on) setState({ climbs, journals, assessments });
         },
       );
       return () => {
@@ -82,8 +83,9 @@ export function DashboardScreen({ navigation }: Props) {
   );
 
   if (state === null) return <Screen />;
-  const { climbs, sessions, assessments } = state;
+  const { climbs, journals, assessments } = state;
   const nowMs = now();
+  const trainDates = trainingDates(journals, climbs);
 
   const bests = DISCIPLINES.map((d) => ({ discipline: d, climb: hardestSend(climbs, d) })).filter(
     (b): b is { discipline: ClimbDiscipline; climb: ClimbRecord } => b.climb !== null,
@@ -147,14 +149,8 @@ export function DashboardScreen({ navigation }: Props) {
           <Text style={styles.statLabel}>climbs</Text>
         </View>
         <View style={styles.stat}>
-          <Text style={styles.statValue}>
-            {countInLastDays(
-              sessions.map((s) => s.date),
-              nowMs,
-              30,
-            )}
-          </Text>
-          <Text style={styles.statLabel}>sessions</Text>
+          <Text style={styles.statValue}>{countInLastDays(trainDates, nowMs, 30)}</Text>
+          <Text style={styles.statLabel}>training days</Text>
         </View>
         <View style={styles.stat}>
           <Text style={styles.statValue}>{climbs.length ? pct(sendRate(climbs)) : '—'}</Text>

@@ -1,24 +1,21 @@
 import React, { useCallback, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { Screen } from '../../components/Screen';
-import { TRAINING_HIERARCHY, type HierarchyAreaId } from '../../content/planning';
-import type { SessionRecord } from '../../db/types';
+import { ACTIVITY_LABELS, INTENSITY_LABELS } from '../../content/journal';
+import type { JournalEntry } from '../../db/types';
 import { now } from '../../lib/clock';
 import { useRepository } from '../../providers/RepositoryProvider';
 import type { TrainStackParamList } from '../../navigation/types';
 import { colors, fontSize, spacing } from '../../theme';
+import { dayIndex, trainingDates } from './log';
 import { buildDailyRecommendation, type DailyRecommendation } from '../today/recommend';
 
 type Props = NativeStackScreenProps<TrainStackParamList, 'TrainHome'>;
-
-const AREA_NAME: Record<HierarchyAreaId, string> = Object.fromEntries(
-  TRAINING_HIERARCHY.map((a) => [a.id, a.name]),
-) as Record<HierarchyAreaId, string>;
 
 function formatDate(ms: number): string {
   return new Date(ms).toLocaleDateString(undefined, {
@@ -29,8 +26,9 @@ function formatDate(ms: number): string {
 }
 
 interface LoadState {
-  sessions: SessionRecord[];
+  journals: JournalEntry[];
   recommendation: DailyRecommendation;
+  todayJournalId: string | null;
 }
 
 export function TrainHomeScreen({ navigation }: Props) {
@@ -40,18 +38,23 @@ export function TrainHomeScreen({ navigation }: Props) {
   useFocusEffect(
     useCallback(() => {
       let on = true;
-      Promise.all([repo.listSessions(), repo.listAssessments(), repo.listGoals()]).then(
-        ([sessions, assessments, goals]) => {
-          if (!on) return;
-          const recommendation = buildDailyRecommendation({
-            weakestArea: assessments[0]?.weakestArea ?? null,
-            goals,
-            sessions,
-            nowMs: now(),
-          });
-          setState({ sessions, recommendation });
-        },
-      );
+      Promise.all([
+        repo.listJournals(),
+        repo.listClimbs(),
+        repo.listAssessments(),
+        repo.listGoals(),
+      ]).then(([journals, climbs, assessments, goals]) => {
+        if (!on) return;
+        const nowMs = now();
+        const recommendation = buildDailyRecommendation({
+          weakestArea: assessments[0]?.weakestArea ?? null,
+          goals,
+          trainingDates: trainingDates(journals, climbs),
+          nowMs,
+        });
+        const todayJournal = journals.find((j) => dayIndex(j.date) === dayIndex(nowMs));
+        setState({ journals, recommendation, todayJournalId: todayJournal?.id ?? null });
+      });
       return () => {
         on = false;
       };
@@ -59,7 +62,7 @@ export function TrainHomeScreen({ navigation }: Props) {
   );
 
   if (state === null) return <Screen />;
-  const { sessions, recommendation: rec } = state;
+  const { journals, recommendation: rec, todayJournalId } = state;
 
   return (
     <Screen>
@@ -82,8 +85,10 @@ export function TrainHomeScreen({ navigation }: Props) {
       </Card>
 
       <Button
-        label="+ Log a session"
-        onPress={() => navigation.navigate('SessionForm')}
+        label={todayJournalId ? "Edit today's log" : '+ Log today'}
+        onPress={() =>
+          navigation.navigate('JournalForm', todayJournalId ? { journalId: todayJournalId } : {})
+        }
         style={styles.add}
       />
       <Button
@@ -100,21 +105,33 @@ export function TrainHomeScreen({ navigation }: Props) {
       />
 
       <Text style={styles.sectionTitle}>Recent</Text>
-      {sessions.length === 0 ? (
-        <Text style={styles.empty}>No sessions logged yet.</Text>
+      {journals.length === 0 ? (
+        <Text style={styles.empty}>No entries yet — log your day to start the streak.</Text>
       ) : (
-        sessions.slice(0, 20).map((s) => (
-          <Card key={s.id} style={styles.session}>
-            <View style={styles.sessionHeader}>
-              <Text style={styles.sessionDate}>{formatDate(s.date)}</Text>
-            </View>
-            <Text style={styles.sessionAreas}>
-              {s.focusAreas.length > 0
-                ? s.focusAreas.map((a) => AREA_NAME[a]).join(' · ')
-                : 'No focus areas'}
-            </Text>
-            {s.notes ? <Text style={styles.sessionNotes}>{s.notes}</Text> : null}
-          </Card>
+        journals.slice(0, 20).map((j) => (
+          <Pressable
+            key={j.id}
+            onPress={() => navigation.navigate('JournalForm', { journalId: j.id })}
+          >
+            <Card style={styles.entry}>
+              <View style={styles.entryHeader}>
+                <Text style={styles.entryDate}>{formatDate(j.date)}</Text>
+                {j.intensity ? (
+                  <Text style={styles.entryIntensity}>{INTENSITY_LABELS[j.intensity]}</Text>
+                ) : null}
+              </View>
+              <Text style={styles.entryActivities}>
+                {j.activities.length > 0
+                  ? j.activities.map((a) => ACTIVITY_LABELS[a]).join(' · ')
+                  : 'No activities'}
+              </Text>
+              {j.summary ? (
+                <Text style={styles.entrySummary} numberOfLines={2}>
+                  {j.summary}
+                </Text>
+              ) : null}
+            </Card>
+          </Pressable>
         ))
       )}
     </Screen>
@@ -157,11 +174,12 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   empty: { color: colors.textMuted, fontSize: fontSize.md },
-  session: { marginBottom: spacing.sm },
-  sessionHeader: { flexDirection: 'row', justifyContent: 'space-between' },
-  sessionDate: { color: colors.text, fontSize: fontSize.md, fontWeight: '600' },
-  sessionAreas: { color: colors.primary, fontSize: fontSize.sm, marginTop: spacing.xs },
-  sessionNotes: {
+  entry: { marginBottom: spacing.sm },
+  entryHeader: { flexDirection: 'row', justifyContent: 'space-between' },
+  entryDate: { color: colors.text, fontSize: fontSize.md, fontWeight: '600' },
+  entryIntensity: { color: colors.textMuted, fontSize: fontSize.sm },
+  entryActivities: { color: colors.primary, fontSize: fontSize.sm, marginTop: spacing.xs },
+  entrySummary: {
     color: colors.textMuted,
     fontSize: fontSize.sm,
     marginTop: spacing.xs,

@@ -6,18 +6,19 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { Screen } from '../../components/Screen';
-import type { MacrocyclePeriodRecord, SessionRecord } from '../../db/types';
+import type { MacrocyclePeriodRecord } from '../../db/types';
 import { now } from '../../lib/clock';
 import { useRepository } from '../../providers/RepositoryProvider';
 import type { PlanStackParamList } from '../../navigation/types';
 import { colors, fontSize, spacing } from '../../theme';
+import { trainingDates } from '../train/log';
 import { currentPeriod, formatYmd, trainingDaysInRange } from './macrocycle';
 
 type Props = NativeStackScreenProps<PlanStackParamList, 'Macrocycle'>;
 
 interface LoadState {
   periods: MacrocyclePeriodRecord[];
-  sessions: SessionRecord[];
+  trainingDates: number[];
 }
 
 export function MacrocycleScreen({ navigation }: Props) {
@@ -27,9 +28,9 @@ export function MacrocycleScreen({ navigation }: Props) {
   useFocusEffect(
     useCallback(() => {
       let on = true;
-      Promise.all([repo.listMacrocyclePeriods(), repo.listSessions()]).then(
-        ([periods, sessions]) => {
-          if (on) setState({ periods, sessions });
+      Promise.all([repo.listMacrocyclePeriods(), repo.listJournals(), repo.listClimbs()]).then(
+        ([periods, journals, climbs]) => {
+          if (on) setState({ periods, trainingDates: trainingDates(journals, climbs) });
         },
       );
       return () => {
@@ -39,7 +40,7 @@ export function MacrocycleScreen({ navigation }: Props) {
   );
 
   if (state === null) return <Screen />;
-  const { periods, sessions } = state;
+  const { periods, trainingDates: dates } = state;
   const current = currentPeriod(periods, now());
 
   return (
@@ -65,7 +66,7 @@ export function MacrocycleScreen({ navigation }: Props) {
 
       {periods.map((p) => {
         const isCurrent = current?.id === p.id;
-        const days = trainingDaysInRange(sessions, p.startDate, p.endDate);
+        const days = trainingDaysInRange(dates, p.startDate, p.endDate);
         return (
           <Pressable
             key={p.id}

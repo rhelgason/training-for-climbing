@@ -2,7 +2,7 @@ import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import { TrainHomeScreen } from '../features/train/TrainHomeScreen';
-import { SessionFormScreen } from '../features/train/SessionFormScreen';
+import { JournalFormScreen } from '../features/journal/JournalFormScreen';
 import { EnergyEmotionScreen } from '../features/train/EnergyEmotionScreen';
 import { CheckinFormScreen } from '../features/train/CheckinFormScreen';
 import { ExercisesScreen } from '../features/train/ExercisesScreen';
@@ -16,9 +16,9 @@ export function TrainStack() {
     <Stack.Navigator screenOptions={screenOptions}>
       <Stack.Screen name="TrainHome" component={TrainHomeScreen} options={{ title: 'Train' }} />
       <Stack.Screen
-        name="SessionForm"
-        component={SessionFormScreen}
-        options={{ title: 'Log session' }}
+        name="JournalForm"
+        component={JournalFormScreen}
+        options={{ title: 'Log today' }}
       />
       <Stack.Screen
         name="EnergyEmotion"

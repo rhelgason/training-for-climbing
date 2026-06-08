@@ -1,16 +1,17 @@
 /**
- * Pure helpers for the training log. No I/O — unit-testable.
+ * Pure helpers for training-day awareness. No I/O — unit-testable.
  *
- * Rest awareness is grounded in the book: the Self-Assessment flags "I climb
- * three or four days in a row" (Q9) as an overtraining risk, and Chapter 8
- * stresses adequate rest between hard days. We treat 3+ consecutive training
- * days as the point to recommend rest.
+ * A "training day" is any day with a journal entry that has a non-rest activity,
+ * or a logged climb. Rest awareness is grounded in the book: the Self-Assessment
+ * flags "I climb three or four days in a row" (Q9) as an overtraining risk, and
+ * Chapter 8 stresses adequate rest — so 3+ consecutive training days → rest.
  */
-import type { SessionRecord } from '../../db/types';
+import { isTrainingActivity } from '../../content/journal';
+import type { ClimbRecord, JournalEntry } from '../../db/types';
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
-/** The book's threshold: climbing/training this many days in a row risks overtraining. */
+/** The book's threshold: training this many days in a row risks overtraining. */
 export const REST_AFTER_CONSECUTIVE_DAYS = 3;
 
 /** Calendar-day index for an epoch-ms timestamp. */
@@ -18,18 +19,26 @@ export function dayIndex(ms: number): number {
   return Math.floor(ms / MS_PER_DAY);
 }
 
-/** Was anything logged on the calendar day containing `nowMs`? */
-export function trainedToday(sessions: SessionRecord[], nowMs: number): boolean {
+/** Epoch-ms dates that count as training (journal with real activity, or a climb). */
+export function trainingDates(journals: JournalEntry[], climbs: ClimbRecord[]): number[] {
+  const dates: number[] = [];
+  for (const j of journals) if (isTrainingActivity(j.activities)) dates.push(j.date);
+  for (const c of climbs) dates.push(c.date);
+  return dates;
+}
+
+/** Was a training day logged on the calendar day containing `nowMs`? */
+export function trainedToday(dates: number[], nowMs: number): boolean {
   const today = dayIndex(nowMs);
-  return sessions.some((s) => dayIndex(s.date) === today);
+  return dates.some((d) => dayIndex(d) === today);
 }
 
 /**
- * Number of consecutive calendar days ending today on which at least one
- * session was logged. Returns 0 if today has no session (i.e. you've rested).
+ * Consecutive calendar days ending today that were training days. Returns 0 if
+ * today wasn't a training day (i.e. you've rested today).
  */
-export function currentStreak(sessions: SessionRecord[], nowMs: number): number {
-  const days = new Set(sessions.map((s) => dayIndex(s.date)));
+export function currentStreak(dates: number[], nowMs: number): number {
+  const days = new Set(dates.map(dayIndex));
   const today = dayIndex(nowMs);
   if (!days.has(today)) return 0;
   let count = 0;
@@ -46,9 +55,9 @@ export function restRecommended(streak: number): boolean {
   return streak >= REST_AFTER_CONSECUTIVE_DAYS;
 }
 
-/** Whole days since the most recent session, or null if none logged. */
-export function daysSinceLastSession(sessions: SessionRecord[], nowMs: number): number | null {
-  if (sessions.length === 0) return null;
-  const latest = Math.max(...sessions.map((s) => dayIndex(s.date)));
+/** Whole days since the most recent training day, or null if none. */
+export function daysSinceLastTraining(dates: number[], nowMs: number): number | null {
+  if (dates.length === 0) return null;
+  const latest = Math.max(...dates.map(dayIndex));
   return dayIndex(nowMs) - latest;
 }

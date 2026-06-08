@@ -10,7 +10,7 @@
  *  - Keep active short/medium-term goals in view (Ch 2 goal-setting).
  */
 import { TRIAD_LABELS, type TriadArea } from '../../content/types';
-import type { GoalRecord, SessionRecord } from '../../db/types';
+import type { GoalRecord } from '../../db/types';
 import { activeGoals } from '../plan/goals';
 import { currentStreak, restRecommended } from '../train/log';
 
@@ -18,7 +18,8 @@ export interface DailyInput {
   /** Weakest triad area from the latest assessment, or null if none taken. */
   weakestArea: TriadArea | null;
   goals: GoalRecord[];
-  sessions: SessionRecord[];
+  /** Epoch-ms dates that count as training (journals + climbs). */
+  trainingDates: number[];
   nowMs: number;
 }
 
@@ -51,7 +52,7 @@ function goalReminders(goals: GoalRecord[]): string[] {
 }
 
 export function buildDailyRecommendation(input: DailyInput): DailyRecommendation {
-  const streak = currentStreak(input.sessions, input.nowMs);
+  const streak = currentStreak(input.trainingDates, input.nowMs);
   const reminders = goalReminders(input.goals);
 
   if (restRecommended(streak)) {

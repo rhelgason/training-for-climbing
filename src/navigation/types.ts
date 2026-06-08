@@ -20,7 +20,7 @@ export type PlanStackParamList = {
 
 export type TrainStackParamList = {
   TrainHome: undefined;
-  SessionForm: undefined;
+  JournalForm: { journalId?: string } | undefined;
   EnergyEmotion: undefined;
   CheckinForm: undefined;
   Exercises: undefined;

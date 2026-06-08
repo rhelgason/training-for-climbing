@@ -1,4 +1,4 @@
-import type { MacrocyclePeriodRecord, SessionRecord } from '../../db/types';
+import type { MacrocyclePeriodRecord } from '../../db/types';
 import {
   currentPeriod,
   formatYmd,
@@ -19,10 +19,6 @@ function period(partial: Partial<MacrocyclePeriodRecord>): MacrocyclePeriodRecor
     endDate: partial.endDate ?? DAY,
     ...partial,
   };
-}
-
-function session(dateMs: number): SessionRecord {
-  return { id: `s${dateMs}`, createdAt: 0, date: dateMs, focusAreas: [] };
 }
 
 describe('validatePeriodInput', () => {
@@ -48,14 +44,14 @@ describe('currentPeriod', () => {
 });
 
 describe('trainingDaysInRange', () => {
-  it('counts distinct days with sessions inside the range', () => {
-    const sessions = [
-      session(2 * DAY),
-      session(2 * DAY + 1000), // same day
-      session(4 * DAY),
-      session(50 * DAY), // outside
+  it('counts distinct training days inside the range', () => {
+    const dates = [
+      2 * DAY,
+      2 * DAY + 1000, // same day
+      4 * DAY,
+      50 * DAY, // outside
     ];
-    expect(trainingDaysInRange(sessions, 0, 10 * DAY)).toBe(2);
+    expect(trainingDaysInRange(dates, 0, 10 * DAY)).toBe(2);
   });
 });
 
