@@ -98,8 +98,8 @@ remote; `HttpRemoteStore` (the Railway client) is unit-tested with a mocked `fet
   didn't" plus light activity tags + optional intensity — recording the day, not a workout) with a
   **rest/streak indicator** (a training day = a journal with real activity or a climb; warns at 3+
   days in a row), the **Energy-Emotion Levels** check-in (energy 0–10 × emotion −5..+5 → quadrants
-  - an hourly line chart), and a browsable **exercise library** (Ch 6–7), each exercise tagged with
-    its triad area and within-session hierarchy.
+  plus an hourly line chart), and a browsable **exercise library** (Ch 6–7), each exercise tagged
+  with its triad area and within-session hierarchy.
 - **Today recommendation (done):** the Train tab opens with a **"Today"** card giving a **concrete,
   ordered plan** — warm-up → drills weighted to your weakest area (physical pulls named exercises
   from the tagged library in hierarchy order; mental/technical pull skill drills) → cool-down;
