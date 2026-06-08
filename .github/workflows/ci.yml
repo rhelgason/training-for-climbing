@@ -36,6 +36,9 @@ jobs:
       - name: Format check
         run: npm run format:check
 
+      - name: Server syntax check
+        run: node --check server/index.js
+
       - name: Test (with coverage)
         run: npm run test:coverage -- --ci --maxWorkers=2
 
