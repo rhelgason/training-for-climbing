@@ -68,28 +68,19 @@ src/
 
 ## Cloud sync (optional)
 
-The app is local-first and works fully offline. Cloud sync is opt-in via Supabase and uses a
-**snapshot + last-write-wins** model (the whole dataset is merged per record by `updatedAt`).
+The app is local-first and works fully offline. Cloud sync is opt-in and uses a **snapshot +
+last-write-wins** model (the whole dataset is merged per record by `updatedAt`; deletes
+propagate via tombstones). It talks to your own small sync server — a tiny Express + Postgres
+service in [`server/`](server/) designed to deploy to **Railway**.
 
-1. Create a Supabase project and add a snapshots table:
-
-   ```sql
-   create table snapshots (
-     user_id uuid primary key references auth.users (id) on delete cascade,
-     data jsonb not null,
-     updated_at timestamptz not null default now()
-   );
-   alter table snapshots enable row level security;
-   create policy "own snapshot" on snapshots
-     for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-   ```
-
-2. Copy `.env.example` to `.env` and set `EXPO_PUBLIC_SUPABASE_URL` and
-   `EXPO_PUBLIC_SUPABASE_ANON_KEY`, then restart.
-3. In the app: **Review → Cloud sync**, sign in via email magic link, and tap **Sync now**.
+1. Deploy the sync server to Railway (Postgres plugin + a service rooted at `server/`, with a
+   `SYNC_TOKEN` secret) — see [`server/README.md`](server/README.md). You get an HTTPS URL.
+2. Optionally copy `.env.example` to `.env` and set `EXPO_PUBLIC_SYNC_URL` to prefill the URL.
+3. In the app: **Review → Cloud sync**, enter the server URL and the `SYNC_TOKEN`, then
+   **Connect & sync**.
 
 The merge engine (`src/features/sync/`) is backend-agnostic and unit-tested with an in-memory
-remote. **v1 limitation:** deletes don't propagate across devices yet (no tombstones).
+remote; `HttpRemoteStore` (the Railway client) is unit-tested with a mocked `fetch`.
 
 ## Status
 
