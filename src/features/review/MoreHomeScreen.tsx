@@ -6,27 +6,25 @@ import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { Screen } from '../../components/Screen';
 import { GLOSSARY } from '../../content/glossary';
-import type { ReviewStackParamList } from '../../navigation/types';
+import type { MoreStackParamList } from '../../navigation/types';
 import { colors, fontSize, spacing } from '../../theme';
 
-type Props = NativeStackScreenProps<ReviewStackParamList, 'ReviewHome'>;
+type Props = NativeStackScreenProps<MoreStackParamList, 'MoreHome'>;
 
-export function ReviewHomeScreen({ navigation }: Props) {
+export function MoreHomeScreen({ navigation }: Props) {
   return (
     <Screen>
-      <Text style={styles.title}>Review</Text>
-      <Text style={styles.subtitle}>
-        Refresh the concepts behind your training as you read the book.
-      </Text>
+      <Text style={styles.title}>More</Text>
+      <Text style={styles.subtitle}>Your profile, settings, and reference.</Text>
 
       <Card style={styles.card}>
-        <Text style={styles.cardTitle}>Glossary</Text>
+        <Text style={styles.cardTitle}>Profile & settings</Text>
         <Text style={styles.cardBody}>
-          {GLOSSARY.length} key climbing and training terms, searchable.
+          Ability tier, default discipline, reassessment cadence, and the AI coach.
         </Text>
         <Button
-          label="Open glossary"
-          onPress={() => navigation.navigate('Glossary')}
+          label="Open profile"
+          onPress={() => navigation.navigate('Profile')}
           style={styles.action}
         />
       </Card>
@@ -43,11 +41,16 @@ export function ReviewHomeScreen({ navigation }: Props) {
       </Card>
 
       <Card style={styles.card}>
-        <Text style={styles.cardTitle}>Chapter summaries</Text>
+        <Text style={styles.cardTitle}>Glossary</Text>
         <Text style={styles.cardBody}>
-          Concise refreshers for Mental, Technique, Nutrition, Recovery, and Injury — coming in a
-          later phase.
+          {GLOSSARY.length} key climbing and training terms, searchable.
         </Text>
+        <Button
+          label="Open glossary"
+          variant="secondary"
+          onPress={() => navigation.navigate('Glossary')}
+          style={styles.action}
+        />
       </Card>
     </Screen>
   );

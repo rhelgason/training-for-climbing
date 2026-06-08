@@ -160,6 +160,30 @@ describe('InMemoryRepository', () => {
     expect((await repo.listCheckins()).map((c) => c.id)).toEqual([a.id]);
   });
 
+  it('returns null profile until saved, then upserts with monotonic updatedAt', async () => {
+    const repo = new InMemoryRepository();
+    expect(await repo.getProfile()).toBeNull();
+    const first = await repo.saveProfile({ abilityTier: 'elite' });
+    expect(first.abilityTier).toBe('elite');
+    expect(first.aiCoachEnabled).toBe(false); // default preserved
+    const second = await repo.saveProfile({ aiCoachEnabled: true });
+    expect(second.abilityTier).toBe('elite'); // prior value kept
+    expect(second.aiCoachEnabled).toBe(true);
+    expect(second.updatedAt).toBeGreaterThan(first.updatedAt);
+    expect(second.createdAt).toBe(first.createdAt);
+  });
+
+  it('includes the profile in the snapshot and applies the newer one', async () => {
+    const repo = new InMemoryRepository();
+    await repo.saveProfile({ reassessWeeks: 6 });
+    const snap = await repo.exportSnapshot();
+    expect(snap.profile?.reassessWeeks).toBe(6);
+
+    const other = new InMemoryRepository();
+    await other.applySnapshot(snap);
+    expect((await other.getProfile())?.reassessWeeks).toBe(6);
+  });
+
   it('records and lists usage events newest-first with limit', async () => {
     const repo = new InMemoryRepository();
     await repo.recordEvent({ name: 'app_opened', props: {}, timestamp: 1 });

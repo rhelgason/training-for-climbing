@@ -17,12 +17,15 @@ import type {
   NewGoal,
   NewMacrocyclePeriod,
   NewSession,
+  ProfilePatch,
+  ProfileRecord,
   SessionRecord,
   Snapshot,
   SyncTable,
   TombstoneRecord,
   UsageEventRecord,
 } from './types';
+import { PROFILE_DEFAULTS, PROFILE_ID } from '../content/profile';
 
 /**
  * In-memory Repository. Used in unit tests and as a safe fallback (e.g. web,
@@ -36,6 +39,7 @@ export class InMemoryRepository implements Repository {
   private periods: MacrocyclePeriodRecord[] = [];
   private benchmarks: BenchmarkRecord[] = [];
   private checkins: CheckinRecord[] = [];
+  private profile: ProfileRecord | null = null;
   private tombstones: TombstoneRecord[] = [];
   private events: UsageEventRecord[] = [];
 
@@ -261,6 +265,28 @@ export class InMemoryRepository implements Repository {
     this.tombstone('checkins', id);
   }
 
+  async getProfile(): Promise<ProfileRecord | null> {
+    return this.profile;
+  }
+
+  async saveProfile(patch: ProfilePatch): Promise<ProfileRecord> {
+    const ts = Date.now();
+    const base: ProfileRecord = this.profile ?? {
+      id: PROFILE_ID,
+      createdAt: ts,
+      updatedAt: ts,
+      ...PROFILE_DEFAULTS,
+    };
+    this.profile = {
+      ...base,
+      ...patch,
+      id: PROFILE_ID,
+      createdAt: base.createdAt,
+      updatedAt: this.profile ? Math.max(ts, this.profile.updatedAt + 1) : ts,
+    };
+    return this.profile;
+  }
+
   async exportSnapshot(): Promise<Snapshot> {
     return {
       assessments: [...this.assessments],
@@ -270,6 +296,7 @@ export class InMemoryRepository implements Repository {
       periods: [...this.periods],
       benchmarks: [...this.benchmarks],
       checkins: [...this.checkins],
+      profile: this.profile,
       tombstones: [...this.tombstones],
     };
   }
@@ -287,6 +314,12 @@ export class InMemoryRepository implements Repository {
     this.periods = upsert(this.periods, snapshot.periods);
     this.benchmarks = upsert(this.benchmarks, snapshot.benchmarks);
     this.checkins = upsert(this.checkins, snapshot.checkins);
+    if (
+      snapshot.profile &&
+      (!this.profile || snapshot.profile.updatedAt >= this.profile.updatedAt)
+    ) {
+      this.profile = snapshot.profile;
+    }
 
     // Apply deletions, then remember the tombstones.
     const removals: Record<SyncTable, (id: string) => void> = {

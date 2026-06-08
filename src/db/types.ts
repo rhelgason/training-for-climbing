@@ -1,7 +1,32 @@
 import type { Responses } from '../features/assess/scoring';
 import type { TriadArea } from '../content/types';
-import type { GoalHorizon, GoalStatus, HierarchyAreaId } from '../content/planning';
+import type { AbilityTier, GoalHorizon, GoalStatus, HierarchyAreaId } from '../content/planning';
 import type { ClimbDiscipline, ClimbEnvironment, ClimbOutcome } from '../content/climbing';
+
+/** The grade scale a climber uses (only US YDS/V for now). */
+export type GradeSystem = 'yds-v';
+
+/** Single-row user profile / settings. */
+export interface ProfileRecord {
+  /** Always PROFILE_ID — this is a singleton. */
+  id: string;
+  createdAt: number;
+  updatedAt: number;
+  abilityTier: AbilityTier;
+  defaultDiscipline: ClimbDiscipline;
+  gradeSystem: GradeSystem;
+  /** Weeks between self-assessment reminders (Cycle of Improvement). */
+  reassessWeeks: number;
+  /** Opt-in to the AI coach (requires a server LLM key). */
+  aiCoachEnabled: boolean;
+}
+
+export type ProfilePatch = Partial<
+  Pick<
+    ProfileRecord,
+    'abilityTier' | 'defaultDiscipline' | 'gradeSystem' | 'reassessWeeks' | 'aiCoachEnabled'
+  >
+>;
 
 /** A persisted Self-Assessment attempt. */
 export interface AssessmentRecord {
@@ -198,6 +223,8 @@ export interface Snapshot {
   periods: MacrocyclePeriodRecord[];
   benchmarks: BenchmarkRecord[];
   checkins: CheckinRecord[];
+  /** Singleton profile (last-write-wins by updatedAt), or null if never set. */
+  profile: ProfileRecord | null;
   tombstones: TombstoneRecord[];
 }
 

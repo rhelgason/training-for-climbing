@@ -32,8 +32,9 @@ export type ProgressStackParamList = {
   ClimbForm: { climbId?: string } | undefined;
 };
 
-export type ReviewStackParamList = {
-  ReviewHome: undefined;
+export type MoreStackParamList = {
+  MoreHome: undefined;
+  Profile: undefined;
   Glossary: undefined;
   Sync: undefined;
 };
@@ -43,5 +44,5 @@ export type RootTabParamList = {
   Plan: NavigatorScreenParams<PlanStackParamList>;
   Train: NavigatorScreenParams<TrainStackParamList>;
   Progress: NavigatorScreenParams<ProgressStackParamList>;
-  Review: NavigatorScreenParams<ReviewStackParamList>;
+  More: NavigatorScreenParams<MoreStackParamList>;
 };

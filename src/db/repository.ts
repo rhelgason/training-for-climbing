@@ -15,6 +15,8 @@ import type {
   NewGoal,
   NewMacrocyclePeriod,
   NewSession,
+  ProfilePatch,
+  ProfileRecord,
   SessionRecord,
   Snapshot,
   UsageEventRecord,
@@ -81,6 +83,11 @@ export interface Repository {
   /** Newest first (by reading time). */
   listCheckins(): Promise<CheckinRecord[]>;
   deleteCheckin(id: string): Promise<void>;
+
+  // --- Profile (singleton settings) ---
+  getProfile(): Promise<ProfileRecord | null>;
+  /** Upsert the singleton profile; returns the full updated record. */
+  saveProfile(patch: ProfilePatch): Promise<ProfileRecord>;
 
   // --- Cloud sync ---
   /** Full export of all syncable data (excludes analytics events). */

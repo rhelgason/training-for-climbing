@@ -3,7 +3,7 @@ import * as SQLite from 'expo-sqlite';
 import { log } from '../lib/logger';
 import { newId } from '../lib/ids';
 import type { TriadArea } from '../content/types';
-import type { GoalHorizon, GoalStatus, HierarchyAreaId } from '../content/planning';
+import type { AbilityTier, GoalHorizon, GoalStatus, HierarchyAreaId } from '../content/planning';
 import type { Responses } from '../features/assess/scoring';
 import type { Repository } from './repository';
 import type {
@@ -23,6 +23,9 @@ import type {
   NewGoal,
   NewMacrocyclePeriod,
   NewSession,
+  ProfilePatch,
+  ProfileRecord,
+  GradeSystem,
   SessionRecord,
   Snapshot,
   SyncTable,
@@ -30,6 +33,7 @@ import type {
   UsageEventRecord,
 } from './types';
 import type { ClimbDiscipline, ClimbEnvironment, ClimbOutcome } from '../content/climbing';
+import { PROFILE_DEFAULTS, PROFILE_ID } from '../content/profile';
 
 const DB_NAME = 'training-for-climbing.db';
 
@@ -43,6 +47,17 @@ const SQL_TABLE: Record<SyncTable, string> = {
   benchmarks: 'benchmarks',
   checkins: 'checkins',
 };
+
+interface ProfileRow {
+  id: string;
+  created_at: number;
+  updated_at: number;
+  ability_tier: string;
+  default_discipline: string;
+  grade_system: string;
+  reassess_weeks: number;
+  ai_coach_enabled: number;
+}
 
 interface AssessmentRow {
   id: string;
@@ -228,6 +243,16 @@ export class SqliteRepository implements Repository {
         energy INTEGER NOT NULL,
         emotion INTEGER NOT NULL,
         note TEXT
+      );
+      CREATE TABLE IF NOT EXISTS profile (
+        id TEXT PRIMARY KEY NOT NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        ability_tier TEXT NOT NULL,
+        default_discipline TEXT NOT NULL,
+        grade_system TEXT NOT NULL,
+        reassess_weeks INTEGER NOT NULL,
+        ai_coach_enabled INTEGER NOT NULL
       );
       CREATE TABLE IF NOT EXISTS tombstones (
         table_name TEXT NOT NULL,
@@ -624,6 +649,51 @@ export class SqliteRepository implements Repository {
     await this.recordTombstone('checkins', id);
   }
 
+  async getProfile(): Promise<ProfileRecord | null> {
+    const row = await this.getDb().getFirstAsync<ProfileRow>(
+      `SELECT * FROM profile WHERE id = ?`,
+      PROFILE_ID,
+    );
+    return row ? rowToProfile(row) : null;
+  }
+
+  async saveProfile(patch: ProfilePatch): Promise<ProfileRecord> {
+    const existing = await this.getProfile();
+    const ts = Date.now();
+    const record: ProfileRecord = {
+      id: PROFILE_ID,
+      createdAt: existing?.createdAt ?? ts,
+      updatedAt: existing ? Math.max(ts, existing.updatedAt + 1) : ts,
+      abilityTier: patch.abilityTier ?? existing?.abilityTier ?? PROFILE_DEFAULTS.abilityTier,
+      defaultDiscipline:
+        patch.defaultDiscipline ??
+        existing?.defaultDiscipline ??
+        PROFILE_DEFAULTS.defaultDiscipline,
+      gradeSystem: patch.gradeSystem ?? existing?.gradeSystem ?? PROFILE_DEFAULTS.gradeSystem,
+      reassessWeeks:
+        patch.reassessWeeks ?? existing?.reassessWeeks ?? PROFILE_DEFAULTS.reassessWeeks,
+      aiCoachEnabled:
+        patch.aiCoachEnabled ?? existing?.aiCoachEnabled ?? PROFILE_DEFAULTS.aiCoachEnabled,
+    };
+    await this.upsertProfileRow(record);
+    return record;
+  }
+
+  private async upsertProfileRow(p: ProfileRecord): Promise<void> {
+    await this.getDb().runAsync(
+      `INSERT OR REPLACE INTO profile (id, created_at, updated_at, ability_tier, default_discipline, grade_system, reassess_weeks, ai_coach_enabled)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      p.id,
+      p.createdAt,
+      p.updatedAt,
+      p.abilityTier,
+      p.defaultDiscipline,
+      p.gradeSystem,
+      p.reassessWeeks,
+      p.aiCoachEnabled ? 1 : 0,
+    );
+  }
+
   async exportSnapshot(): Promise<Snapshot> {
     const [assessments, goals, sessions, climbs, periods, benchmarks, checkins, tombRows] =
       await Promise.all([
@@ -641,7 +711,18 @@ export class SqliteRepository implements Repository {
       id: t.id,
       deletedAt: t.deleted_at,
     }));
-    return { assessments, goals, sessions, climbs, periods, benchmarks, checkins, tombstones };
+    const profile = await this.getProfile();
+    return {
+      assessments,
+      goals,
+      sessions,
+      climbs,
+      periods,
+      benchmarks,
+      checkins,
+      profile,
+      tombstones,
+    };
   }
 
   async applySnapshot(snapshot: Snapshot): Promise<void> {
@@ -741,6 +822,31 @@ export class SqliteRepository implements Repository {
           c.note ?? null,
         );
       }
+      // Profile (singleton) — keep whichever is newer.
+      if (snapshot.profile) {
+        const p = snapshot.profile;
+        await db.runAsync(
+          `INSERT INTO profile (id, created_at, updated_at, ability_tier, default_discipline, grade_system, reassess_weeks, ai_coach_enabled)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET
+             created_at = excluded.created_at,
+             updated_at = excluded.updated_at,
+             ability_tier = excluded.ability_tier,
+             default_discipline = excluded.default_discipline,
+             grade_system = excluded.grade_system,
+             reassess_weeks = excluded.reassess_weeks,
+             ai_coach_enabled = excluded.ai_coach_enabled
+           WHERE excluded.updated_at >= profile.updated_at`,
+          p.id,
+          p.createdAt,
+          p.updatedAt,
+          p.abilityTier,
+          p.defaultDiscipline,
+          p.gradeSystem,
+          p.reassessWeeks,
+          p.aiCoachEnabled ? 1 : 0,
+        );
+      }
       // Apply deletions, then persist the tombstones.
       for (const t of snapshot.tombstones) {
         await db.runAsync(`DELETE FROM ${SQL_TABLE[t.table]} WHERE id = ?`, t.id);
@@ -780,6 +886,19 @@ export class SqliteRepository implements Repository {
       timestamp: r.timestamp,
     }));
   }
+}
+
+function rowToProfile(row: ProfileRow): ProfileRecord {
+  return {
+    id: row.id,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    abilityTier: row.ability_tier as AbilityTier,
+    defaultDiscipline: row.default_discipline as ClimbDiscipline,
+    gradeSystem: row.grade_system as GradeSystem,
+    reassessWeeks: row.reassess_weeks,
+    aiCoachEnabled: row.ai_coach_enabled === 1,
+  };
 }
 
 function rowToAssessment(row: AssessmentRow): AssessmentRecord {

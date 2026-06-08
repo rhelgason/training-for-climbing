@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { Card } from '../../components/Card';
@@ -11,7 +11,9 @@ import {
   type AbilityTier,
   type HierarchyAreaId,
 } from '../../content/planning';
+import { effectiveProfile } from '../../content/profile';
 import { trackEvent } from '../../lib/logger';
+import { useRepository } from '../../providers/RepositoryProvider';
 import { colors, fontSize, spacing } from '../../theme';
 import { buildSessionPlan, restGuidanceFor, tierInfo } from './program';
 
@@ -26,11 +28,21 @@ const AREA_OPTIONS: ChipOption<HierarchyAreaId>[] = TRAINING_HIERARCHY.map((a) =
 }));
 
 export function ProgramBuilderScreen() {
+  const repo = useRepository();
   const [tier, setTier] = useState<AbilityTier>('intermediate');
   const [areas, setAreas] = useState<HierarchyAreaId[]>(['skill']);
 
+  useEffect(() => {
+    repo.getProfile().then((p) => setTier(effectiveProfile(p).abilityTier));
+  }, [repo]);
+
   const plan = useMemo(() => buildSessionPlan(areas), [areas]);
   const info = tierInfo(tier);
+
+  const onSelectTier = (next: AbilityTier) => {
+    setTier(next);
+    repo.saveProfile({ abilityTier: next });
+  };
 
   const toggleArea = (id: HierarchyAreaId) => {
     const next = areas.includes(id) ? areas.filter((a) => a !== id) : [...areas, id];
@@ -43,7 +55,12 @@ export function ProgramBuilderScreen() {
       <Text style={styles.title}>Program builder</Text>
 
       <Text style={styles.sectionTitle}>Ability tier</Text>
-      <OptionChips options={TIER_OPTIONS} selected={tier} onSelect={setTier} testIDPrefix="tier" />
+      <OptionChips
+        options={TIER_OPTIONS}
+        selected={tier}
+        onSelect={onSelectTier}
+        testIDPrefix="tier"
+      />
       <Card style={styles.tierCard}>
         <Text style={styles.split}>
           {info.techniqueMentalPct}% technique &amp; mental · {info.conditioningPct}% conditioning

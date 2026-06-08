@@ -20,6 +20,7 @@ export function emptySnapshot(): Snapshot {
     periods: [],
     benchmarks: [],
     checkins: [],
+    profile: null,
     tombstones: [],
   };
 }
@@ -74,6 +75,13 @@ export function mergeSnapshots(a: Snapshot, b: Snapshot): Snapshot {
     periods: survive('periods', a.periods, b.periods),
     benchmarks: survive('benchmarks', a.benchmarks, b.benchmarks),
     checkins: survive('checkins', a.checkins, b.checkins),
+    profile: !a.profile
+      ? b.profile
+      : !b.profile
+        ? a.profile
+        : b.profile.updatedAt >= a.profile.updatedAt
+          ? b.profile
+          : a.profile,
     tombstones,
   };
 
