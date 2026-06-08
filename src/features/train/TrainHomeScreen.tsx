@@ -14,6 +14,7 @@ import type { TrainStackParamList } from '../../navigation/types';
 import { colors, fontSize, spacing } from '../../theme';
 import { dayIndex, trainingDates } from './log';
 import { buildDailyRecommendation, type DailyRecommendation } from '../today/recommend';
+import { useCoach } from '../coach/useCoach';
 
 type Props = NativeStackScreenProps<TrainStackParamList, 'TrainHome'>;
 
@@ -34,6 +35,7 @@ interface LoadState {
 export function TrainHomeScreen({ navigation }: Props) {
   const repo = useRepository();
   const [state, setState] = useState<LoadState | null>(null);
+  const coach = useCoach(repo);
 
   useFocusEffect(
     useCallback(() => {
@@ -63,19 +65,21 @@ export function TrainHomeScreen({ navigation }: Props) {
 
   if (state === null) return <Screen />;
   const { journals, recommendation: rec, todayJournalId } = state;
+  const ai = coach.suggestion;
 
   return (
     <Screen>
       <Text style={styles.title}>Train</Text>
 
-      <Card style={[styles.todayCard, rec.kind === 'rest' && styles.restCard]}>
-        <Text style={styles.todayLabel}>Today</Text>
-        <Text style={styles.todayHeadline}>{rec.headline}</Text>
-        <Text style={styles.todayDetail}>{rec.detail}</Text>
-        {rec.plan.length > 0 && (
+      <Card style={[styles.todayCard, rec.kind === 'rest' && styles.restCard, ai && styles.aiCard]}>
+        <Text style={[styles.todayLabel, ai && styles.aiLabel]}>{ai ? 'AI coach' : 'Today'}</Text>
+        <Text style={styles.todayHeadline}>{ai ? ai.headline : rec.headline}</Text>
+        <Text style={styles.todayDetail}>{ai ? ai.rationale || rec.detail : rec.detail}</Text>
+
+        {(ai ? ai.plan : rec.plan).length > 0 && (
           <View style={styles.plan}>
             <Text style={styles.planLabel}>Today&apos;s plan</Text>
-            {rec.plan.map((step, i) => (
+            {(ai ? ai.plan : rec.plan).map((step, i) => (
               <View key={i} style={styles.planStep}>
                 <Text style={styles.planNum}>{i + 1}</Text>
                 <Text style={styles.planText}>{step}</Text>
@@ -83,6 +87,18 @@ export function TrainHomeScreen({ navigation }: Props) {
             ))}
           </View>
         )}
+
+        {ai && ai.watchOuts.length > 0 && (
+          <View style={styles.goals}>
+            <Text style={styles.goalsLabel}>Watch out for</Text>
+            {ai.watchOuts.map((w) => (
+              <Text key={w} style={styles.goalItem}>
+                • {w}
+              </Text>
+            ))}
+          </View>
+        )}
+
         {rec.goalReminders.length > 0 && (
           <View style={styles.goals}>
             <Text style={styles.goalsLabel}>Keep in mind</Text>
@@ -94,6 +110,27 @@ export function TrainHomeScreen({ navigation }: Props) {
           </View>
         )}
       </Card>
+
+      {coach.enabled && (
+        <Button
+          label={
+            coach.status === 'loading'
+              ? 'Asking your coach…'
+              : ai
+                ? 'Refresh AI suggestion'
+                : 'Get AI suggestion'
+          }
+          variant="secondary"
+          onPress={coach.refresh}
+          disabled={coach.status === 'loading'}
+          style={styles.secondaryAction}
+        />
+      )}
+      {coach.status === 'error' && (
+        <Text style={styles.coachError}>
+          Couldn&apos;t reach your coach — showing the built-in plan instead.
+        </Text>
+      )}
 
       <Button
         label={todayJournalId ? "Edit today's log" : '+ Log today'}
@@ -153,12 +190,20 @@ const styles = StyleSheet.create({
   title: { color: colors.text, fontSize: fontSize.xxl, fontWeight: '700' },
   todayCard: { marginTop: spacing.md, borderColor: colors.primary },
   restCard: { borderColor: colors.warning },
+  aiCard: { borderColor: colors.success },
   todayLabel: {
     color: colors.textMuted,
     fontSize: fontSize.sm,
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 1,
+  },
+  aiLabel: { color: colors.success },
+  coachError: {
+    color: colors.textMuted,
+    fontSize: fontSize.sm,
+    marginTop: spacing.sm,
+    fontStyle: 'italic',
   },
   todayHeadline: {
     color: colors.text,
