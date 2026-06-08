@@ -1,67 +1,60 @@
 import React, { useEffect, useState } from 'react';
 import { Alert, StyleSheet, Text, TextInput } from 'react-native';
-import type { Session } from '@supabase/supabase-js';
 
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { Screen } from '../../components/Screen';
-import { getSupabase, isSupabaseConfigured } from '../../lib/supabase';
 import { log, trackEvent } from '../../lib/logger';
 import { useRepository } from '../../providers/RepositoryProvider';
 import { colors, fontSize, radius, spacing } from '../../theme';
 import { runSync } from './engine';
-import { SupabaseRemoteStore } from './supabaseRemote';
+import { HttpRemoteStore } from './httpRemote';
+import {
+  clearSyncConfig,
+  defaultSyncUrl,
+  getSyncConfig,
+  isSyncConfigured,
+  saveSyncConfig,
+  type SyncConfig,
+} from './syncConfig';
 
 export function SyncScreen() {
   const repo = useRepository();
-  const configured = isSupabaseConfigured();
-  const [session, setSession] = useState<Session | null>(null);
-  const [ready, setReady] = useState(!configured);
-  const [email, setEmail] = useState('');
+  const [url, setUrl] = useState('');
+  const [token, setToken] = useState('');
+  const [connected, setConnected] = useState(false);
+  const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
-  const [lastSynced, setLastSynced] = useState<number | null>(null);
 
   useEffect(() => {
-    const supabase = getSupabase();
-    if (!supabase) return;
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setReady(true);
+    getSyncConfig().then((config) => {
+      if (config) {
+        setUrl(config.url);
+        setToken(config.token);
+        setConnected(isSyncConfigured(config));
+        setLastSyncedAt(config.lastSyncedAt ?? null);
+      } else {
+        setUrl(defaultSyncUrl());
+      }
     });
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, next) => setSession(next));
-    return () => sub.subscription.unsubscribe();
   }, []);
 
-  const signIn = async () => {
-    const supabase = getSupabase();
-    if (!supabase || !email.trim()) return;
-    setBusy(true);
-    try {
-      const { error } = await supabase.auth.signInWithOtp({ email: email.trim() });
-      if (error) throw error;
-      Alert.alert('Check your email', 'We sent you a magic link to sign in.');
-    } catch (err) {
-      log.error('sign-in failed', err);
-      Alert.alert('Sign-in failed', String((err as Error).message ?? err));
-    } finally {
-      setBusy(false);
+  const sync = async () => {
+    const config: SyncConfig = { url: url.trim(), token: token.trim() };
+    if (!isSyncConfigured(config)) {
+      Alert.alert('Missing details', 'Enter both the server URL and the sync token.');
+      return;
     }
-  };
-
-  const signOut = async () => {
-    await getSupabase()?.auth.signOut();
-  };
-
-  const syncNow = async () => {
-    const supabase = getSupabase();
-    if (!supabase || !session) return;
     setBusy(true);
     setStatus('Syncing…');
     try {
-      await runSync(repo, new SupabaseRemoteStore(supabase, session.user.id));
+      await runSync(repo, new HttpRemoteStore(config.url, config.token));
+      const now = Date.now();
+      await saveSyncConfig({ ...config, lastSyncedAt: now });
       trackEvent('cloud_synced');
-      setLastSynced(Date.now());
+      setConnected(true);
+      setLastSyncedAt(now);
       setStatus('Synced');
     } catch (err) {
       log.error('sync failed', err);
@@ -72,72 +65,68 @@ export function SyncScreen() {
     }
   };
 
-  if (!configured) {
-    return (
-      <Screen>
-        <Text style={styles.title}>Cloud sync</Text>
-        <Card style={styles.card}>
-          <Text style={styles.body}>
-            Cloud sync isn’t configured. Your data is saved locally on this device.
-          </Text>
-          <Text style={styles.body}>
-            To enable it, set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY (see the
-            README) and restart the app.
-          </Text>
-        </Card>
-      </Screen>
-    );
-  }
+  const disconnect = async () => {
+    await clearSyncConfig();
+    setConnected(false);
+    setToken('');
+    setLastSyncedAt(null);
+    setStatus(null);
+  };
 
   return (
     <Screen>
       <Text style={styles.title}>Cloud sync</Text>
       <Text style={styles.subtitle}>
-        Back up and sync your data across devices. Merging is last-write-wins per record.
+        Back up and sync your data across devices via your own sync server (e.g. hosted on Railway).
+        Merging is last-write-wins per record, and deletes propagate.
       </Text>
 
-      {!ready ? null : session ? (
-        <>
-          <Card style={styles.card}>
-            <Text style={styles.body}>Signed in as {session.user.email ?? session.user.id}</Text>
-            {lastSynced && (
-              <Text style={styles.meta}>
-                Last synced {new Date(lastSynced).toLocaleTimeString()}
-              </Text>
-            )}
-            {status && <Text style={styles.meta}>{status}</Text>}
-          </Card>
-          <Button
-            label={busy ? 'Syncing…' : 'Sync now'}
-            onPress={syncNow}
-            disabled={busy}
-            style={styles.action}
-          />
-          <Button label="Sign out" variant="secondary" onPress={signOut} style={styles.action} />
-        </>
-      ) : (
-        <Card style={styles.card}>
-          <Text style={styles.body}>Sign in with your email to enable sync.</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="you@example.com"
-            placeholderTextColor={colors.textMuted}
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            keyboardType="email-address"
-          />
-          <Button
-            label={busy ? 'Sending…' : 'Send magic link'}
-            onPress={signIn}
-            disabled={busy}
-            style={styles.action}
-          />
-        </Card>
+      <Card style={styles.card}>
+        <Text style={styles.label}>Server URL</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="https://your-app.up.railway.app"
+          placeholderTextColor={colors.textMuted}
+          value={url}
+          onChangeText={setUrl}
+          autoCapitalize="none"
+          autoCorrect={false}
+          keyboardType="url"
+          testID="sync-url"
+        />
+
+        <Text style={styles.label}>Sync token</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Your SYNC_TOKEN secret"
+          placeholderTextColor={colors.textMuted}
+          value={token}
+          onChangeText={setToken}
+          autoCapitalize="none"
+          autoCorrect={false}
+          secureTextEntry
+          testID="sync-token"
+        />
+
+        {connected && lastSyncedAt && (
+          <Text style={styles.meta}>Last synced {new Date(lastSyncedAt).toLocaleString()}</Text>
+        )}
+        {status && <Text style={styles.meta}>{status}</Text>}
+      </Card>
+
+      <Button
+        label={busy ? 'Syncing…' : connected ? 'Sync now' : 'Connect & sync'}
+        onPress={sync}
+        disabled={busy}
+        style={styles.action}
+      />
+      {connected && (
+        <Button label="Disconnect" variant="secondary" onPress={disconnect} style={styles.action} />
       )}
 
       <Text style={styles.footnote}>
-        Note: deletes don’t yet propagate between devices (no tombstones in v1).
+        The token is a shared secret that gates your snapshot — keep it private. See server/README
+        for one-time Railway setup.
       </Text>
     </Screen>
   );
@@ -152,8 +141,7 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   card: { marginTop: spacing.lg },
-  body: { color: colors.text, fontSize: fontSize.md, lineHeight: 22, marginBottom: spacing.sm },
-  meta: { color: colors.textMuted, fontSize: fontSize.sm, marginTop: spacing.xs },
+  label: { color: colors.text, fontSize: fontSize.md, fontWeight: '600', marginBottom: spacing.sm },
   input: {
     backgroundColor: colors.surfaceAlt,
     borderWidth: 1,
@@ -163,8 +151,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     fontSize: fontSize.md,
-    marginTop: spacing.sm,
+    marginBottom: spacing.md,
   },
+  meta: { color: colors.textMuted, fontSize: fontSize.sm, marginTop: spacing.xs },
   action: { marginTop: spacing.md },
   footnote: {
     color: colors.textMuted,

@@ -14,6 +14,7 @@ module.exports = [
       'coverage/**',
       'ios/**',
       'android/**',
+      'server/**',
       'babel.config.js',
     ],
   },
