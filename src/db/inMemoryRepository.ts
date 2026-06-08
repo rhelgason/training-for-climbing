@@ -10,16 +10,17 @@ import type {
   GoalRecord,
   MacrocyclePeriodPatch,
   MacrocyclePeriodRecord,
+  JournalEntry,
+  JournalPatch,
   NewAssessment,
   NewBenchmark,
   NewCheckin,
   NewClimb,
   NewGoal,
+  NewJournal,
   NewMacrocyclePeriod,
-  NewSession,
   ProfilePatch,
   ProfileRecord,
-  SessionRecord,
   Snapshot,
   SyncTable,
   TombstoneRecord,
@@ -34,7 +35,7 @@ import { PROFILE_DEFAULTS, PROFILE_ID } from '../content/profile';
 export class InMemoryRepository implements Repository {
   private assessments: AssessmentRecord[] = [];
   private goals: GoalRecord[] = [];
-  private sessions: SessionRecord[] = [];
+  private journals: JournalEntry[] = [];
   private climbs: ClimbRecord[] = [];
   private periods: MacrocyclePeriodRecord[] = [];
   private benchmarks: BenchmarkRecord[] = [];
@@ -116,29 +117,42 @@ export class InMemoryRepository implements Repository {
     this.tombstone('goals', id);
   }
 
-  async saveSession(input: NewSession): Promise<SessionRecord> {
-    const record: SessionRecord = {
+  async saveJournal(input: NewJournal): Promise<JournalEntry> {
+    const ts = Date.now();
+    const createdAt = input.createdAt ?? ts;
+    const record: JournalEntry = {
       id: newId(),
-      createdAt: input.createdAt ?? Date.now(),
+      createdAt,
+      updatedAt: input.updatedAt ?? createdAt,
       date: input.date,
-      focusAreas: [...input.focusAreas],
-      notes: input.notes,
+      summary: input.summary,
+      wins: input.wins,
+      struggles: input.struggles,
+      activities: [...input.activities],
+      intensity: input.intensity,
     };
-    this.sessions.push(record);
+    this.journals.push(record);
     return record;
   }
 
-  async listSessions(): Promise<SessionRecord[]> {
-    return [...this.sessions].sort((a, b) => b.date - a.date);
+  async listJournals(): Promise<JournalEntry[]> {
+    return [...this.journals].sort((a, b) => b.date - a.date);
   }
 
-  async getSession(id: string): Promise<SessionRecord | null> {
-    return this.sessions.find((s) => s.id === id) ?? null;
+  async getJournal(id: string): Promise<JournalEntry | null> {
+    return this.journals.find((j) => j.id === id) ?? null;
   }
 
-  async deleteSession(id: string): Promise<void> {
-    this.sessions = this.sessions.filter((s) => s.id !== id);
-    this.tombstone('sessions', id);
+  async updateJournal(id: string, patch: JournalPatch): Promise<JournalEntry | null> {
+    const journal = this.journals.find((j) => j.id === id);
+    if (!journal) return null;
+    Object.assign(journal, patch, { updatedAt: Math.max(Date.now(), journal.updatedAt + 1) });
+    return journal;
+  }
+
+  async deleteJournal(id: string): Promise<void> {
+    this.journals = this.journals.filter((j) => j.id !== id);
+    this.tombstone('journals', id);
   }
 
   async saveClimb(input: NewClimb): Promise<ClimbRecord> {
@@ -291,7 +305,7 @@ export class InMemoryRepository implements Repository {
     return {
       assessments: [...this.assessments],
       goals: [...this.goals],
-      sessions: [...this.sessions],
+      journals: [...this.journals],
       climbs: [...this.climbs],
       periods: [...this.periods],
       benchmarks: [...this.benchmarks],
@@ -309,7 +323,7 @@ export class InMemoryRepository implements Repository {
     };
     this.assessments = upsert(this.assessments, snapshot.assessments);
     this.goals = upsert(this.goals, snapshot.goals);
-    this.sessions = upsert(this.sessions, snapshot.sessions);
+    this.journals = upsert(this.journals, snapshot.journals);
     this.climbs = upsert(this.climbs, snapshot.climbs);
     this.periods = upsert(this.periods, snapshot.periods);
     this.benchmarks = upsert(this.benchmarks, snapshot.benchmarks);
@@ -325,7 +339,7 @@ export class InMemoryRepository implements Repository {
     const removals: Record<SyncTable, (id: string) => void> = {
       assessments: (id) => (this.assessments = this.assessments.filter((r) => r.id !== id)),
       goals: (id) => (this.goals = this.goals.filter((r) => r.id !== id)),
-      sessions: (id) => (this.sessions = this.sessions.filter((r) => r.id !== id)),
+      journals: (id) => (this.journals = this.journals.filter((r) => r.id !== id)),
       climbs: (id) => (this.climbs = this.climbs.filter((r) => r.id !== id)),
       periods: (id) => (this.periods = this.periods.filter((r) => r.id !== id)),
       benchmarks: (id) => (this.benchmarks = this.benchmarks.filter((r) => r.id !== id)),

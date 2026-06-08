@@ -1,5 +1,5 @@
 import { InMemoryRepository } from './inMemoryRepository';
-import type { NewAssessment, NewGoal, NewSession } from './types';
+import type { NewAssessment, NewGoal, NewJournal } from './types';
 
 function sampleAssessment(overrides: Partial<NewAssessment> = {}): NewAssessment {
   return {
@@ -71,24 +71,37 @@ describe('InMemoryRepository', () => {
     expect(await repo.listGoals()).toHaveLength(0);
   });
 
-  it('saves sessions, lists them newest-first by date, and deletes', async () => {
+  it('saves journals, lists them newest-first by date, updates, and deletes', async () => {
     const repo = new InMemoryRepository();
-    const base: NewSession = { date: 0, focusAreas: ['skill'] };
-    const older = await repo.saveSession({ ...base, date: 1000 });
-    const newer = await repo.saveSession({ ...base, date: 2000, focusAreas: ['skill', 'stamina'] });
-    const list = await repo.listSessions();
-    expect(list.map((s) => s.id)).toEqual([newer.id, older.id]);
-    expect(list[0].focusAreas).toEqual(['skill', 'stamina']);
-    await repo.deleteSession(newer.id);
-    expect((await repo.listSessions()).map((s) => s.id)).toEqual([older.id]);
+    const base: NewJournal = { date: 0, activities: ['climbing'] };
+    const older = await repo.saveJournal({ ...base, date: 1000 });
+    const newer = await repo.saveJournal({
+      ...base,
+      date: 2000,
+      activities: ['climbing', 'fingerboard'],
+      summary: 'Felt strong',
+    });
+    const list = await repo.listJournals();
+    expect(list.map((j) => j.id)).toEqual([newer.id, older.id]);
+    expect(list[0].activities).toEqual(['climbing', 'fingerboard']);
+    expect(list[0].summary).toBe('Felt strong');
+    expect(await repo.getJournal(older.id)).toMatchObject({ id: older.id });
+
+    const updated = await repo.updateJournal(older.id, { intensity: 'hard', wins: 'sent it' });
+    expect(updated).toMatchObject({ intensity: 'hard', wins: 'sent it' });
+    expect(updated!.updatedAt).toBeGreaterThanOrEqual(older.updatedAt);
+    expect(await repo.updateJournal('nope', { intensity: 'easy' })).toBeNull();
+
+    await repo.deleteJournal(newer.id);
+    expect((await repo.listJournals()).map((j) => j.id)).toEqual([older.id]);
   });
 
-  it('copies session focus areas so later input mutation is isolated', async () => {
+  it('copies journal activities so later input mutation is isolated', async () => {
     const repo = new InMemoryRepository();
-    const input: NewSession = { date: 1, focusAreas: ['skill'] };
-    const saved = await repo.saveSession(input);
-    input.focusAreas.push('stamina');
-    expect(saved.focusAreas).toEqual(['skill']);
+    const input: NewJournal = { date: 1, activities: ['climbing'] };
+    const saved = await repo.saveJournal(input);
+    input.activities.push('strength');
+    expect(saved.activities).toEqual(['climbing']);
   });
 
   it('saves climbs, lists newest-first by date, sets timestamps, and deletes', async () => {

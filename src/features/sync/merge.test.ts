@@ -1,17 +1,17 @@
-import type { GoalRecord, SessionRecord, Snapshot, TombstoneRecord } from '../../db/types';
+import type { GoalRecord, JournalEntry, Snapshot, TombstoneRecord } from '../../db/types';
 import { emptySnapshot, mergeLists, mergeSnapshots, mergeTombstones } from './merge';
 
 function goal(id: string, createdAt: number, updatedAt: number, title: string): GoalRecord {
   return { id, createdAt, updatedAt, horizon: 'medium', title, status: 'active' };
 }
 
-function session(id: string, createdAt: number): SessionRecord {
-  return { id, createdAt, date: createdAt, focusAreas: [] };
+function journal(id: string, createdAt: number): JournalEntry {
+  return { id, createdAt, updatedAt: createdAt, date: createdAt, activities: [] };
 }
 
 describe('mergeLists', () => {
   it('unions records by id', () => {
-    const merged = mergeLists([session('a', 1)], [session('b', 2)]);
+    const merged = mergeLists([journal('a', 1)], [journal('b', 2)]);
     expect(merged.map((r) => r.id).sort()).toEqual(['a', 'b']);
   });
 
@@ -30,7 +30,9 @@ describe('mergeLists', () => {
   });
 
   it('falls back to createdAt for records without updatedAt', () => {
-    const merged = mergeLists([session('s', 100)], [session('s', 50)]);
+    const withoutUpdatedAt = (id: string, createdAt: number) =>
+      ({ id, createdAt, date: createdAt, activities: [] }) as unknown as JournalEntry;
+    const merged = mergeLists([withoutUpdatedAt('s', 100)], [withoutUpdatedAt('s', 50)]);
     expect(merged[0].createdAt).toBe(100);
   });
 });
@@ -50,10 +52,10 @@ describe('mergeTombstones', () => {
 describe('mergeSnapshots', () => {
   it('merges every table', () => {
     const a: Snapshot = { ...emptySnapshot(), goals: [goal('g', 1, 1, 'a')] };
-    const b: Snapshot = { ...emptySnapshot(), sessions: [session('s', 1)] };
+    const b: Snapshot = { ...emptySnapshot(), journals: [journal('s', 1)] };
     const merged = mergeSnapshots(a, b);
     expect(merged.goals).toHaveLength(1);
-    expect(merged.sessions).toHaveLength(1);
+    expect(merged.journals).toHaveLength(1);
   });
 
   it('removes a record when a tombstone is newer than it', () => {

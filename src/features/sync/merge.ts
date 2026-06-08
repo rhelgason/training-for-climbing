@@ -15,7 +15,7 @@ export function emptySnapshot(): Snapshot {
   return {
     assessments: [],
     goals: [],
-    sessions: [],
+    journals: [],
     climbs: [],
     periods: [],
     benchmarks: [],
@@ -70,7 +70,7 @@ export function mergeSnapshots(a: Snapshot, b: Snapshot): Snapshot {
   const merged: Snapshot = {
     assessments: survive('assessments', a.assessments, b.assessments),
     goals: survive('goals', a.goals, b.goals),
-    sessions: survive('sessions', a.sessions, b.sessions),
+    journals: survive('journals', a.journals, b.journals),
     climbs: survive('climbs', a.climbs, b.climbs),
     periods: survive('periods', a.periods, b.periods),
     benchmarks: survive('benchmarks', a.benchmarks, b.benchmarks),
@@ -90,7 +90,7 @@ export function mergeSnapshots(a: Snapshot, b: Snapshot): Snapshot {
   for (const [table, list] of [
     ['assessments', merged.assessments],
     ['goals', merged.goals],
-    ['sessions', merged.sessions],
+    ['journals', merged.journals],
     ['climbs', merged.climbs],
     ['periods', merged.periods],
     ['benchmarks', merged.benchmarks],

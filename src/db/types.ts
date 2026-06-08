@@ -1,7 +1,8 @@
 import type { Responses } from '../features/assess/scoring';
 import type { TriadArea } from '../content/types';
-import type { AbilityTier, GoalHorizon, GoalStatus, HierarchyAreaId } from '../content/planning';
+import type { AbilityTier, GoalHorizon, GoalStatus } from '../content/planning';
 import type { ClimbDiscipline, ClimbEnvironment, ClimbOutcome } from '../content/climbing';
+import type { ActivityTag, JournalIntensity } from '../content/journal';
 
 /** The grade scale a climber uses (only US YDS/V for now). */
 export type GradeSystem = 'yds-v';
@@ -90,18 +91,32 @@ export type GoalPatch = Partial<
   >
 >;
 
-/** A logged training session / climbing day (the book's "training notebook"). */
-export interface SessionRecord {
+/** A daily journal entry — a quick "what I did / how it went" log. */
+export interface JournalEntry {
   id: string;
   createdAt: number;
-  /** The day the session happened (epoch ms). */
+  updatedAt: number;
+  /** The day this entry is for (epoch ms). */
   date: number;
-  /** Which areas of the 5-step training hierarchy were trained. */
-  focusAreas: HierarchyAreaId[];
-  notes?: string;
+  /** Free-text: what I did today. */
+  summary?: string;
+  /** Free-text: what went well. */
+  wins?: string;
+  /** Free-text: what didn't go well. */
+  struggles?: string;
+  /** Activity tags (climbing, fingerboard, strength, …, rest). */
+  activities: ActivityTag[];
+  intensity?: JournalIntensity;
 }
 
-export type NewSession = Omit<SessionRecord, 'id' | 'createdAt'> & { createdAt?: number };
+export type NewJournal = Omit<JournalEntry, 'id' | 'createdAt' | 'updatedAt'> & {
+  createdAt?: number;
+  updatedAt?: number;
+};
+
+export type JournalPatch = Partial<
+  Pick<JournalEntry, 'date' | 'summary' | 'wins' | 'struggles' | 'activities' | 'intensity'>
+>;
 
 /** A logged ascent — what you climbed on a given day. */
 export interface ClimbRecord {
@@ -196,7 +211,7 @@ export type NewCheckin = Omit<CheckinRecord, 'id' | 'createdAt'> & { createdAt?:
 export type SyncTable =
   | 'assessments'
   | 'goals'
-  | 'sessions'
+  | 'journals'
   | 'climbs'
   | 'periods'
   | 'benchmarks'
@@ -218,7 +233,7 @@ export interface TombstoneRecord {
 export interface Snapshot {
   assessments: AssessmentRecord[];
   goals: GoalRecord[];
-  sessions: SessionRecord[];
+  journals: JournalEntry[];
   climbs: ClimbRecord[];
   periods: MacrocyclePeriodRecord[];
   benchmarks: BenchmarkRecord[];

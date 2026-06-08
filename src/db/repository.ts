@@ -7,17 +7,18 @@ import type {
   GoalRecord,
   MacrocyclePeriodPatch,
   MacrocyclePeriodRecord,
+  JournalEntry,
+  JournalPatch,
   NewAssessment,
   NewBenchmark,
   ClimbPatch,
   NewCheckin,
   NewClimb,
   NewGoal,
+  NewJournal,
   NewMacrocyclePeriod,
-  NewSession,
   ProfilePatch,
   ProfileRecord,
-  SessionRecord,
   Snapshot,
   UsageEventRecord,
 } from './types';
@@ -46,12 +47,13 @@ export interface Repository {
   updateGoal(id: string, patch: GoalPatch): Promise<GoalRecord | null>;
   deleteGoal(id: string): Promise<void>;
 
-  // --- Training sessions ---
-  saveSession(input: NewSession): Promise<SessionRecord>;
-  /** Newest first (by session date). */
-  listSessions(): Promise<SessionRecord[]>;
-  getSession(id: string): Promise<SessionRecord | null>;
-  deleteSession(id: string): Promise<void>;
+  // --- Daily journal ---
+  saveJournal(input: NewJournal): Promise<JournalEntry>;
+  /** Newest first (by entry date). */
+  listJournals(): Promise<JournalEntry[]>;
+  getJournal(id: string): Promise<JournalEntry | null>;
+  updateJournal(id: string, patch: JournalPatch): Promise<JournalEntry | null>;
+  deleteJournal(id: string): Promise<void>;
 
   // --- Climbs (logged ascents) ---
   saveClimb(input: NewClimb): Promise<ClimbRecord>;

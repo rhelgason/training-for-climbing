@@ -3,7 +3,7 @@ import * as SQLite from 'expo-sqlite';
 import { log } from '../lib/logger';
 import { newId } from '../lib/ids';
 import type { TriadArea } from '../content/types';
-import type { AbilityTier, GoalHorizon, GoalStatus, HierarchyAreaId } from '../content/planning';
+import type { AbilityTier, GoalHorizon, GoalStatus } from '../content/planning';
 import type { Responses } from '../features/assess/scoring';
 import type { Repository } from './repository';
 import type {
@@ -16,23 +16,25 @@ import type {
   GoalRecord,
   MacrocyclePeriodPatch,
   MacrocyclePeriodRecord,
+  JournalEntry,
+  JournalPatch,
   NewAssessment,
   NewBenchmark,
   NewCheckin,
   NewClimb,
   NewGoal,
+  NewJournal,
   NewMacrocyclePeriod,
-  NewSession,
   ProfilePatch,
   ProfileRecord,
   GradeSystem,
-  SessionRecord,
   Snapshot,
   SyncTable,
   TombstoneRecord,
   UsageEventRecord,
 } from './types';
 import type { ClimbDiscipline, ClimbEnvironment, ClimbOutcome } from '../content/climbing';
+import type { ActivityTag, JournalIntensity } from '../content/journal';
 import { PROFILE_DEFAULTS, PROFILE_ID } from '../content/profile';
 
 const DB_NAME = 'training-for-climbing.db';
@@ -41,7 +43,7 @@ const DB_NAME = 'training-for-climbing.db';
 const SQL_TABLE: Record<SyncTable, string> = {
   assessments: 'assessments',
   goals: 'goals',
-  sessions: 'sessions',
+  journals: 'journals',
   climbs: 'climbs',
   periods: 'macrocycle_periods',
   benchmarks: 'benchmarks',
@@ -82,12 +84,16 @@ interface TombstoneRow {
   deleted_at: number;
 }
 
-interface SessionRow {
+interface JournalRow {
   id: string;
   created_at: number;
+  updated_at: number;
   date: number;
-  focus_areas: string;
-  notes: string | null;
+  summary: string | null;
+  wins: string | null;
+  struggles: string | null;
+  activities: string;
+  intensity: string | null;
 }
 
 interface CheckinRow {
@@ -197,12 +203,16 @@ export class SqliteRepository implements Repository {
         status TEXT NOT NULL,
         completed_at INTEGER
       );
-      CREATE TABLE IF NOT EXISTS sessions (
+      CREATE TABLE IF NOT EXISTS journals (
         id TEXT PRIMARY KEY NOT NULL,
         created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
         date INTEGER NOT NULL,
-        focus_areas TEXT NOT NULL,
-        notes TEXT
+        summary TEXT,
+        wins TEXT,
+        struggles TEXT,
+        activities TEXT NOT NULL,
+        intensity TEXT
       );
       CREATE TABLE IF NOT EXISTS climbs (
         id TEXT PRIMARY KEY NOT NULL,
@@ -268,7 +278,7 @@ export class SqliteRepository implements Repository {
       );
       CREATE INDEX IF NOT EXISTS idx_assessments_created_at ON assessments (created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_goals_created_at ON goals (created_at DESC);
-      CREATE INDEX IF NOT EXISTS idx_sessions_date ON sessions (date DESC);
+      CREATE INDEX IF NOT EXISTS idx_journals_date ON journals (date DESC);
       CREATE INDEX IF NOT EXISTS idx_climbs_date ON climbs (date DESC);
       CREATE INDEX IF NOT EXISTS idx_macrocycle_start ON macrocycle_periods (start_date ASC);
       CREATE INDEX IF NOT EXISTS idx_benchmarks_date ON benchmarks (date DESC);
@@ -392,43 +402,79 @@ export class SqliteRepository implements Repository {
     await this.recordTombstone('goals', id);
   }
 
-  async saveSession(input: NewSession): Promise<SessionRecord> {
-    const record: SessionRecord = {
+  async saveJournal(input: NewJournal): Promise<JournalEntry> {
+    const ts = Date.now();
+    const record: JournalEntry = {
       id: newId(),
-      createdAt: input.createdAt ?? Date.now(),
+      createdAt: input.createdAt ?? ts,
+      updatedAt: input.updatedAt ?? ts,
       date: input.date,
-      focusAreas: [...input.focusAreas],
-      notes: input.notes,
+      summary: input.summary,
+      wins: input.wins,
+      struggles: input.struggles,
+      activities: [...input.activities],
+      intensity: input.intensity,
     };
     await this.getDb().runAsync(
-      `INSERT INTO sessions (id, created_at, date, focus_areas, notes) VALUES (?, ?, ?, ?, ?)`,
+      `INSERT INTO journals (id, created_at, updated_at, date, summary, wins, struggles, activities, intensity)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       record.id,
       record.createdAt,
+      record.updatedAt,
       record.date,
-      JSON.stringify(record.focusAreas),
-      record.notes ?? null,
+      record.summary ?? null,
+      record.wins ?? null,
+      record.struggles ?? null,
+      JSON.stringify(record.activities),
+      record.intensity ?? null,
     );
     return record;
   }
 
-  async listSessions(): Promise<SessionRecord[]> {
-    const rows = await this.getDb().getAllAsync<SessionRow>(
-      `SELECT * FROM sessions ORDER BY date DESC`,
+  async listJournals(): Promise<JournalEntry[]> {
+    const rows = await this.getDb().getAllAsync<JournalRow>(
+      `SELECT * FROM journals ORDER BY date DESC`,
     );
-    return rows.map(rowToSession);
+    return rows.map(rowToJournal);
   }
 
-  async getSession(id: string): Promise<SessionRecord | null> {
-    const row = await this.getDb().getFirstAsync<SessionRow>(
-      `SELECT * FROM sessions WHERE id = ?`,
+  async getJournal(id: string): Promise<JournalEntry | null> {
+    const row = await this.getDb().getFirstAsync<JournalRow>(
+      `SELECT * FROM journals WHERE id = ?`,
       id,
     );
-    return row ? rowToSession(row) : null;
+    return row ? rowToJournal(row) : null;
   }
 
-  async deleteSession(id: string): Promise<void> {
-    await this.getDb().runAsync(`DELETE FROM sessions WHERE id = ?`, id);
-    await this.recordTombstone('sessions', id);
+  async updateJournal(id: string, patch: JournalPatch): Promise<JournalEntry | null> {
+    const COLUMNS: Record<keyof JournalPatch, string> = {
+      date: 'date',
+      summary: 'summary',
+      wins: 'wins',
+      struggles: 'struggles',
+      activities: 'activities',
+      intensity: 'intensity',
+    };
+    const existing = await this.getJournal(id);
+    if (!existing) return null;
+    const sets: string[] = ['updated_at = ?'];
+    const values: SQLite.SQLiteBindValue[] = [Math.max(Date.now(), existing.updatedAt + 1)];
+    (Object.keys(patch) as (keyof JournalPatch)[]).forEach((key) => {
+      sets.push(`${COLUMNS[key]} = ?`);
+      if (key === 'activities') {
+        values.push(JSON.stringify(patch.activities ?? []));
+      } else {
+        values.push(patch[key] ?? null);
+      }
+    });
+    values.push(id);
+    await this.getDb().runAsync(`UPDATE journals SET ${sets.join(', ')} WHERE id = ?`, ...values);
+    return this.getJournal(id);
+  }
+
+  async deleteJournal(id: string): Promise<void> {
+    await this.getDb().runAsync(`DELETE FROM journals WHERE id = ?`, id);
+    await this.recordTombstone('journals', id);
   }
 
   async saveClimb(input: NewClimb): Promise<ClimbRecord> {
@@ -695,11 +741,11 @@ export class SqliteRepository implements Repository {
   }
 
   async exportSnapshot(): Promise<Snapshot> {
-    const [assessments, goals, sessions, climbs, periods, benchmarks, checkins, tombRows] =
+    const [assessments, goals, journals, climbs, periods, benchmarks, checkins, tombRows] =
       await Promise.all([
         this.listAssessments(),
         this.listGoals(),
-        this.listSessions(),
+        this.listJournals(),
         this.listClimbs(),
         this.listMacrocyclePeriods(),
         this.listBenchmarks(),
@@ -715,7 +761,7 @@ export class SqliteRepository implements Repository {
     return {
       assessments,
       goals,
-      sessions,
+      journals,
       climbs,
       periods,
       benchmarks,
@@ -758,14 +804,19 @@ export class SqliteRepository implements Repository {
           g.completedAt ?? null,
         );
       }
-      for (const s of snapshot.sessions) {
+      for (const j of snapshot.journals) {
         await db.runAsync(
-          `INSERT OR REPLACE INTO sessions (id, created_at, date, focus_areas, notes) VALUES (?, ?, ?, ?, ?)`,
-          s.id,
-          s.createdAt,
-          s.date,
-          JSON.stringify(s.focusAreas),
-          s.notes ?? null,
+          `INSERT OR REPLACE INTO journals (id, created_at, updated_at, date, summary, wins, struggles, activities, intensity)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          j.id,
+          j.createdAt,
+          j.updatedAt,
+          j.date,
+          j.summary ?? null,
+          j.wins ?? null,
+          j.struggles ?? null,
+          JSON.stringify(j.activities),
+          j.intensity ?? null,
         );
       }
       for (const c of snapshot.climbs) {
@@ -929,13 +980,17 @@ function rowToGoal(row: GoalRow): GoalRecord {
   };
 }
 
-function rowToSession(row: SessionRow): SessionRecord {
+function rowToJournal(row: JournalRow): JournalEntry {
   return {
     id: row.id,
     createdAt: row.created_at,
+    updatedAt: row.updated_at,
     date: row.date,
-    focusAreas: safeParse<HierarchyAreaId[]>(row.focus_areas, []),
-    notes: row.notes ?? undefined,
+    summary: row.summary ?? undefined,
+    wins: row.wins ?? undefined,
+    struggles: row.struggles ?? undefined,
+    activities: safeParse<ActivityTag[]>(row.activities, []),
+    intensity: (row.intensity as JournalIntensity | null) ?? undefined,
   };
 }
 
