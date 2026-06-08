@@ -1,0 +1,17 @@
+{
+  "name": "tfc-sync-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Tiny snapshot sync server for the Training for Climbing app (deploy to Railway).",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "pg": "^8.13.1"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
