@@ -7,6 +7,8 @@
  * a substitute for owning/reading the book.
  */
 
+import type { HierarchyAreaId } from './planning';
+
 /** The "performance triad" — the book's three pillars of climbing performance. */
 export type TriadArea = 'mental' | 'technical' | 'physical';
 
@@ -74,4 +76,12 @@ export interface Exercise {
   name: string;
   category: ExerciseCategory;
   description: string;
+  /**
+   * Which performance-triad area this exercise develops. The library is drawn
+   * from the conditioning chapters, so every entry is `physical`; the field
+   * exists so the daily baseline and library can filter "for my weakness".
+   */
+  triadArea: TriadArea;
+  /** Where this exercise sits in the within-session training hierarchy. */
+  hierarchyAreaId: HierarchyAreaId;
 }

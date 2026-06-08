@@ -72,6 +72,17 @@ export function TrainHomeScreen({ navigation }: Props) {
         <Text style={styles.todayLabel}>Today</Text>
         <Text style={styles.todayHeadline}>{rec.headline}</Text>
         <Text style={styles.todayDetail}>{rec.detail}</Text>
+        {rec.plan.length > 0 && (
+          <View style={styles.plan}>
+            <Text style={styles.planLabel}>Today&apos;s plan</Text>
+            {rec.plan.map((step, i) => (
+              <View key={i} style={styles.planStep}>
+                <Text style={styles.planNum}>{i + 1}</Text>
+                <Text style={styles.planText}>{step}</Text>
+              </View>
+            ))}
+          </View>
+        )}
         {rec.goalReminders.length > 0 && (
           <View style={styles.goals}>
             <Text style={styles.goalsLabel}>Keep in mind</Text>
@@ -161,6 +172,23 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     lineHeight: 20,
   },
+  plan: { marginTop: spacing.md },
+  planLabel: {
+    color: colors.textMuted,
+    fontSize: fontSize.sm,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: spacing.xs,
+  },
+  planStep: { flexDirection: 'row', marginTop: spacing.xs },
+  planNum: {
+    color: colors.primary,
+    fontSize: fontSize.sm,
+    fontWeight: '700',
+    width: 20,
+  },
+  planText: { color: colors.text, fontSize: fontSize.sm, flex: 1, lineHeight: 20 },
   goals: { marginTop: spacing.md },
   goalsLabel: { color: colors.textMuted, fontSize: fontSize.sm, fontWeight: '600' },
   goalItem: { color: colors.text, fontSize: fontSize.sm, marginTop: spacing.xs },

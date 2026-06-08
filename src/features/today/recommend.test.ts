@@ -51,6 +51,24 @@ describe('buildDailyRecommendation', () => {
     expect(rec.kind).toBe('rest');
   });
 
+  it('emits a concrete physical plan that warms up and names a library exercise', () => {
+    const rec = buildDailyRecommendation(input({ weakestArea: 'physical' }));
+    expect(rec.plan[0]).toMatch(/Warm up/i);
+    expect(rec.plan.some((s) => /Max strength & power:/.test(s))).toBe(true);
+    expect(rec.plan[rec.plan.length - 1]).toMatch(/Cool down/i);
+  });
+
+  it('emits mental-game drills when the mental area is weakest', () => {
+    const rec = buildDailyRecommendation(input({ weakestArea: 'mental' }));
+    expect(rec.plan.some((s) => /visualization|breathing|fall|now/i.test(s))).toBe(true);
+  });
+
+  it('suggests recovery steps on a rest day', () => {
+    const rec = buildDailyRecommendation(input({ trainingDates: trainDates(0, -1, -2) }));
+    expect(rec.kind).toBe('rest');
+    expect(rec.plan.some((s) => /sleep|recovery|rest/i.test(s))).toBe(true);
+  });
+
   it('surfaces up to three active short/medium-term goals only', () => {
     const rec = buildDailyRecommendation(
       input({
