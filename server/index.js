@@ -2,19 +2,23 @@
  * Tiny snapshot sync server for the Training for Climbing app.
  *
  * Stores one JSON snapshot per user in Postgres and exposes:
- *   GET  /health           → { ok: true }
- *   GET  /snapshot         → { data: Snapshot | null }   (auth)
- *   PUT  /snapshot  <json> → { ok: true }                (auth)
+ *   GET  /health             → { ok: true, coach: boolean }
+ *   GET  /snapshot           → { data: Snapshot | null }         (auth)
+ *   PUT  /snapshot  <json>   → { ok: true }                      (auth)
+ *   POST /coach     <json>   → { suggestion: CoachSuggestion }   (auth, AI)
  *
  * Deploy to Railway alongside a Postgres plugin. Required env:
  *   DATABASE_URL  – provided by the Railway Postgres plugin
  *   SYNC_TOKEN    – a long random secret; the app must send it as a Bearer token
  *   PORT          – provided by Railway
  * Optional:
- *   PGSSL=disable – turn off TLS for local Postgres (Railway needs TLS, the default)
+ *   PGSSL=disable    – turn off TLS for local Postgres (Railway needs TLS, the default)
+ *   GEMINI_API_KEY   – free LLM key enabling the AI coach (see llm.js / README)
+ *   LLM_PROVIDER     – 'gemini' (default) | 'groq'
  */
 const express = require('express');
 const { Pool } = require('pg');
+const { generateCoachSuggestion, isLlmConfigured } = require('./llm');
 
 const TOKEN = process.env.SYNC_TOKEN;
 // A shared-secret token gates a single snapshot (personal, multi-device use).
@@ -46,7 +50,7 @@ function auth(req, res, next) {
 const app = express();
 app.use(express.json({ limit: '10mb' }));
 
-app.get('/health', (_req, res) => res.json({ ok: true }));
+app.get('/health', (_req, res) => res.json({ ok: true, coach: isLlmConfigured() }));
 
 app.get('/snapshot', auth, async (_req, res) => {
   try {
@@ -69,6 +73,26 @@ app.put('/snapshot', auth, async (req, res) => {
   } catch (err) {
     console.error('PUT /snapshot failed', err);
     res.status(500).json({ error: 'internal error' });
+  }
+});
+
+// AI coach: the app sends its training context; we call the LLM and return a
+// structured suggestion. When no LLM key is configured we return 503 so the app
+// falls back to its deterministic baseline.
+app.post('/coach', auth, async (req, res) => {
+  if (!isLlmConfigured()) {
+    return res.status(503).json({ error: 'AI coach not configured' });
+  }
+  const context = req.body && req.body.context;
+  if (!context || typeof context !== 'object') {
+    return res.status(400).json({ error: 'missing context' });
+  }
+  try {
+    const suggestion = await generateCoachSuggestion(context);
+    res.json({ suggestion });
+  } catch (err) {
+    console.error('POST /coach failed', err);
+    res.status(502).json({ error: 'coach upstream error' });
   }
 });
 
