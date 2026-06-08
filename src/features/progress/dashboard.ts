@@ -90,6 +90,29 @@ export function monthlyCounts(timestamps: number[], nowMs: number, months: numbe
   return buckets;
 }
 
+export interface WeekBucket {
+  label: string;
+  count: number;
+}
+
+/**
+ * Counts of timestamps bucketed into the last `weeks` rolling 7-day windows
+ * (oldest-first), each labelled with the window's start date (M/D). Used for the
+ * training-consistency chart.
+ */
+export function weeklyCounts(timestamps: number[], nowMs: number, weeks: number): WeekBucket[] {
+  const buckets: WeekBucket[] = [];
+  for (let i = weeks - 1; i >= 0; i -= 1) {
+    const endMs = nowMs - i * 7 * MS_PER_DAY;
+    const startMs = endMs - 7 * MS_PER_DAY;
+    buckets.push({
+      label: new Date(startMs).toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' }),
+      count: timestamps.filter((t) => t > startMs && t <= endMs).length,
+    });
+  }
+  return buckets;
+}
+
 export interface TriadPoint {
   date: number;
   mental: number;

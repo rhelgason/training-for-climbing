@@ -14,9 +14,19 @@ import {
   type ClimbDiscipline,
 } from '../../content/climbing';
 import { TRIAD_LABELS } from '../../content/types';
-import type { AssessmentRecord, ClimbRecord, JournalEntry } from '../../db/types';
+import { FITNESS_TESTS } from '../../content/fitnessEvaluation';
+import { effectiveProfile } from '../../content/profile';
+import type {
+  AssessmentRecord,
+  BenchmarkRecord,
+  ClimbRecord,
+  JournalEntry,
+  ProfileRecord,
+} from '../../db/types';
 import { now } from '../../lib/clock';
 import { trainingDates } from '../train/log';
+import { reassessDue } from '../assess/reassessment';
+import { trendForTest } from '../assess/fitness';
 import { useRepository } from '../../providers/RepositoryProvider';
 import type { ProgressStackParamList } from '../../navigation/types';
 import { colors, fontSize, radius, spacing, triadColors } from '../../theme';
@@ -28,6 +38,7 @@ import {
   sendPyramid,
   sendRate,
   triadSeries,
+  weeklyCounts,
   type PyramidRow,
 } from './dashboard';
 
@@ -37,6 +48,8 @@ interface LoadState {
   climbs: ClimbRecord[];
   journals: JournalEntry[];
   assessments: AssessmentRecord[];
+  benchmarks: BenchmarkRecord[];
+  profile: ProfileRecord | null;
 }
 
 function pct(n: number): string {
@@ -71,11 +84,15 @@ export function DashboardScreen({ navigation }: Props) {
   useFocusEffect(
     useCallback(() => {
       let on = true;
-      Promise.all([repo.listClimbs(), repo.listJournals(), repo.listAssessments()]).then(
-        ([climbs, journals, assessments]) => {
-          if (on) setState({ climbs, journals, assessments });
-        },
-      );
+      Promise.all([
+        repo.listClimbs(),
+        repo.listJournals(),
+        repo.listAssessments(),
+        repo.listBenchmarks(),
+        repo.getProfile(),
+      ]).then(([climbs, journals, assessments, benchmarks, profile]) => {
+        if (on) setState({ climbs, journals, assessments, benchmarks, profile });
+      });
       return () => {
         on = false;
       };
@@ -83,9 +100,23 @@ export function DashboardScreen({ navigation }: Props) {
   );
 
   if (state === null) return <Screen />;
-  const { climbs, journals, assessments } = state;
+  const { climbs, journals, assessments, benchmarks, profile } = state;
   const nowMs = now();
   const trainDates = trainingDates(journals, climbs);
+  const { reassessWeeks } = effectiveProfile(profile);
+  const showReassessNudge = reassessDue(assessments, nowMs, reassessWeeks);
+
+  const trainingByWeek = weeklyCounts(trainDates, nowMs, 8);
+  const maxWeekly = Math.max(...trainingByWeek.map((w) => w.count), 1);
+
+  // Fitness tests with at least one recorded benchmark (non-bilateral side).
+  const benchmarkTrends = FITNESS_TESTS.map((t) => ({
+    test: t,
+    trend: trendForTest(benchmarks, t.id),
+    history: benchmarks
+      .filter((b) => b.testId === t.id && b.side === undefined)
+      .sort((a, b) => a.date - b.date),
+  })).filter((x) => x.trend !== null);
 
   const bests = DISCIPLINES.map((d) => ({ discipline: d, climb: hardestSend(climbs, d) })).filter(
     (b): b is { discipline: ClimbDiscipline; climb: ClimbRecord } => b.climb !== null,
@@ -118,6 +149,15 @@ export function DashboardScreen({ navigation }: Props) {
           style={styles.secondaryAction}
         />
       </View>
+
+      {showReassessNudge && (
+        <Card style={styles.nudge}>
+          <Text style={styles.nudgeText}>
+            It&apos;s been {reassessWeeks}+ weeks since your last self-assessment. Retake it in the
+            Assess tab to keep your training aimed at the right weakness.
+          </Text>
+        </Card>
+      )}
 
       <Text style={styles.sectionTitle}>Personal bests</Text>
       {bests.length === 0 ? (
@@ -179,6 +219,63 @@ export function DashboardScreen({ navigation }: Props) {
               yMax={maxMonthly}
             />
           </Card>
+        </>
+      )}
+
+      {trainDates.length > 0 && (
+        <>
+          <Text style={styles.sectionTitle}>Training consistency</Text>
+          <Card>
+            <LineChart
+              series={[
+                {
+                  color: colors.success,
+                  label: 'days/week',
+                  values: trainingByWeek.map((w) => w.count),
+                },
+              ]}
+              xLabels={trainingByWeek.map((w) => w.label)}
+              yMin={0}
+              yMax={maxWeekly}
+            />
+          </Card>
+        </>
+      )}
+
+      {benchmarkTrends.length > 0 && (
+        <>
+          <Text style={styles.sectionTitle}>Fitness benchmarks</Text>
+          {benchmarkTrends.map(({ test, trend, history }) => (
+            <Card key={test.id} style={styles.benchCard}>
+              <View style={styles.row}>
+                <Text style={styles.benchName}>{test.name}</Text>
+                <Text style={styles.benchValue}>
+                  {trend!.latest.value} {test.unit}
+                  {trend!.delta !== null && trend!.delta !== 0 ? (
+                    <Text style={{ color: trend!.delta > 0 ? colors.success : colors.danger }}>
+                      {trend!.delta > 0 ? `  ▲ ${trend!.delta}` : `  ▼ ${Math.abs(trend!.delta)}`}
+                    </Text>
+                  ) : null}
+                </Text>
+              </View>
+              {history.length >= 2 && (
+                <View style={styles.benchChart}>
+                  <LineChart
+                    series={[
+                      {
+                        color: colors.primary,
+                        label: test.unit,
+                        values: history.map((b) => b.value),
+                      },
+                    ]}
+                    xLabels={history.map((b) => formatDate(b.date))}
+                    yMin={Math.min(...history.map((b) => b.value), 0)}
+                    yMax={Math.max(...history.map((b) => b.value), 1)}
+                  />
+                </View>
+              )}
+            </Card>
+          ))}
         </>
       )}
 
@@ -287,6 +384,12 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   empty: { color: colors.textMuted, fontSize: fontSize.md },
+  nudge: { marginTop: spacing.md, borderColor: colors.warning },
+  nudgeText: { color: colors.text, fontSize: fontSize.sm, lineHeight: 20 },
+  benchCard: { marginBottom: spacing.sm },
+  benchName: { color: colors.text, fontSize: fontSize.md, fontWeight: '600' },
+  benchValue: { color: colors.text, fontSize: fontSize.md },
+  benchChart: { marginTop: spacing.sm },
   bests: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   bestCard: { flexGrow: 1, minWidth: 100, alignItems: 'center' },
   bestGrade: { color: colors.primary, fontSize: fontSize.xxl, fontWeight: '700' },

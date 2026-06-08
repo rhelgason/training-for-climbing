@@ -6,20 +6,29 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { Screen } from '../../components/Screen';
+import { effectiveProfile } from '../../content/profile';
+import { now } from '../../lib/clock';
 import { useRepository } from '../../providers/RepositoryProvider';
 import type { AssessStackParamList } from '../../navigation/types';
 import { colors, fontSize, spacing } from '../../theme';
+import { reassessDue } from './reassessment';
 
 type Props = NativeStackScreenProps<AssessStackParamList, 'AssessHome'>;
 
 export function AssessHomeScreen({ navigation }: Props) {
   const repo = useRepository();
   const [count, setCount] = useState<number | null>(null);
+  const [due, setDue] = useState(false);
+  const [reassessWeeks, setReassessWeeks] = useState(0);
 
   const reload = useCallback(() => {
     let active = true;
-    repo.listAssessments().then((list) => {
-      if (active) setCount(list.length);
+    Promise.all([repo.listAssessments(), repo.getProfile()]).then(([list, profile]) => {
+      if (!active) return;
+      setCount(list.length);
+      const weeks = effectiveProfile(profile).reassessWeeks;
+      setReassessWeeks(weeks);
+      setDue(reassessDue(list, now(), weeks));
     });
     return () => {
       active = false;
@@ -46,6 +55,15 @@ export function AssessHomeScreen({ navigation }: Props) {
           </Text>
         )}
       </Card>
+
+      {due && (
+        <Card style={styles.nudge}>
+          <Text style={styles.nudgeText}>
+            Time to reassess — it&apos;s been {reassessWeeks}+ weeks. Retaking it keeps your
+            training aimed at your current weakest area (the Cycle of Improvement).
+          </Text>
+        </Card>
+      )}
 
       <View style={styles.actions}>
         <Button label="Take the assessment" onPress={() => navigation.navigate('Assessment')} />
@@ -85,6 +103,8 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   cardMeta: { color: colors.textMuted, fontSize: fontSize.sm, marginTop: spacing.sm },
+  nudge: { marginTop: spacing.lg, borderColor: colors.warning },
+  nudgeText: { color: colors.text, fontSize: fontSize.sm, lineHeight: 20 },
   actions: { marginTop: spacing.xl, gap: spacing.md },
   secondaryAction: {},
 });

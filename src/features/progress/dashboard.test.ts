@@ -8,6 +8,7 @@ import {
   sendPyramid,
   sendRate,
   triadSeries,
+  weeklyCounts,
 } from './dashboard';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -102,6 +103,21 @@ describe('monthlyCounts', () => {
     expect(buckets[buckets.length - 1].count).toBe(2); // current month
     expect(buckets[buckets.length - 2].count).toBe(1); // previous month
     expect(buckets[0].count).toBe(0); // two months ago
+  });
+});
+
+describe('weeklyCounts', () => {
+  const DAY = 24 * 60 * 60 * 1000;
+
+  it('buckets timestamps into the last N rolling 7-day windows, oldest-first', () => {
+    const now = 1000 * DAY + DAY / 2;
+    const thisWeek = [now - 1 * DAY, now - 3 * DAY]; // 2 in the most recent window
+    const lastWeek = [now - 9 * DAY]; // 1 in the prior window
+    const buckets = weeklyCounts([...thisWeek, ...lastWeek], now, 4);
+    expect(buckets).toHaveLength(4);
+    expect(buckets[buckets.length - 1].count).toBe(2); // current week
+    expect(buckets[buckets.length - 2].count).toBe(1); // previous week
+    expect(buckets[0].count).toBe(0); // oldest window
   });
 });
 
