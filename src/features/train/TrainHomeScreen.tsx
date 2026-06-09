@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
@@ -15,6 +15,7 @@ import { colors, fontSize, spacing } from '../../theme';
 import { dayIndex, trainingDates } from './log';
 import { buildDailyRecommendation, type DailyRecommendation } from '../today/recommend';
 import { useCoach } from '../coach/useCoach';
+import { relativeTime } from '../coach/format';
 
 type Props = NativeStackScreenProps<TrainStackParamList, 'TrainHome'>;
 
@@ -72,7 +73,16 @@ export function TrainHomeScreen({ navigation }: Props) {
       <Text style={styles.title}>Train</Text>
 
       <Card style={[styles.todayCard, rec.kind === 'rest' && styles.restCard, ai && styles.aiCard]}>
-        <Text style={[styles.todayLabel, ai && styles.aiLabel]}>{ai ? 'AI coach' : 'Today'}</Text>
+        <View style={styles.todayHeader}>
+          <Text style={[styles.todayLabel, ai && styles.aiLabel]}>{ai ? 'AI coach' : 'Today'}</Text>
+          {coach.status === 'loading' ? (
+            <ActivityIndicator size="small" color={colors.success} testID="coach-spinner" />
+          ) : ai && coach.generatedAt ? (
+            <Text style={styles.todayUpdated}>
+              updated {relativeTime(coach.generatedAt, now())}
+            </Text>
+          ) : null}
+        </View>
         <Text style={styles.todayHeadline}>{ai ? ai.headline : rec.headline}</Text>
         <Text style={styles.todayDetail}>{ai ? ai.rationale || rec.detail : rec.detail}</Text>
 
@@ -199,6 +209,8 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   aiLabel: { color: colors.success },
+  todayHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  todayUpdated: { color: colors.textMuted, fontSize: fontSize.sm },
   coachError: {
     color: colors.textMuted,
     fontSize: fontSize.sm,
