@@ -1,15 +1,19 @@
 /**
- * Tiny snapshot sync server for the Training for Climbing app.
+ * Sync + AI server for the Training for Climbing app.
  *
- * Stores one JSON snapshot per user in Postgres and exposes:
+ * Each account has its own private snapshot. Endpoints:
  *   GET  /health             → { ok: true, coach: boolean }
- *   GET  /snapshot           → { data: Snapshot | null }         (auth)
- *   PUT  /snapshot  <json>   → { ok: true }                      (auth)
- *   POST /coach     <json>   → { suggestion: CoachSuggestion }   (auth, AI)
+ *   POST /auth/register      → { token, user }                    (email + password)
+ *   POST /auth/login         → { token, user }                    (email + password)
+ *   GET  /snapshot           → { data: Snapshot | null }          (auth)
+ *   PUT  /snapshot  <json>   → { ok: true }                       (auth)
+ *   POST /coach     <json>   → { suggestion: CoachSuggestion }    (auth, AI)
+ *
+ * Auth is a JWT session token (Bearer) issued at register/login.
  *
  * Deploy to Railway alongside a Postgres plugin. Required env:
  *   DATABASE_URL  – provided by the Railway Postgres plugin
- *   SYNC_TOKEN    – a long random secret; the app must send it as a Bearer token
+ *   JWT_SECRET    – secret for signing session tokens (falls back to SYNC_TOKEN)
  *   PORT          – provided by Railway
  * Optional:
  *   PGSSL=disable    – turn off TLS for local Postgres (Railway needs TLS, the default)
@@ -19,10 +23,18 @@
 const express = require('express');
 const { Pool } = require('pg');
 const { generateCoachSuggestion, isLlmConfigured } = require('./llm');
-
-const TOKEN = process.env.SYNC_TOKEN;
-// A shared-secret token gates a single snapshot (personal, multi-device use).
-const USER_ID = 'default';
+const {
+  isAuthConfigured,
+  normalizeEmail,
+  isValidEmail,
+  isValidPassword,
+  hashPassword,
+  verifyPassword,
+  signToken,
+  verifyToken,
+  newUserId,
+  MIN_PASSWORD_LENGTH,
+} = require('./auth');
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -31,30 +43,95 @@ const pool = new Pool({
 
 async function ensureSchema() {
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      email TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `);
+  // One snapshot per user (FK to users; cascades on account deletion).
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS snapshots (
-      user_id TEXT PRIMARY KEY,
+      user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
       data JSONB NOT NULL,
       updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )
   `);
 }
 
+// Verify the Bearer session token and attach the user id to the request.
 function auth(req, res, next) {
-  if (!TOKEN) return res.status(500).json({ error: 'server is missing SYNC_TOKEN' });
+  if (!isAuthConfigured()) return res.status(500).json({ error: 'server is missing JWT_SECRET' });
   const header = req.get('authorization') || '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : '';
-  if (token !== TOKEN) return res.status(401).json({ error: 'unauthorized' });
+  const payload = verifyToken(token);
+  if (!payload) return res.status(401).json({ error: 'unauthorized' });
+  req.userId = payload.sub;
   return next();
 }
 
 const app = express();
 app.use(express.json({ limit: '10mb' }));
 
-app.get('/health', (_req, res) => res.json({ ok: true, coach: isLlmConfigured() }));
+app.get('/health', (_req, res) =>
+  res.json({ ok: true, coach: isLlmConfigured(), auth: isAuthConfigured() }),
+);
 
-app.get('/snapshot', auth, async (_req, res) => {
+app.post('/auth/register', async (req, res) => {
+  if (!isAuthConfigured()) return res.status(500).json({ error: 'server is missing JWT_SECRET' });
+  const email = normalizeEmail(req.body && req.body.email);
+  const password = req.body && req.body.password;
+  if (!isValidEmail(email)) return res.status(400).json({ error: 'enter a valid email' });
+  if (!isValidPassword(password)) {
+    return res
+      .status(400)
+      .json({ error: `password must be at least ${MIN_PASSWORD_LENGTH} characters` });
+  }
   try {
-    const { rows } = await pool.query('SELECT data FROM snapshots WHERE user_id = $1', [USER_ID]);
+    const id = newUserId();
+    const passwordHash = await hashPassword(password);
+    await pool.query('INSERT INTO users (id, email, password_hash) VALUES ($1, $2, $3)', [
+      id,
+      email,
+      passwordHash,
+    ]);
+    const user = { id, email };
+    res.json({ token: signToken(user), user });
+  } catch (err) {
+    if (err && err.code === '23505') {
+      return res.status(409).json({ error: 'an account with that email already exists' });
+    }
+    console.error('POST /auth/register failed', err);
+    res.status(500).json({ error: 'internal error' });
+  }
+});
+
+app.post('/auth/login', async (req, res) => {
+  if (!isAuthConfigured()) return res.status(500).json({ error: 'server is missing JWT_SECRET' });
+  const email = normalizeEmail(req.body && req.body.email);
+  const password = req.body && req.body.password;
+  try {
+    const { rows } = await pool.query(
+      'SELECT id, email, password_hash FROM users WHERE email = $1',
+      [email],
+    );
+    const row = rows[0];
+    const ok = row && (await verifyPassword(password || '', row.password_hash));
+    if (!ok) return res.status(401).json({ error: 'incorrect email or password' });
+    const user = { id: row.id, email: row.email };
+    res.json({ token: signToken(user), user });
+  } catch (err) {
+    console.error('POST /auth/login failed', err);
+    res.status(500).json({ error: 'internal error' });
+  }
+});
+
+app.get('/snapshot', auth, async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT data FROM snapshots WHERE user_id = $1', [
+      req.userId,
+    ]);
     res.json({ data: rows[0] ? rows[0].data : null });
   } catch (err) {
     console.error('GET /snapshot failed', err);
@@ -67,7 +144,7 @@ app.put('/snapshot', auth, async (req, res) => {
     await pool.query(
       `INSERT INTO snapshots (user_id, data, updated_at) VALUES ($1, $2, now())
        ON CONFLICT (user_id) DO UPDATE SET data = EXCLUDED.data, updated_at = now()`,
-      [USER_ID, req.body],
+      [req.userId, req.body],
     );
     res.json({ ok: true });
   } catch (err) {
