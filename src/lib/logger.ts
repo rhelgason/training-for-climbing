@@ -61,7 +61,10 @@ export type UsageEvent =
       name: 'climb_logged';
       props: { discipline: string; environment: string; grade: string; outcome: string };
     }
-  | { name: 'cloud_synced'; props?: Record<string, never> };
+  | { name: 'cloud_synced'; props?: Record<string, never> }
+  | { name: 'signed_up'; props?: Record<string, never> }
+  | { name: 'signed_in'; props?: Record<string, never> }
+  | { name: 'signed_out'; props?: Record<string, never> };
 
 export type EventSink = (event: {
   name: UsageEvent['name'];

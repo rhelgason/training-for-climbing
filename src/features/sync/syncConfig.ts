@@ -1,10 +1,9 @@
 /**
- * Persisted cloud-sync configuration (server URL + bearer token), stored
- * locally on the device. The URL may default from EXPO_PUBLIC_SYNC_URL.
+ * Sync configuration — now derived from the signed-in account session. Kept as a
+ * thin `{ url, token }` adapter so the sync engine and AI coach don't need to know
+ * about accounts; they just ask for the current sync config.
  */
-import AsyncStorage from '@react-native-async-storage/async-storage';
-
-const KEY = 'tfc.syncConfig';
+import { getSession, isSignedIn } from '../auth/session';
 
 export interface SyncConfig {
   url: string;
@@ -12,6 +11,7 @@ export interface SyncConfig {
   lastSyncedAt?: number;
 }
 
+/** The default server URL, baked into the build so users never type it. */
 export function defaultSyncUrl(): string {
   return process.env.EXPO_PUBLIC_SYNC_URL ?? '';
 }
@@ -20,20 +20,9 @@ export function isSyncConfigured(config: SyncConfig | null): config is SyncConfi
   return Boolean(config && config.url && config.token);
 }
 
+/** The current sync config from the signed-in session, or null if signed out. */
 export async function getSyncConfig(): Promise<SyncConfig | null> {
-  const raw = await AsyncStorage.getItem(KEY);
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw) as SyncConfig;
-  } catch {
-    return null;
-  }
-}
-
-export async function saveSyncConfig(config: SyncConfig): Promise<void> {
-  await AsyncStorage.setItem(KEY, JSON.stringify(config));
-}
-
-export async function clearSyncConfig(): Promise<void> {
-  await AsyncStorage.removeItem(KEY);
+  const session = await getSession();
+  if (!isSignedIn(session)) return null;
+  return { url: session.url, token: session.token, lastSyncedAt: session.lastSyncedAt };
 }
