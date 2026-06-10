@@ -25,6 +25,28 @@ export function emptySnapshot(): Snapshot {
   };
 }
 
+/**
+ * Backfill any missing fields so the merge never touches `undefined`. Snapshots
+ * produced by an older app version (e.g. before `journals`/`profile`/`tombstones`
+ * existed, or with a since-removed `sessions` field) are normalised to the
+ * current shape — unknown fields are simply dropped.
+ */
+export function normalizeSnapshot(snapshot: Partial<Snapshot> | null | undefined): Snapshot {
+  const empty = emptySnapshot();
+  if (!snapshot) return empty;
+  return {
+    assessments: snapshot.assessments ?? empty.assessments,
+    goals: snapshot.goals ?? empty.goals,
+    journals: snapshot.journals ?? empty.journals,
+    climbs: snapshot.climbs ?? empty.climbs,
+    periods: snapshot.periods ?? empty.periods,
+    benchmarks: snapshot.benchmarks ?? empty.benchmarks,
+    checkins: snapshot.checkins ?? empty.checkins,
+    profile: snapshot.profile ?? empty.profile,
+    tombstones: snapshot.tombstones ?? empty.tombstones,
+  };
+}
+
 function timestamp(record: { createdAt: number; updatedAt?: number }): number {
   return record.updatedAt ?? record.createdAt;
 }
@@ -52,7 +74,10 @@ export function mergeTombstones(a: TombstoneRecord[], b: TombstoneRecord[]): Tom
   return [...byKey.values()];
 }
 
-export function mergeSnapshots(a: Snapshot, b: Snapshot): Snapshot {
+export function mergeSnapshots(aIn: Partial<Snapshot>, bIn: Partial<Snapshot>): Snapshot {
+  // Tolerate older/partial snapshots (missing or renamed fields) on either side.
+  const a = normalizeSnapshot(aIn);
+  const b = normalizeSnapshot(bIn);
   const tombstones = mergeTombstones(a.tombstones, b.tombstones);
   const deletedAtFor = new Map(tombstones.map((t) => [`${t.table}:${t.id}`, t.deletedAt]));
 

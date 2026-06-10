@@ -73,4 +73,15 @@ describe('mergeSnapshots', () => {
     expect(merged.goals).toHaveLength(1);
     expect(merged.tombstones).toHaveLength(0);
   });
+
+  it('tolerates an older/partial remote snapshot (missing fields, dropped sessions)', () => {
+    const local: Snapshot = { ...emptySnapshot(), journals: [journal('j', 1)] };
+    // Pre-refactor shape: has `sessions`, lacks journals/profile/tombstones.
+    const oldRemote = { goals: [goal('g', 1, 1, 'kept')], sessions: [{ id: 's' }] };
+    const merged = mergeSnapshots(local, oldRemote as unknown as Snapshot);
+    expect(merged.goals).toHaveLength(1);
+    expect(merged.journals).toHaveLength(1);
+    expect(merged.tombstones).toEqual([]);
+    expect('sessions' in merged).toBe(false);
+  });
 });
