@@ -1,9 +1,13 @@
 # Sync server (Railway)
 
-A tiny Express + Postgres service that stores one JSON snapshot per user for the
-Training for Climbing app's cloud sync, and (optionally) powers the **AI coach**
-behind `POST /coach`. The app's sync engine is backend-agnostic; this is just a
-remote store plus a thin LLM proxy so the app never holds an LLM key.
+An Express + Postgres service that backs the Training for Climbing app:
+**per-user accounts** (email + password), one private JSON snapshot per account
+for cloud sync, and (optionally) the **AI coach** behind `POST /coach`. The app's
+sync engine is backend-agnostic; this is a remote store plus a thin LLM proxy so
+the app never holds an LLM key.
+
+Each account signs in with email + password and gets its own data — friends can
+all use the same server without seeing each other's training.
 
 ## Deploy to Railway
 
@@ -14,19 +18,33 @@ remote store plus a thin LLM proxy so the app never holds an LLM key.
 3. **Variables** on the service:
    - `DATABASE_URL` → reference the Postgres plugin's `DATABASE_URL`
      (Variables → Add Reference → Postgres → `DATABASE_URL`).
-   - `SYNC_TOKEN` → a long random secret (e.g. `openssl rand -hex 32`).
+   - `JWT_SECRET` → a long random secret used to sign session tokens
+     (e.g. `openssl rand -hex 32`). Falls back to `SYNC_TOKEN` if you still have
+     that set from an earlier deploy.
    - `PORT` is provided by Railway automatically.
    - _(optional, enables the AI coach)_ `GEMINI_API_KEY` → a **free** key from
      <https://aistudio.google.com/apikey>. See "AI coach" below.
 4. **Generate a domain** (Settings → Networking → Generate Domain). That HTTPS URL
    is your sync server URL.
-5. Verify: `curl https://<your-domain>/health` → `{"ok":true,"coach":true}`
-   (`coach` is `true` once an LLM key is set).
+5. Verify: `curl https://<your-domain>/health` →
+   `{"ok":true,"coach":true,"auth":true}` (`coach` true once an LLM key is set;
+   `auth` true once `JWT_SECRET`/`SYNC_TOKEN` is set).
 
 ## Use it in the app
 
-In the app: **Review → Cloud sync**, enter the server URL and the same `SYNC_TOKEN`,
-then **Connect & sync**. (You can also set a default URL via `EXPO_PUBLIC_SYNC_URL`.)
+Bake the server URL into the app build via `EXPO_PUBLIC_SYNC_URL` (see the app
+`.env.example`) so users never type it. Then in the app: **More → Account**,
+**create an account** (or sign in) with an email + password — the first sync runs
+automatically. Each account's data is private.
+
+## Accounts & auth
+
+Sign-in is email + password. `POST /auth/register` and `POST /auth/login` return a
+**JWT session token** (passwords are stored only as a bcrypt hash). The token is
+sent as a `Bearer` header on `/snapshot` and `/coach`; the server resolves it to a
+`user_id` and scopes all data to that user. Registration is currently open (fine
+for a small friends-and-family deployment); add an allow-list or invite code later
+if you want to lock it down.
 
 ## AI coach
 
@@ -56,13 +74,14 @@ change in `llm.js` — the app and the `/coach` route are unchanged.
 
 ## Endpoints
 
-| Method | Path        | Auth   | Body          | Response                          |
-| ------ | ----------- | ------ | ------------- | --------------------------------- |
-| GET    | `/health`   | –      | –             | `{ ok: true, coach: boolean }`    |
-| GET    | `/snapshot` | Bearer | –             | `{ data: Snapshot \| null }`      |
-| PUT    | `/snapshot` | Bearer | Snapshot JSON | `{ ok: true }`                    |
-| POST   | `/coach`    | Bearer | `{ context }` | `{ suggestion: CoachSuggestion }` |
+| Method | Path             | Auth   | Body                  | Response                          |
+| ------ | ---------------- | ------ | --------------------- | --------------------------------- |
+| GET    | `/health`        | –      | –                     | `{ ok, coach, auth }`             |
+| POST   | `/auth/register` | –      | `{ email, password }` | `{ token, user }`                 |
+| POST   | `/auth/login`    | –      | `{ email, password }` | `{ token, user }`                 |
+| GET    | `/snapshot`      | Bearer | –                     | `{ data: Snapshot \| null }`      |
+| PUT    | `/snapshot`      | Bearer | Snapshot JSON         | `{ ok: true }`                    |
+| POST   | `/coach`         | Bearer | `{ context }`         | `{ suggestion: CoachSuggestion }` |
 
-`SYNC_TOKEN` is a shared secret that gates a single snapshot — perfect for one
-person syncing across devices. Per-user accounts can be added later by mapping
-tokens to `user_id`.
+`Bearer` is the JWT session token returned by register/login. Each token maps to a
+`user_id`, so every account reads/writes only its own snapshot.

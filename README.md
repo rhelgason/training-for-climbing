@@ -48,8 +48,9 @@ src/
     today/      # daily "what to work on" — deterministic ordered plan (tested)
     coach/      # AI coach: context builder + client + cache + fallback (tested)
     progress/   # climb logging + dashboard (trends, consistency, benchmarks) (tested)
+    auth/       # accounts: email/password sign-in, session, Account screen
     sync/       # backend-agnostic snapshot sync engine + HTTP (Railway) remote
-    review/     # "More": settings/profile entry, glossary, cloud sync
+    review/     # "More": settings/profile entry, glossary, account
     settings/   # Profile/Settings singleton (ability tier, AI toggle, cadence)
   db/           # Repository interface + InMemory + SQLite implementations
   lib/          # logger + structured usage events, ids
@@ -69,21 +70,24 @@ src/
 - **CI:** `.github/workflows/ci.yml` runs typecheck + lint + format check + tests on every
   push/PR and must stay green.
 
-## Cloud sync (optional)
+## Accounts & cloud sync (optional)
 
-The app is local-first and works fully offline. Cloud sync is opt-in and uses a **snapshot +
-last-write-wins** model (the whole dataset is merged per record by `updatedAt`; deletes
-propagate via tombstones). It talks to your own small sync server — a tiny Express + Postgres
-service in [`server/`](server/) designed to deploy to **Railway**.
+The app is local-first and works fully offline. Sign-in is opt-in: each user creates an
+**account** (email + password) and gets their **own private data**, so friends can share one
+server without seeing each other's training. Sync uses a **snapshot + last-write-wins** model
+(merged per record by `updatedAt`; deletes propagate via tombstones), talking to your own
+Express + Postgres server in [`server/`](server/) deployed to **Railway**.
 
-1. Deploy the sync server to Railway (Postgres plugin + a service rooted at `server/`, with a
-   `SYNC_TOKEN` secret) — see [`server/README.md`](server/README.md). You get an HTTPS URL.
-2. Optionally copy `.env.example` to `.env` and set `EXPO_PUBLIC_SYNC_URL` to prefill the URL.
-3. In the app: **More → Cloud sync**, enter the server URL and the `SYNC_TOKEN`, then
-   **Connect & sync**.
+1. Deploy the server to Railway (Postgres plugin + a service rooted at `server/`, with a
+   `JWT_SECRET` secret) — see [`server/README.md`](server/README.md). You get an HTTPS URL.
+2. Set `EXPO_PUBLIC_SYNC_URL` to that URL (copy `.env.example` to `.env`) so it's baked into the
+   build and nobody types it.
+3. In the app: **More → Account**, create an account (or sign in) with an email + password — the
+   first sync runs automatically, and the AI coach (if enabled) authenticates as the same user.
 
-The merge engine (`src/features/sync/`) is backend-agnostic and unit-tested with an in-memory
-remote; `HttpRemoteStore` (the Railway client) is unit-tested with a mocked `fetch`.
+Auth is a JWT session token; passwords are stored only as a bcrypt hash server-side. The merge
+engine (`src/features/sync/`) is backend-agnostic and unit-tested with an in-memory remote;
+`HttpRemoteStore` and the auth client are unit-tested with a mocked `fetch`.
 
 ## Status
 
@@ -119,6 +123,7 @@ remote; `HttpRemoteStore` (the Railway client) is unit-tested with a mocked `fet
   (cadence from Profile).
 - **Profile/Settings (done):** a singleton profile — ability tier, default discipline, reassess
   cadence, and the AI-coach toggle — under the **More** tab.
-- **Cloud sync (done):** optional snapshot sync to your own Railway server (see above).
+- **Accounts & cloud sync (done):** optional email/password accounts on your own Railway server,
+  each with private snapshot sync across devices (see above).
 
 See the plan file for the full phased roadmap.
