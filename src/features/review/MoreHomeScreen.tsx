@@ -30,12 +30,14 @@ export function MoreHomeScreen({ navigation }: Props) {
       </Card>
 
       <Card style={styles.card}>
-        <Text style={styles.cardTitle}>Cloud sync</Text>
-        <Text style={styles.cardBody}>Back up your data and sync it across devices.</Text>
+        <Text style={styles.cardTitle}>Account &amp; sync</Text>
+        <Text style={styles.cardBody}>
+          Sign in to back up your data and sync it across devices.
+        </Text>
         <Button
-          label="Open cloud sync"
+          label="Open account"
           variant="secondary"
-          onPress={() => navigation.navigate('Sync')}
+          onPress={() => navigation.navigate('Account')}
           style={styles.action}
         />
       </Card>

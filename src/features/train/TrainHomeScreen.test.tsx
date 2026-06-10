@@ -5,7 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { InMemoryRepository } from '../../db/inMemoryRepository';
 import { RepositoryProvider } from '../../providers/RepositoryProvider';
-import { saveSyncConfig } from '../sync/syncConfig';
+import { saveSession } from '../auth/session';
 import { saveCachedSuggestion } from '../coach/coachCache';
 import { now } from '../../lib/clock';
 import { TrainHomeScreen } from './TrainHomeScreen';
@@ -77,7 +77,12 @@ describe('TrainHomeScreen', () => {
     const repo = new InMemoryRepository();
     await repo.init();
     await repo.saveProfile({ aiCoachEnabled: true });
-    await saveSyncConfig({ url: 'https://srv.example.com', token: 'secret' });
+    await saveSession({
+      url: 'https://srv.example.com',
+      token: 'secret',
+      userId: 'u1',
+      email: 'a@b.com',
+    });
     await saveCachedSuggestion({ suggestion: aiSuggestion, generatedAt: now() });
 
     const view = await renderScreen(repo);
@@ -92,7 +97,12 @@ describe('TrainHomeScreen', () => {
     const repo = new InMemoryRepository();
     await repo.init();
     await repo.saveProfile({ aiCoachEnabled: true });
-    await saveSyncConfig({ url: 'https://srv.example.com', token: 'secret' });
+    await saveSession({
+      url: 'https://srv.example.com',
+      token: 'secret',
+      userId: 'u1',
+      email: 'a@b.com',
+    });
     await saveCachedSuggestion({
       suggestion: { ...aiSuggestion, headline: 'Old plan' },
       generatedAt: now(),

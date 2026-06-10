@@ -36,7 +36,7 @@ export type MoreStackParamList = {
   MoreHome: undefined;
   Profile: undefined;
   Glossary: undefined;
-  Sync: undefined;
+  Account: undefined;
 };
 
 export type RootTabParamList = {
