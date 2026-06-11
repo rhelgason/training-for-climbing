@@ -16,6 +16,8 @@ import { dayIndex, trainingDates } from './log';
 import { buildDailyRecommendation, type DailyRecommendation } from '../today/recommend';
 import { useCoach } from '../coach/useCoach';
 import { relativeTime } from '../coach/format';
+import { useBackupNudge } from '../auth/useBackupNudge';
+import { BackupBanner } from '../auth/BackupBanner';
 
 type Props = NativeStackScreenProps<TrainStackParamList, 'TrainHome'>;
 
@@ -37,6 +39,7 @@ export function TrainHomeScreen({ navigation }: Props) {
   const repo = useRepository();
   const [state, setState] = useState<LoadState | null>(null);
   const coach = useCoach(repo);
+  const backup = useBackupNudge();
 
   useFocusEffect(
     useCallback(() => {
@@ -71,6 +74,16 @@ export function TrainHomeScreen({ navigation }: Props) {
   return (
     <Screen>
       <Text style={styles.title}>Train</Text>
+
+      {backup.visible && (
+        <BackupBanner
+          onSignIn={() => {
+            backup.dismiss();
+            navigation.getParent()?.navigate('More', { screen: 'Account' });
+          }}
+          onDismiss={backup.dismiss}
+        />
+      )}
 
       <Card style={[styles.todayCard, rec.kind === 'rest' && styles.restCard, ai && styles.aiCard]}>
         <View style={styles.todayHeader}>

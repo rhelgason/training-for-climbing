@@ -73,6 +73,37 @@ describe('TrainHomeScreen', () => {
     expect(view.queryByText('Get AI suggestion')).toBeNull();
   });
 
+  it('shows the backup nudge when signed out and routes to Account', async () => {
+    const repo = new InMemoryRepository();
+    await repo.init();
+    const navigateParent = jest.fn();
+
+    const view = await renderScreen(repo, {
+      getParent: () => ({ navigate: navigateParent }) as never,
+    });
+    await waitFor(() => expect(view.getByText("Your training isn't backed up")).toBeTruthy());
+
+    await act(async () => {
+      fireEvent.press(view.getByText('Sign in'));
+    });
+    expect(navigateParent).toHaveBeenCalledWith('More', { screen: 'Account' });
+  });
+
+  it('hides the backup nudge when signed in', async () => {
+    const repo = new InMemoryRepository();
+    await repo.init();
+    await saveSession({
+      url: 'https://srv.example.com',
+      token: 'secret',
+      userId: 'u1',
+      email: 'a@b.com',
+    });
+
+    const view = await renderScreen(repo);
+    await waitFor(() => expect(view.getByText('Today')).toBeTruthy());
+    expect(view.queryByText("Your training isn't backed up")).toBeNull();
+  });
+
   it('shows the cached AI suggestion (with "updated" stamp) when enabled', async () => {
     const repo = new InMemoryRepository();
     await repo.init();
