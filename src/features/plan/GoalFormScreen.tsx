@@ -5,7 +5,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Button } from '../../components/Button';
 import { OptionChips, type ChipOption } from '../../components/OptionChips';
 import { Screen } from '../../components/Screen';
-import { GOAL_HORIZONS, type GoalHorizon } from '../../content/planning';
+import { GOAL_DEADLINE_OPTIONS, GOAL_HORIZONS, type GoalHorizon } from '../../content/planning';
 import { TRIAD_AREAS, TRIAD_LABELS, type TriadArea } from '../../content/types';
 import type { GoalRecord } from '../../db/types';
 import { now } from '../../lib/clock';
@@ -28,18 +28,7 @@ const TRIAD_OPTIONS: ChipOption<TriadChoice>[] = [
   ...TRIAD_AREAS.map((a) => ({ label: TRIAD_LABELS[a], value: a })),
 ];
 
-type DeadlineChoice = 'none' | '1w' | '1m' | '3m';
-const DEADLINE_OPTIONS: ChipOption<DeadlineChoice>[] = [
-  { label: 'No deadline', value: 'none' },
-  { label: '1 week', value: '1w' },
-  { label: '1 month', value: '1m' },
-  { label: '3 months', value: '3m' },
-];
-const DEADLINE_DAYS: Record<Exclude<DeadlineChoice, 'none'>, number> = {
-  '1w': 7,
-  '1m': 30,
-  '3m': 90,
-};
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 export function GoalFormScreen({ navigation, route }: Props) {
   const repo = useRepository();
@@ -51,9 +40,23 @@ export function GoalFormScreen({ navigation, route }: Props) {
   const [mission, setMission] = useState('');
   const [sacrifice, setSacrifice] = useState('');
   const [triad, setTriad] = useState<TriadChoice>('none');
-  const [deadline, setDeadline] = useState<DeadlineChoice>('none');
+  const [deadline, setDeadline] = useState<string>('none');
   const [existing, setExisting] = useState<GoalRecord | null>(null);
   const [saving, setSaving] = useState(false);
+
+  const deadlineOptions = GOAL_DEADLINE_OPTIONS[horizon];
+  const deadlineChips: ChipOption<string>[] = deadlineOptions.map((o) => ({
+    label: o.label,
+    value: o.id,
+  }));
+
+  // Deadline options depend on the horizon; reset the choice if it no longer fits.
+  const onSelectHorizon = (next: GoalHorizon) => {
+    setHorizon(next);
+    if (!GOAL_DEADLINE_OPTIONS[next].some((o) => o.id === deadline)) {
+      setDeadline('none');
+    }
+  };
 
   useEffect(() => {
     navigation.setOptions({ title: editing ? 'Edit goal' : 'New goal' });
@@ -70,8 +73,10 @@ export function GoalFormScreen({ navigation, route }: Props) {
   }, [goalId, editing, navigation, repo]);
 
   const computeTargetDate = (): number | undefined => {
-    if (deadline === 'none') return existing?.targetDate;
-    return now() + DEADLINE_DAYS[deadline] * 24 * 60 * 60 * 1000;
+    const option = deadlineOptions.find((o) => o.id === deadline);
+    // Open-ended: keep any existing deadline rather than wiping it.
+    if (!option || option.days === null) return existing?.targetDate;
+    return now() + option.days * MS_PER_DAY;
   };
 
   const onSave = async () => {
@@ -109,7 +114,7 @@ export function GoalFormScreen({ navigation, route }: Props) {
       <OptionChips
         options={HORIZON_OPTIONS}
         selected={horizon}
-        onSelect={setHorizon}
+        onSelect={onSelectHorizon}
         testIDPrefix="horizon"
       />
 
@@ -153,7 +158,7 @@ export function GoalFormScreen({ navigation, route }: Props) {
 
       <Text style={styles.label}>Deadline</Text>
       <OptionChips
-        options={DEADLINE_OPTIONS}
+        options={deadlineChips}
         selected={deadline}
         onSelect={setDeadline}
         testIDPrefix="deadline"

@@ -43,6 +43,37 @@ export const GOAL_HORIZON_LABELS: Record<GoalHorizon, string> = {
   long: 'Long-term',
 };
 
+/** A selectable deadline length for a goal. `days: null` means open-ended. */
+export interface GoalDeadlineOption {
+  id: string;
+  label: string;
+  days: number | null;
+}
+
+/**
+ * Deadline choices scoped to each horizon, so the time options match the scale of
+ * the goal: short-term is days/weeks, medium-term is months, long-term is years.
+ */
+export const GOAL_DEADLINE_OPTIONS: Record<GoalHorizon, GoalDeadlineOption[]> = {
+  short: [
+    { id: 'none', label: 'No deadline', days: null },
+    { id: '1d', label: '1 day', days: 1 },
+    { id: '1w', label: '1 week', days: 7 },
+  ],
+  medium: [
+    { id: 'none', label: 'No deadline', days: null },
+    { id: '1m', label: '1 month', days: 30 },
+    { id: '3m', label: '3 months', days: 90 },
+    { id: '6m', label: '6 months', days: 180 },
+  ],
+  long: [
+    { id: 'none', label: 'No deadline', days: null },
+    { id: '1y', label: '1 year', days: 365 },
+    { id: '2y', label: '2 years', days: 730 },
+    { id: '5y', label: '5 years', days: 1825 },
+  ],
+};
+
 export type GoalStatus = 'active' | 'done' | 'archived';
 
 // --- Program design / periodization (Chapter 8) ---
