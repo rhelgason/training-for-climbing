@@ -81,8 +81,8 @@ export function ResultsScreen({ navigation, route }: Props) {
       {result.flagged.length > 0 && (
         <Text style={styles.flagIntro}>
           Each of these is a specific element holding you back. Focus your short- and medium-term
-          goals on the five or six lowest-scoring items, and look to the book for the exercises and
-          strategies that address them.
+          goals on the five or six lowest-scoring items, and use the exercise library and your daily
+          plan to address them.
         </Text>
       )}
       {groupFlaggedByArea(result.flagged).map((group) => (

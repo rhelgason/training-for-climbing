@@ -48,7 +48,7 @@ export const EXERCISES: Exercise[] = [
     triadArea: 'physical',
     hierarchyAreaId: 'maxStrengthPower',
     description:
-      'Hörst’s method: climb identical HIT-strip holds with added weight to isolate and overload each grip position.',
+      'Climb identical HIT-strip holds with added weight to isolate and overload each grip position.',
   },
   {
     id: 'one-arm-lunging',

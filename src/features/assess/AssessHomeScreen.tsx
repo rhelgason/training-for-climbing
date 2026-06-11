@@ -47,8 +47,8 @@ export function AssessHomeScreen({ navigation }: Props) {
       </Text>
 
       <Card style={styles.card}>
-        <Text style={styles.cardLabel}>Companion to</Text>
-        <Text style={styles.cardValue}>Training for Climbing — Chapter 2</Text>
+        <Text style={styles.cardLabel}>The performance triad</Text>
+        <Text style={styles.cardValue}>Mental · Technical · Physical</Text>
         {count !== null && (
           <Text style={styles.cardMeta}>
             {count === 0 ? 'No attempts yet' : `${count} attempt${count === 1 ? '' : 's'} saved`}

@@ -121,7 +121,7 @@ export function buildDailyRecommendation(input: DailyInput): DailyRecommendation
       kind: 'rest',
       streak,
       headline: 'Take a rest day',
-      detail: `You've trained ${streak} days in a row. Hörst warns that 3–4 days in a row risks overtraining — rest is when you get stronger.`,
+      detail: `You've trained ${streak} days in a row. Training 3–4 days straight risks overtraining — rest is when your body actually gets stronger.`,
       focusArea: null,
       plan: [
         'Rest from hard climbing and training today.',

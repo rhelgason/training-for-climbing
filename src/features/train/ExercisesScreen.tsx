@@ -27,7 +27,7 @@ export function ExercisesScreen() {
     <Screen>
       <Text style={styles.title}>Exercise library</Text>
       <Text style={styles.subtitle}>
-        Conditioning and climbing-specific exercises from the book’s training chapters.
+        Conditioning and climbing-specific exercises to build the physical side of your climbing.
       </Text>
 
       <OptionChips
@@ -44,8 +44,6 @@ export function ExercisesScreen() {
           <Text style={styles.description}>{ex.description}</Text>
         </Card>
       ))}
-
-      <Text style={styles.footnote}>From Training for Climbing, Chapters 6–7.</Text>
     </Screen>
   );
 }
@@ -66,13 +64,6 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: fontSize.sm,
     marginTop: spacing.xs,
-    lineHeight: 20,
-  },
-  footnote: {
-    color: colors.textMuted,
-    fontSize: fontSize.sm,
-    fontStyle: 'italic',
-    marginTop: spacing.lg,
     lineHeight: 20,
   },
 });

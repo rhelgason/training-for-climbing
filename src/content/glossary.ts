@@ -107,7 +107,7 @@ export const GLOSSARY: GlossaryEntry[] = [
   {
     term: 'HIT (Hypergravity Isolation Training)',
     definition:
-      'Hörst-developed method training max finger strength and power on identical holds with added weight.',
+      'A method for training max finger strength and power on identical holds with added weight.',
   },
   {
     term: 'Isometric',
