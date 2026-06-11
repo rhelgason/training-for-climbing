@@ -5,9 +5,10 @@
  *   GET  /health             → { ok: true, coach: boolean }
  *   POST /auth/register      → { token, user }                    (email + password)
  *   POST /auth/login         → { token, user }                    (email + password)
- *   GET  /snapshot           → { data: Snapshot | null }          (auth)
- *   PUT  /snapshot  <json>   → { ok: true }                       (auth)
- *   POST /coach     <json>   → { suggestion: CoachSuggestion }    (auth, AI)
+ *   GET    /snapshot         → { data: Snapshot | null }          (auth)
+ *   PUT    /snapshot <json>  → { ok: true }                       (auth)
+ *   DELETE /account          → { ok: true }                       (auth)
+ *   POST   /coach    <json>  → { suggestion: CoachSuggestion }    (auth, AI)
  *
  * Auth is a JWT session token (Bearer) issued at register/login.
  *
@@ -149,6 +150,17 @@ app.put('/snapshot', auth, async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error('PUT /snapshot failed', err);
+    res.status(500).json({ error: 'internal error' });
+  }
+});
+
+// Delete the signed-in account and all its data (snapshot cascades via FK).
+app.delete('/account', auth, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM users WHERE id = $1', [req.userId]);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('DELETE /account failed', err);
     res.status(500).json({ error: 'internal error' });
   }
 });

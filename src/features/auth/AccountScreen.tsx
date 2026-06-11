@@ -11,7 +11,8 @@ import { colors, fontSize, radius, spacing } from '../../theme';
 import { runSync } from '../sync/engine';
 import { HttpRemoteStore } from '../sync/httpRemote';
 import { defaultSyncUrl } from '../sync/syncConfig';
-import { AuthError, login, register } from './authClient';
+import { clearCachedSuggestion } from '../coach/coachCache';
+import { AuthError, deleteAccount, login, register } from './authClient';
 import { clearSession, getSession, saveSession, type AuthSession } from './session';
 
 type Mode = 'login' | 'register';
@@ -113,6 +114,39 @@ export function AccountScreen() {
     setPassword('');
   };
 
+  const removeAccount = async () => {
+    if (!session) return;
+    setBusy(true);
+    setStatus('Deleting account…');
+    try {
+      await deleteAccount(session.url, session.token);
+      await clearSession();
+      await clearCachedSuggestion();
+      trackEvent('account_deleted');
+      setSession(null);
+      setStatus(null);
+      setEmail('');
+      setPassword('');
+    } catch (err) {
+      log.error('delete account failed', err);
+      setStatus(null);
+      Alert.alert('Delete failed', String((err as Error).message ?? err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const confirmDelete = () => {
+    Alert.alert(
+      'Delete account?',
+      'This permanently deletes your account and its cloud backup. Your data on this device is kept, but it will no longer sync.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete account', style: 'destructive', onPress: removeAccount },
+      ],
+    );
+  };
+
   if (!ready) return <Screen />;
 
   if (session) {
@@ -142,6 +176,9 @@ export function AccountScreen() {
           style={styles.action}
         />
         <Button label="Sign out" variant="secondary" onPress={signOut} style={styles.action} />
+        <Text style={styles.deleteLink} onPress={busy ? undefined : confirmDelete}>
+          Delete account
+        </Text>
       </Screen>
     );
   }
@@ -250,6 +287,13 @@ const styles = StyleSheet.create({
   },
   meta: { color: colors.textMuted, fontSize: fontSize.sm, marginTop: spacing.xs },
   action: { marginTop: spacing.md },
+  deleteLink: {
+    color: colors.danger,
+    fontSize: fontSize.sm,
+    textAlign: 'center',
+    marginTop: spacing.lg,
+    paddingVertical: spacing.sm,
+  },
   footnote: {
     color: colors.textMuted,
     fontSize: fontSize.sm,

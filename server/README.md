@@ -41,10 +41,11 @@ automatically. Each account's data is private.
 
 Sign-in is email + password. `POST /auth/register` and `POST /auth/login` return a
 **JWT session token** (passwords are stored only as a bcrypt hash). The token is
-sent as a `Bearer` header on `/snapshot` and `/coach`; the server resolves it to a
-`user_id` and scopes all data to that user. Registration is currently open (fine
-for a small friends-and-family deployment); add an allow-list or invite code later
-if you want to lock it down.
+sent as a `Bearer` header on `/snapshot`, `/coach`, and `/account`; the server
+resolves it to a `user_id` and scopes all data to that user. `DELETE /account`
+removes the account and its snapshot (cascades via the FK). Registration is
+currently open (fine for a small friends-and-family deployment); add an allow-list
+or invite code later if you want to lock it down.
 
 ## AI coach
 
@@ -81,6 +82,7 @@ change in `llm.js` — the app and the `/coach` route are unchanged.
 | POST   | `/auth/login`    | –      | `{ email, password }` | `{ token, user }`                 |
 | GET    | `/snapshot`      | Bearer | –                     | `{ data: Snapshot \| null }`      |
 | PUT    | `/snapshot`      | Bearer | Snapshot JSON         | `{ ok: true }`                    |
+| DELETE | `/account`       | Bearer | –                     | `{ ok: true }`                    |
 | POST   | `/coach`         | Bearer | `{ context }`         | `{ suggestion: CoachSuggestion }` |
 
 `Bearer` is the JWT session token returned by register/login. Each token maps to a

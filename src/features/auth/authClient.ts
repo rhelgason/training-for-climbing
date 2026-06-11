@@ -55,3 +55,25 @@ export function register(baseUrl: string, email: string, password: string): Prom
 export function login(baseUrl: string, email: string, password: string): Promise<AuthResult> {
   return post(endpoint(baseUrl, '/auth/login'), { email, password });
 }
+
+/** Permanently delete the signed-in account and its server-side data. */
+export async function deleteAccount(baseUrl: string, token: string): Promise<void> {
+  let res: Response;
+  try {
+    res = await fetch(endpoint(baseUrl, '/account'), {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  } catch (err) {
+    throw new AuthError(`Couldn't reach the server: ${(err as Error).message}`);
+  }
+  if (!res.ok) {
+    let payload: { error?: string } = {};
+    try {
+      payload = (await res.json()) as typeof payload;
+    } catch {
+      // fall through
+    }
+    throw new AuthError(payload.error || `Request failed (HTTP ${res.status})`, res.status);
+  }
+}

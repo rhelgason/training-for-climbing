@@ -64,7 +64,8 @@ export type UsageEvent =
   | { name: 'cloud_synced'; props?: Record<string, never> }
   | { name: 'signed_up'; props?: Record<string, never> }
   | { name: 'signed_in'; props?: Record<string, never> }
-  | { name: 'signed_out'; props?: Record<string, never> };
+  | { name: 'signed_out'; props?: Record<string, never> }
+  | { name: 'account_deleted'; props?: Record<string, never> };
 
 export type EventSink = (event: {
   name: UsageEvent['name'];

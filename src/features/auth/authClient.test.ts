@@ -1,4 +1,4 @@
-import { AuthError, login, register } from './authClient';
+import { AuthError, deleteAccount, login, register } from './authClient';
 
 const result = { token: 'jwt-abc', user: { id: 'u1', email: 'a@b.com' } };
 
@@ -61,6 +61,31 @@ describe('authClient', () => {
     await expect(login('https://srv.example.com', 'a@b.com', 'pw')).rejects.toBeInstanceOf(
       AuthError,
     );
+  });
+
+  it('deleteAccount sends a DELETE to /account with the bearer token', async () => {
+    const calls: { url: string; init: RequestInit }[] = [];
+    mockFetch((async (url: string, init: RequestInit) => {
+      calls.push({ url, init });
+      return { ok: true, status: 200, json: async () => ({ ok: true }) } as Response;
+    }) as unknown as typeof fetch);
+
+    await deleteAccount('https://srv.example.com', 'jwt-abc');
+    expect(calls[0].url).toBe('https://srv.example.com/account');
+    expect(calls[0].init.method).toBe('DELETE');
+    expect((calls[0].init.headers as Record<string, string>).Authorization).toBe('Bearer jwt-abc');
+  });
+
+  it('deleteAccount throws AuthError on a non-OK response', async () => {
+    mockFetch(
+      (async () =>
+        ({
+          ok: false,
+          status: 401,
+          json: async () => ({ error: 'unauthorized' }),
+        }) as Response) as unknown as typeof fetch,
+    );
+    await expect(deleteAccount('https://srv.example.com', 'bad')).rejects.toBeInstanceOf(AuthError);
   });
 
   it('throws AuthError on a malformed (token-less) success response', async () => {

@@ -1,4 +1,5 @@
 import React from 'react';
+import { Alert } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -98,5 +99,44 @@ describe('AccountScreen', () => {
     // Back to the signed-out form.
     await waitFor(() => expect(view.getByTestId('account-email')).toBeTruthy());
     expect(await getSession()).toBeNull();
+  });
+
+  it('deletes the account after confirmation and returns to signed-out', async () => {
+    const repo = new InMemoryRepository();
+    await repo.init();
+    await saveSession({
+      url: 'https://srv.example.com',
+      token: 'jwt-xyz',
+      userId: 'u9',
+      email: 'climber@example.com',
+    });
+
+    const calls: string[] = [];
+    (globalThis as unknown as { fetch: typeof fetch }).fetch = (async (
+      url: string,
+      init: RequestInit,
+    ) => {
+      calls.push(`${init.method ?? 'GET'} ${url}`);
+      return { ok: true, status: 200, json: async () => ({ ok: true }) } as Response;
+    }) as unknown as typeof fetch;
+
+    // Auto-confirm the destructive alert.
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation((_title, _msg, buttons) => {
+      const destructive = (buttons ?? []).find((b) => b.style === 'destructive');
+      destructive?.onPress?.();
+    });
+
+    const view = await renderScreen(repo);
+    await waitFor(() => expect(view.getByText('Account')).toBeTruthy());
+
+    await act(async () => {
+      fireEvent.press(view.getByText('Delete account'));
+    });
+
+    await waitFor(() => expect(view.getByTestId('account-email')).toBeTruthy());
+    expect(calls).toContain('DELETE https://srv.example.com/account');
+    expect(await getSession()).toBeNull();
+
+    alertSpy.mockRestore();
   });
 });
