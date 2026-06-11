@@ -67,7 +67,7 @@ export const GOAL_DEADLINE_OPTIONS: Record<GoalHorizon, GoalDeadlineOption[]> = 
     { id: '6m', label: '6 months', days: 180 },
   ],
   long: [
-    { id: 'none', label: 'No deadline', days: null },
+    { id: 'none', label: 'Lifetime', days: null },
     { id: '1y', label: '1 year', days: 365 },
     { id: '2y', label: '2 years', days: 730 },
     { id: '5y', label: '5 years', days: 1825 },
