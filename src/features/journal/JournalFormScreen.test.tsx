@@ -1,4 +1,5 @@
 import React from 'react';
+import { Alert } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -86,5 +87,37 @@ describe('JournalFormScreen', () => {
     const journals = await repo.listJournals();
     expect(journals).toHaveLength(1);
     expect(journals[0].summary).toBe('Lifting day, felt strong');
+  });
+
+  it('deletes an existing entry after confirmation', async () => {
+    const repo = new InMemoryRepository();
+    const existing = await repo.saveJournal({ date: 1000, activities: ['climbing'] });
+    const goBack = jest.fn();
+
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation((_t, _m, buttons) => {
+      (buttons ?? []).find((b) => b.style === 'destructive')?.onPress?.();
+    });
+
+    const view = await renderForm(
+      repo,
+      { goBack, setOptions: jest.fn() },
+      { journalId: existing.id },
+    );
+    await waitFor(() => expect(view.getByText('Delete entry')).toBeTruthy());
+
+    await act(async () => {
+      fireEvent.press(view.getByText('Delete entry'));
+    });
+
+    await waitFor(() => expect(goBack).toHaveBeenCalled());
+    expect(await repo.listJournals()).toHaveLength(0);
+    alertSpy.mockRestore();
+  });
+
+  it('has no delete action when creating a new entry', async () => {
+    const repo = new InMemoryRepository();
+    const view = await renderForm(repo, { goBack: jest.fn(), setOptions: jest.fn() });
+    await waitFor(() => expect(view.getByText('What did you do?')).toBeTruthy());
+    expect(view.queryByText('Delete entry')).toBeNull();
   });
 });

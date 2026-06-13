@@ -65,7 +65,8 @@ export type UsageEvent =
   | { name: 'signed_up'; props?: Record<string, never> }
   | { name: 'signed_in'; props?: Record<string, never> }
   | { name: 'signed_out'; props?: Record<string, never> }
-  | { name: 'account_deleted'; props?: Record<string, never> };
+  | { name: 'account_deleted'; props?: Record<string, never> }
+  | { name: 'coach_feedback'; props: { rating: 'up' | 'down' } };
 
 export type EventSink = (event: {
   name: UsageEvent['name'];

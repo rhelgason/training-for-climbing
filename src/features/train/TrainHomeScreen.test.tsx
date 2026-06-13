@@ -124,6 +124,41 @@ describe('TrainHomeScreen', () => {
     expect(view.getByText('Refresh AI suggestion')).toBeTruthy();
   });
 
+  it('records thumbs feedback on the AI suggestion', async () => {
+    const repo = new InMemoryRepository();
+    await repo.init();
+    await repo.saveProfile({ aiCoachEnabled: true });
+    await saveSession({
+      url: 'https://srv.example.com',
+      token: 'secret',
+      userId: 'u1',
+      email: 'a@b.com',
+    });
+    await saveCachedSuggestion({ suggestion: aiSuggestion, generatedAt: now() });
+
+    const view = await renderScreen(repo);
+    await waitFor(() => expect(view.getByText('AI coach')).toBeTruthy());
+
+    await act(async () => {
+      fireEvent.press(view.getByTestId('coach-thumbs-up'));
+    });
+    await waitFor(() => expect(view.getByText(/Thanks/)).toBeTruthy());
+    const events = await repo.listEvents();
+    expect(events.some((e) => e.name === 'coach_feedback')).toBe(true);
+  });
+
+  it('shows a streak chip after consecutive training days', async () => {
+    const repo = new InMemoryRepository();
+    await repo.init();
+    const today = Date.now();
+    const DAY = 24 * 60 * 60 * 1000;
+    await repo.saveJournal({ date: today, activities: ['climbing'] });
+    await repo.saveJournal({ date: today - DAY, activities: ['fingerboard'] });
+
+    const view = await renderScreen(repo);
+    await waitFor(() => expect(view.getByText(/day streak/)).toBeTruthy());
+  });
+
   it('refreshes the suggestion on demand', async () => {
     const repo = new InMemoryRepository();
     await repo.init();

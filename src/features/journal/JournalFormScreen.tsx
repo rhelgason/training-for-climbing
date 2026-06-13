@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, Text, TextInput } from 'react-native';
+import { Alert, StyleSheet, Text, TextInput } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import { Button } from '../../components/Button';
@@ -95,6 +95,22 @@ export function JournalFormScreen({ navigation, route }: Props) {
     }
   };
 
+  const onDelete = () => {
+    if (!journalId) return;
+    Alert.alert('Delete entry?', 'This permanently removes this journal entry.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          await repo.deleteJournal(journalId);
+          trackEvent('journal_deleted');
+          navigation.goBack();
+        },
+      },
+    ]);
+  };
+
   const formatDate = (ms: number) =>
     new Date(ms).toLocaleDateString(undefined, {
       weekday: 'short',
@@ -169,6 +185,11 @@ export function JournalFormScreen({ navigation, route }: Props) {
         disabled={saving}
         style={styles.save}
       />
+      {editing && (
+        <Text style={styles.deleteLink} onPress={saving ? undefined : onDelete}>
+          Delete entry
+        </Text>
+      )}
     </Screen>
   );
 }
@@ -194,4 +215,11 @@ const styles = StyleSheet.create({
   },
   multiline: { minHeight: 64, textAlignVertical: 'top' },
   save: { marginTop: spacing.xl },
+  deleteLink: {
+    color: colors.danger,
+    fontSize: fontSize.sm,
+    textAlign: 'center',
+    marginTop: spacing.lg,
+    paddingVertical: spacing.sm,
+  },
 });

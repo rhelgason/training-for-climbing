@@ -9,6 +9,7 @@ import { Screen } from '../../components/Screen';
 import { ACTIVITY_LABELS, INTENSITY_LABELS } from '../../content/journal';
 import type { JournalEntry } from '../../db/types';
 import { now } from '../../lib/clock';
+import { trackEvent } from '../../lib/logger';
 import { useRepository } from '../../providers/RepositoryProvider';
 import type { TrainStackParamList } from '../../navigation/types';
 import { colors, fontSize, spacing } from '../../theme';
@@ -41,6 +42,12 @@ export function TrainHomeScreen({ navigation }: Props) {
   const [state, setState] = useState<LoadState | null>(null);
   const coach = useCoach(repo);
   const backup = useBackupNudge();
+  const [feedback, setFeedback] = useState<'up' | 'down' | null>(null);
+
+  const sendFeedback = (rating: 'up' | 'down') => {
+    setFeedback(rating);
+    trackEvent('coach_feedback', { rating });
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -78,7 +85,16 @@ export function TrainHomeScreen({ navigation }: Props) {
 
   return (
     <Screen>
-      <Text style={styles.title}>Train</Text>
+      <View style={styles.header}>
+        <Text style={styles.title}>Train</Text>
+        {rec.streak > 0 && (
+          <View style={styles.streakChip}>
+            <Text style={styles.streakText}>
+              🔥 {rec.streak}-day streak{rec.streak >= 7 ? ' — on fire!' : ''}
+            </Text>
+          </View>
+        )}
+      </View>
 
       {backup.visible && (
         <BackupBanner
@@ -146,6 +162,28 @@ export function TrainHomeScreen({ navigation }: Props) {
                 • {g}
               </Text>
             ))}
+          </View>
+        )}
+
+        {ai && (
+          <View style={styles.feedbackRow}>
+            {feedback ? (
+              <Text style={styles.feedbackThanks}>Thanks — this helps tune your coach.</Text>
+            ) : (
+              <>
+                <Text style={styles.feedbackPrompt}>Was this helpful?</Text>
+                <Pressable onPress={() => sendFeedback('up')} hitSlop={8} testID="coach-thumbs-up">
+                  <Text style={styles.feedbackBtn}>👍</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => sendFeedback('down')}
+                  hitSlop={8}
+                  testID="coach-thumbs-down"
+                >
+                  <Text style={styles.feedbackBtn}>👎</Text>
+                </Pressable>
+              </>
+            )}
           </View>
         )}
       </Card>
@@ -227,6 +265,26 @@ export function TrainHomeScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   title: { color: colors.text, fontSize: fontSize.xxl, fontWeight: '700' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  streakChip: {
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: 999,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+  },
+  streakText: { color: colors.warning, fontSize: fontSize.sm, fontWeight: '700' },
+  feedbackRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginTop: spacing.md,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  feedbackPrompt: { color: colors.textMuted, fontSize: fontSize.sm },
+  feedbackThanks: { color: colors.textMuted, fontSize: fontSize.sm, fontStyle: 'italic' },
+  feedbackBtn: { fontSize: fontSize.lg },
   todayCard: { marginTop: spacing.md, borderColor: colors.primary },
   restCard: { borderColor: colors.warning },
   aiCard: { borderColor: colors.success },
