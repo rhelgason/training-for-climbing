@@ -73,6 +73,47 @@ describe('TrainHomeScreen', () => {
     expect(view.queryByText('Get AI suggestion')).toBeNull();
   });
 
+  it('shows the getting-started checklist and routes its steps', async () => {
+    const repo = new InMemoryRepository();
+    await repo.init();
+    const navigate = jest.fn();
+    const navigateParent = jest.fn();
+
+    const view = await renderScreen(repo, {
+      navigate,
+      getParent: () => ({ navigate: navigateParent }) as never,
+    });
+    await waitFor(() => expect(view.getByText('Getting started')).toBeTruthy());
+
+    await act(async () => {
+      fireEvent.press(view.getByTestId('onboarding-assess'));
+    });
+    expect(navigateParent).toHaveBeenCalledWith('Assess', { screen: 'Assessment' });
+
+    await act(async () => {
+      fireEvent.press(view.getByTestId('onboarding-journal'));
+    });
+    expect(navigate).toHaveBeenCalledWith('JournalForm', {});
+  });
+
+  it('hides the checklist once assessment, goal, and journal all exist', async () => {
+    const repo = new InMemoryRepository();
+    await repo.init();
+    await repo.saveAssessment({
+      responses: {},
+      mental: 30,
+      technical: 40,
+      physical: 45,
+      weakestArea: 'mental',
+    });
+    await repo.saveGoal({ horizon: 'short', title: 'Send the slab' });
+    await repo.saveJournal({ date: Date.now(), activities: ['climbing'] });
+
+    const view = await renderScreen(repo);
+    await waitFor(() => expect(view.getByText('Today')).toBeTruthy());
+    expect(view.queryByText('Getting started')).toBeNull();
+  });
+
   it('shows the backup nudge when signed out and routes to Account', async () => {
     const repo = new InMemoryRepository();
     await repo.init();

@@ -20,6 +20,8 @@ import { useCoach } from '../coach/useCoach';
 import { relativeTime } from '../coach/format';
 import { useBackupNudge } from '../auth/useBackupNudge';
 import { BackupBanner } from '../auth/BackupBanner';
+import { useOnboarding } from '../onboarding/useOnboarding';
+import { GettingStarted, type OnboardingStep } from '../onboarding/GettingStarted';
 
 type Props = NativeStackScreenProps<TrainStackParamList, 'TrainHome'>;
 
@@ -35,6 +37,8 @@ interface LoadState {
   journals: JournalEntry[];
   recommendation: DailyRecommendation;
   todayJournalId: string | null;
+  hasAssessment: boolean;
+  hasGoal: boolean;
 }
 
 export function TrainHomeScreen({ navigation }: Props) {
@@ -42,6 +46,7 @@ export function TrainHomeScreen({ navigation }: Props) {
   const [state, setState] = useState<LoadState | null>(null);
   const coach = useCoach(repo);
   const backup = useBackupNudge();
+  const onboarding = useOnboarding();
   const [feedback, setFeedback] = useState<'up' | 'down' | null>(null);
 
   const sendFeedback = (rating: 'up' | 'down') => {
@@ -71,7 +76,13 @@ export function TrainHomeScreen({ navigation }: Props) {
           nowMs,
         });
         const todayJournal = journals.find((j) => dayIndex(j.date) === dayIndex(nowMs));
-        setState({ journals, recommendation, todayJournalId: todayJournal?.id ?? null });
+        setState({
+          journals,
+          recommendation,
+          todayJournalId: todayJournal?.id ?? null,
+          hasAssessment: assessments.length > 0,
+          hasGoal: goals.length > 0,
+        });
       });
       return () => {
         on = false;
@@ -80,8 +91,30 @@ export function TrainHomeScreen({ navigation }: Props) {
   );
 
   if (state === null) return <Screen />;
-  const { journals, recommendation: rec, todayJournalId } = state;
+  const { journals, recommendation: rec, todayJournalId, hasAssessment, hasGoal } = state;
   const ai = coach.suggestion;
+
+  const onboardingSteps: OnboardingStep[] = [
+    {
+      key: 'assess',
+      label: 'Take the self-assessment',
+      done: hasAssessment,
+      onPress: () => navigation.getParent()?.navigate('Assess', { screen: 'Assessment' }),
+    },
+    {
+      key: 'goal',
+      label: 'Set your first goal',
+      done: hasGoal,
+      onPress: () => navigation.getParent()?.navigate('Plan', { screen: 'GoalForm' }),
+    },
+    {
+      key: 'journal',
+      label: 'Log your first day',
+      done: journals.length > 0,
+      onPress: () => navigation.navigate('JournalForm', {}),
+    },
+  ];
+  const showOnboarding = !onboarding.dismissed && onboardingSteps.some((s) => !s.done);
 
   return (
     <Screen>
@@ -95,6 +128,8 @@ export function TrainHomeScreen({ navigation }: Props) {
           </View>
         )}
       </View>
+
+      {showOnboarding && <GettingStarted steps={onboardingSteps} onDismiss={onboarding.dismiss} />}
 
       {backup.visible && (
         <BackupBanner
