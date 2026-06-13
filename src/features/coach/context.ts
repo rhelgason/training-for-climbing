@@ -15,6 +15,7 @@ import type {
   ProfileRecord,
 } from '../../db/types';
 import { effectiveProfile } from '../../content/profile';
+import { flaggedPromptsForArea } from '../assess/scoring';
 import { activeGoals } from '../plan/goals';
 import { countInLastDays, hardestSend, sendRate } from '../progress/dashboard';
 import { currentStreak, trainingDates } from '../train/log';
@@ -85,6 +86,7 @@ export function buildCoachContext(input: CoachContextInput): CoachContext {
           technical: assessment.technical,
           physical: assessment.physical,
           weakestArea: assessment.weakestArea,
+          weakSpots: flaggedPromptsForArea(assessment.responses, assessment.weakestArea),
         }
       : null,
     fitness: fitnessHighlights(input.benchmarks),

@@ -58,6 +58,24 @@ describe('buildDailyRecommendation', () => {
     expect(rec.plan[rec.plan.length - 1]).toMatch(/Cool down/i);
   });
 
+  it('passes weak spots through as focusItems on a train day', () => {
+    const rec = buildDailyRecommendation(
+      input({
+        weakestArea: 'technical',
+        weakSpots: ['Footwork on steep ground', 'Trusting smears'],
+      }),
+    );
+    expect(rec.kind).toBe('train');
+    expect(rec.focusItems).toEqual(['Footwork on steep ground', 'Trusting smears']);
+  });
+
+  it('has no focusItems on rest or assess days', () => {
+    expect(buildDailyRecommendation(input({ weakestArea: null })).focusItems).toEqual([]);
+    expect(
+      buildDailyRecommendation(input({ trainingDates: trainDates(0, -1, -2) })).focusItems,
+    ).toEqual([]);
+  });
+
   it('emits mental-game drills when the mental area is weakest', () => {
     const rec = buildDailyRecommendation(input({ weakestArea: 'mental' }));
     expect(rec.plan.some((s) => /visualization|breathing|fall|now/i.test(s))).toBe(true);

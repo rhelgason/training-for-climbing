@@ -27,6 +27,8 @@ import { currentStreak, dayIndex, restRecommended } from '../train/log';
 export interface DailyInput {
   /** Weakest triad area from the latest assessment, or null if none taken. */
   weakestArea: TriadArea | null;
+  /** Specific low-rated statements in the weakest area, worst-first (optional). */
+  weakSpots?: string[];
   goals: GoalRecord[];
   /** Epoch-ms dates that count as training (journals + climbs). */
   trainingDates: number[];
@@ -43,6 +45,8 @@ export interface DailyRecommendation {
   focusArea: TriadArea | null;
   /** Concrete, ordered steps for today (warm-up → drills → cool-down). */
   plan: string[];
+  /** Specific weak-spot statements to target today (from the assessment). */
+  focusItems: string[];
   /** Titles of active short/medium-term goals to keep in mind. */
   goalReminders: string[];
 }
@@ -128,6 +132,7 @@ export function buildDailyRecommendation(input: DailyInput): DailyRecommendation
         'Stay loose: light mobility, gentle stretching, and a short walk are fine.',
         'Prioritise sleep, food, and hydration — recovery is when the gains happen.',
       ],
+      focusItems: [],
       goalReminders: reminders,
     };
   }
@@ -144,6 +149,7 @@ export function buildDailyRecommendation(input: DailyInput): DailyRecommendation
         'Open Assess and complete the 30-question self-assessment.',
         'Note your weakest triad area — it becomes the focus of your daily plan.',
       ],
+      focusItems: [],
       goalReminders: reminders,
     };
   }
@@ -155,6 +161,7 @@ export function buildDailyRecommendation(input: DailyInput): DailyRecommendation
     detail: FOCUS_DETAIL[input.weakestArea],
     focusArea: input.weakestArea,
     plan: trainPlan(input.weakestArea, dayIdx),
+    focusItems: input.weakSpots ?? [],
     goalReminders: reminders,
   };
 }

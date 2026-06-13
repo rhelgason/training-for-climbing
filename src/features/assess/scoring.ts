@@ -119,6 +119,18 @@ export function getFlaggedWeaknesses(responses: Responses): FlaggedWeakness[] {
     .sort((a, b) => a.rating - b.rating || a.question.id - b.question.id);
 }
 
+/**
+ * The prompts of the flagged (low-rated) statements within a single triad area,
+ * worst-first, capped at `limit`. Feeds the daily plan + AI coach so "what to
+ * work on" can name concrete weak spots, not just the area.
+ */
+export function flaggedPromptsForArea(responses: Responses, area: TriadArea, limit = 3): string[] {
+  return getFlaggedWeaknesses(responses)
+    .filter((f) => f.question.triad === area)
+    .slice(0, limit)
+    .map((f) => f.question.prompt);
+}
+
 export interface FlaggedGroup {
   area: TriadArea;
   items: FlaggedWeakness[];

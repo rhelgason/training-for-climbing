@@ -15,6 +15,8 @@ export interface CoachContext {
     technical: number;
     physical: number;
     weakestArea: TriadArea;
+    /** Specific low-rated statements in the weakest area, worst-first. */
+    weakSpots: string[];
   } | null;
   /** Fitness-benchmark highlights: latest value + recent direction. */
   fitness: { test: string; latest: number; trend: 'up' | 'down' | 'flat' | 'new' }[];

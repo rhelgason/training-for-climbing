@@ -15,7 +15,7 @@ function assessment(over: Partial<AssessmentRecord> = {}): AssessmentRecord {
   return {
     id: over.id ?? 'a',
     createdAt: over.createdAt ?? NOW - 5 * DAY,
-    responses: {},
+    responses: over.responses ?? {},
     mental: over.mental ?? 40,
     technical: over.technical ?? 30,
     physical: over.physical ?? 50,
@@ -69,6 +69,17 @@ describe('buildCoachContext', () => {
     expect(ctx.profile.abilityTier).toBe('intermediate');
     expect(ctx.assessment).toBeNull();
     expect(ctx.generatedAt).toBe(NOW);
+  });
+
+  it('includes the weakest area’s flagged weak-spot statements', () => {
+    // Questions 2 and 5 are technical; rate them at/below the weakness threshold.
+    const ctx = buildCoachContext(
+      input({
+        assessments: [assessment({ responses: { 2: 1, 5: 2 }, weakestArea: 'technical' })],
+      }),
+    );
+    expect(ctx.assessment?.weakSpots.length).toBe(2);
+    expect(typeof ctx.assessment?.weakSpots[0]).toBe('string');
   });
 
   it('picks the latest assessment and reflects the weakest area', () => {

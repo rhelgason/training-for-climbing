@@ -12,6 +12,7 @@ import { now } from '../../lib/clock';
 import { useRepository } from '../../providers/RepositoryProvider';
 import type { TrainStackParamList } from '../../navigation/types';
 import { colors, fontSize, spacing } from '../../theme';
+import { flaggedPromptsForArea } from '../assess/scoring';
 import { dayIndex, trainingDates } from './log';
 import { buildDailyRecommendation, type DailyRecommendation } from '../today/recommend';
 import { useCoach } from '../coach/useCoach';
@@ -52,8 +53,12 @@ export function TrainHomeScreen({ navigation }: Props) {
       ]).then(([journals, climbs, assessments, goals]) => {
         if (!on) return;
         const nowMs = now();
+        const latest = assessments[0] ?? null;
+        const weakestArea = latest?.weakestArea ?? null;
         const recommendation = buildDailyRecommendation({
-          weakestArea: assessments[0]?.weakestArea ?? null,
+          weakestArea,
+          weakSpots:
+            latest && weakestArea ? flaggedPromptsForArea(latest.responses, weakestArea) : [],
           goals,
           trainingDates: trainingDates(journals, climbs),
           nowMs,
@@ -107,6 +112,17 @@ export function TrainHomeScreen({ navigation }: Props) {
                 <Text style={styles.planNum}>{i + 1}</Text>
                 <Text style={styles.planText}>{step}</Text>
               </View>
+            ))}
+          </View>
+        )}
+
+        {!ai && rec.focusItems.length > 0 && (
+          <View style={styles.goals}>
+            <Text style={styles.goalsLabel}>Target your weak spots</Text>
+            {rec.focusItems.map((item) => (
+              <Text key={item} style={styles.goalItem}>
+                • {item}
+              </Text>
             ))}
           </View>
         )}
