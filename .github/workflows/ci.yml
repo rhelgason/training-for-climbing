@@ -12,36 +12,30 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
-    name: typecheck · lint · test
+  mobile:
+    name: mobile · typecheck · lint · test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
-
+      # `npm install` (not `npm ci`): the workspace lockfile is refreshed on the
+      # first networked install after the monorepo/web app were added.
       - name: Install dependencies
-        run: npm ci
-
-      - name: Typecheck
+        run: npm install --no-audit --no-fund
+      - name: Typecheck (mobile)
         run: npm run typecheck
-
-      - name: Lint
+      - name: Lint (mobile)
         run: npm run lint
-
       - name: Format check
         run: npm run format:check
-
       - name: Server syntax check
         run: node --check server/index.js && node --check server/llm.js && node --check server/auth.js
-
-      - name: Test (with coverage)
+      - name: Test with coverage (mobile)
         run: npm run test:coverage -- --ci --maxWorkers=2
-
       - name: Upload coverage artifact
         if: always()
         uses: actions/upload-artifact@v4
@@ -49,3 +43,41 @@ jobs:
           name: coverage
           path: coverage/
           if-no-files-found: ignore
+
+  core:
+    name: core · typecheck · test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Typecheck (@tfc/core)
+        run: npm run typecheck --workspace @tfc/core
+      - name: Test (@tfc/core)
+        run: npm run test --workspace @tfc/core
+
+  web:
+    name: web · typecheck · lint · test · build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Typecheck (@tfc/web)
+        run: npm run typecheck --workspace @tfc/web
+      - name: Lint (@tfc/web)
+        run: npm run lint --workspace @tfc/web
+      - name: Test (@tfc/web)
+        run: npm run test --workspace @tfc/web
+      - name: Build (@tfc/web)
+        run: npm run build --workspace @tfc/web

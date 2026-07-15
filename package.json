@@ -2,6 +2,10 @@
   "name": "training-for-climbing",
   "version": "0.1.0",
   "main": "index.ts",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-navigation/bottom-tabs": "^7.16.2",
@@ -50,11 +54,20 @@
     "test": "jest",
     "test:coverage": "jest --coverage",
     "ci": "npm run typecheck && npm run lint && npm run test:coverage",
+    "dev:web": "npm run dev --workspace @tfc/web",
+    "build:web": "npm run build --workspace @tfc/web",
+    "typecheck:core": "npm run typecheck --workspace @tfc/core",
+    "test:core": "npm run test --workspace @tfc/core",
+    "typecheck:web": "npm run typecheck --workspace @tfc/web",
+    "test:web": "npm run test --workspace @tfc/web",
     "prepare": "husky"
   },
   "jest": {
     "preset": "jest-expo",
     "watchman": false,
+    "roots": [
+      "<rootDir>/src"
+    ],
     "setupFilesAfterEnv": [
       "<rootDir>/jest.setup.ts"
     ],

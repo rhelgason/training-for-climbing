@@ -15,6 +15,9 @@ module.exports = [
       'ios/**',
       'android/**',
       'server/**',
+      // Workspaces lint themselves with their own configs.
+      'packages/**',
+      'apps/**',
       'babel.config.js',
     ],
   },
