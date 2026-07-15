@@ -34,6 +34,7 @@ export * from './features/plan/goals';
 export * from './features/plan/macrocycle';
 export * from './features/plan/program';
 export * from './features/progress/dashboard';
+export * from './features/review/filterGlossary';
 
 // ── Sync ───────────────────────────────────────────────────────────────────
 export * from './features/sync/engine';
