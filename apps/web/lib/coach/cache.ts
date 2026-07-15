@@ -8,8 +8,8 @@ const KEY = 'tfc.coachSuggestion';
 
 export interface CachedCoachSuggestion {
   suggestion: CoachSuggestion;
-  /** Epoch ms the suggestion was fetched. */
-  fetchedAt: number;
+  /** Epoch ms the suggestion was generated. */
+  generatedAt: number;
 }
 
 export function getCachedSuggestion(): CachedCoachSuggestion | null {
