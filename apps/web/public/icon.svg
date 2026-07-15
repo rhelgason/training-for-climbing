@@ -1,0 +1,7 @@
+<svg width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+  <rect width="256" height="256" rx="56" fill="#0f1115" />
+  <!-- mountain / peak motif in the brand accents -->
+  <path d="M40 196 L104 92 L146 156 L176 116 L216 196 Z" fill="#4f8cff" />
+  <path d="M146 156 L176 116 L216 196 L152 196 Z" fill="#3ec07b" />
+  <circle cx="104" cy="72" r="16" fill="#a78bfa" />
+</svg>
