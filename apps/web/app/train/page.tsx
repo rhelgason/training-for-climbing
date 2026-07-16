@@ -34,6 +34,13 @@ function formatDate(ms: number): string {
   });
 }
 
+function greeting(nowMs: number): string {
+  const h = new Date(nowMs).getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 18) return 'Good afternoon';
+  return 'Good evening';
+}
+
 interface LoadState {
   journals: JournalEntry[];
   recommendation: DailyRecommendation;
@@ -125,11 +132,17 @@ export default function TrainHome() {
 
   return (
     <Screen>
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Train</h1>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-muted">{greeting(now())}</p>
+          <h1 className="display text-3xl font-extrabold">
+            Let’s <span className="text-gradient">train</span>
+          </h1>
+        </div>
         {rec.streak > 0 && (
-          <span className="rounded-full bg-surface-alt px-4 py-1 text-sm font-bold text-warning">
-            🔥 {rec.streak}-day streak{rec.streak >= 7 ? ' — on fire!' : ''}
+          <span className="flex shrink-0 items-center gap-1 rounded-full border border-warning/30 bg-warning/10 px-3 py-1.5 text-sm font-bold text-warning">
+            🔥 {rec.streak}
+            <span className="hidden sm:inline">-day{rec.streak >= 7 ? ' 🔥' : ''}</span>
           </span>
         )}
       </div>

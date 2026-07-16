@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { RepositoryProvider } from '../lib/db/RepositoryProvider';
 import { TabBar } from '../components/TabBar';
+import { Sidebar } from '../components/Sidebar';
 
 export const metadata: Metadata = {
   title: 'Training for Climbing',
@@ -30,9 +31,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body>
         <RepositoryProvider>
-          <div className="mx-auto flex min-h-dvh w-full max-w-[480px] flex-col">
-            <main className="flex-1">{children}</main>
-            <TabBar />
+          <div className="flex min-h-dvh">
+            <Sidebar />
+            <div className="flex min-h-dvh min-w-0 flex-1 flex-col">
+              <main className="mx-auto w-full max-w-2xl flex-1">{children}</main>
+              <TabBar />
+            </div>
           </div>
         </RepositoryProvider>
       </body>

@@ -9,11 +9,11 @@ interface Props extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 export function Button({ children, variant = 'primary', className = '', ...rest }: Props) {
   const base =
-    'w-full rounded-md px-6 py-3 text-center text-base font-semibold transition disabled:opacity-40';
+    'w-full rounded-xl px-6 py-3 text-center text-base font-semibold transition active:scale-[0.98] disabled:opacity-40 disabled:active:scale-100';
   const look =
     variant === 'primary'
-      ? 'bg-primary text-primary-text active:opacity-80'
-      : 'border border-border bg-transparent text-text active:opacity-80';
+      ? 'bg-brand text-primary-text shadow-lg shadow-primary/25 hover:brightness-110'
+      : 'border border-border bg-surface-alt/50 text-text hover:bg-surface-alt hover:border-muted/40';
   return (
     <button className={`${base} ${look} ${className}`} {...rest}>
       {children}

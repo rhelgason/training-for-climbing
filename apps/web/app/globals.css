@@ -6,9 +6,9 @@
  * like `bg-surface`, `text-muted`, `rounded-md` resolve to the brand values.
  */
 @theme {
-  --color-background: #0f1115;
-  --color-surface: #1a1d24;
-  --color-surface-alt: #232730;
+  --color-background: #0e1014;
+  --color-surface: #171a21;
+  --color-surface-alt: #212530;
   --color-border: #2e333d;
   --color-text: #f5f7fa;
   --color-muted: #9aa3b2;
@@ -18,7 +18,7 @@
   --color-warning: #f5a623;
   --color-danger: #ef5350;
 
-  /* Distinct accent per triad area (charts + labels). */
+  /* Distinct accent per triad area (charts + labels) + section accents. */
   --color-mental: #a78bfa;
   --color-technical: #4f8cff;
   --color-physical: #3ec07b;
@@ -26,17 +26,21 @@
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 16px;
+  --radius-xl: 22px;
 
   --text-xs: 13px;
   --text-sm: 15px;
   --text-base: 15px;
   --text-lg: 18px;
   --text-xl: 24px;
-  --text-2xl: 32px;
+  --text-2xl: 30px;
+  --text-3xl: 38px;
+
+  /* Brand gradient — used for the logo, active nav, primary actions, accents. */
+  --gradient-brand: linear-gradient(135deg, #4f8cff 0%, #7c6cff 55%, #a78bfa 100%);
 }
 
-/* Dark, full-height mobile shell. The app is a single phone-width column,
-   centered on wider screens. */
+/* Dark, full-height shell with a soft brand glow behind everything. */
 html,
 body {
   height: 100%;
@@ -44,16 +48,49 @@ body {
 
 body {
   margin: 0;
-  background-color: var(--color-background);
   color: var(--color-text);
+  background-color: var(--color-background);
+  /* Two subtle radial glows for depth — fixed so they don't scroll away. */
+  background-image:
+    radial-gradient(60rem 40rem at 15% -10%, rgba(79, 140, 255, 0.16), transparent 60%),
+    radial-gradient(50rem 40rem at 100% 0%, rgba(167, 139, 250, 0.12), transparent 55%);
+  background-attachment: fixed;
   -webkit-text-size-adjust: 100%;
   overscroll-behavior-y: none;
   font-family:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif,
-    'Apple Color Emoji', 'Segoe UI Emoji';
+    ui-rounded,
+    'SF Pro Rounded',
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    Roboto,
+    Helvetica,
+    Arial,
+    sans-serif,
+    'Apple Color Emoji',
+    'Segoe UI Emoji';
 }
 
-/* Respect the color-scheme so form controls render dark. */
 :root {
   color-scheme: dark;
+}
+
+/* Reusable helpers ------------------------------------------------------- */
+
+/* Brand-gradient text (headings, the wordmark, big numbers). */
+.text-gradient {
+  background: var(--gradient-brand);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Brand-gradient fill (logo tile, primary button, active nav pill). */
+.bg-brand {
+  background-image: var(--gradient-brand);
+}
+
+/* Tighter tracking for display headings. */
+.display {
+  letter-spacing: -0.02em;
 }
