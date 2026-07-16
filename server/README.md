@@ -73,17 +73,36 @@ change in `llm.js` — the app and the `/coach` route are unchanged.
 > may use inputs to improve their models. This is surfaced in the app's Profile
 > screen and is off by default.
 
+## Password reset (email)
+
+Forgotten-password reset works by emailing a short-lived 6-digit code (nothing to
+save in advance). It's **off until you set an email provider** — both have free
+tiers and are provider-agnostic (`email.js` picks whichever key is present):
+
+| Variable         | Notes                                                                                                                             |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `BREVO_API_KEY`  | **No domain needed** — verify one sender email (even a Gmail), free 300/day: <https://www.brevo.com>                              |
+| `RESEND_API_KEY` | Great API, free 3,000/mo, but needs a **verified domain** to email people other than yourself: <https://resend.com>               |
+| `EMAIL_FROM`     | Sender, e.g. `Training for Climbing <you@yourdomain.com>` (Brevo: your verified sender; Resend defaults to onboarding@resend.dev) |
+
+`GET /health` reports `email: true/false` so you can confirm it's configured. Flow:
+`POST /auth/request-reset { email }` emails a code (always returns `200`, even for
+an unknown email, so it can't be used to probe accounts); `POST /auth/reset
+{ email, code, newPassword }` verifies the unexpired code and signs the user in.
+
 ## Endpoints
 
-| Method | Path             | Auth   | Body                  | Response                          |
-| ------ | ---------------- | ------ | --------------------- | --------------------------------- |
-| GET    | `/health`        | –      | –                     | `{ ok, coach, auth }`             |
-| POST   | `/auth/register` | –      | `{ email, password }` | `{ token, user }`                 |
-| POST   | `/auth/login`    | –      | `{ email, password }` | `{ token, user }`                 |
-| GET    | `/snapshot`      | Bearer | –                     | `{ data: Snapshot \| null }`      |
-| PUT    | `/snapshot`      | Bearer | Snapshot JSON         | `{ ok: true }`                    |
-| DELETE | `/account`       | Bearer | –                     | `{ ok: true }`                    |
-| POST   | `/coach`         | Bearer | `{ context }`         | `{ suggestion: CoachSuggestion }` |
+| Method | Path                  | Auth   | Body                           | Response                          |
+| ------ | --------------------- | ------ | ------------------------------ | --------------------------------- |
+| GET    | `/health`             | –      | –                              | `{ ok, coach, auth, email }`      |
+| POST   | `/auth/register`      | –      | `{ email, password }`          | `{ token, user }`                 |
+| POST   | `/auth/login`         | –      | `{ email, password }`          | `{ token, user }`                 |
+| POST   | `/auth/request-reset` | –      | `{ email }`                    | `{ ok: true }`                    |
+| POST   | `/auth/reset`         | –      | `{ email, code, newPassword }` | `{ token, user }`                 |
+| GET    | `/snapshot`           | Bearer | –                              | `{ data: Snapshot \| null }`      |
+| PUT    | `/snapshot`           | Bearer | Snapshot JSON                  | `{ ok: true }`                    |
+| DELETE | `/account`            | Bearer | –                              | `{ ok: true }`                    |
+| POST   | `/coach`              | Bearer | `{ context }`                  | `{ suggestion: CoachSuggestion }` |
 
 `Bearer` is the JWT session token returned by register/login. Each token maps to a
 `user_id`, so every account reads/writes only its own snapshot.

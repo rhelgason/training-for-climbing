@@ -91,6 +91,11 @@ function verifyRecoveryCode(code, hash) {
   return bcrypt.compare(normalizeRecoveryCode(code), hash);
 }
 
+/** A 6-digit numeric code emailed on demand for password reset. */
+function generateResetCode() {
+  return String(crypto.randomInt(0, 1000000)).padStart(6, '0');
+}
+
 module.exports = {
   isAuthConfigured,
   normalizeEmail,
@@ -105,5 +110,6 @@ module.exports = {
   normalizeRecoveryCode,
   hashRecoveryCode,
   verifyRecoveryCode,
+  generateResetCode,
   MIN_PASSWORD_LENGTH,
 };
