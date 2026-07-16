@@ -157,14 +157,24 @@ app.post('/auth/login', async (req, res) => {
   const password = req.body && req.body.password;
   try {
     const { rows } = await pool.query(
-      'SELECT id, email, password_hash FROM users WHERE email = $1',
+      'SELECT id, email, password_hash, recovery_code_hash FROM users WHERE email = $1',
       [email],
     );
     const row = rows[0];
     const ok = row && (await verifyPassword(password || '', row.password_hash));
     if (!ok) return res.status(401).json({ error: 'incorrect email or password' });
     const user = { id: row.id, email: row.email };
-    res.json({ token: signToken(user), user });
+    // Back-fill a recovery code for accounts created before recovery existed, so
+    // existing users get one (shown once) without having to re-register.
+    let recoveryCode;
+    if (!row.recovery_code_hash) {
+      recoveryCode = generateRecoveryCode();
+      await pool.query('UPDATE users SET recovery_code_hash = $1 WHERE id = $2', [
+        await hashRecoveryCode(recoveryCode),
+        row.id,
+      ]);
+    }
+    res.json({ token: signToken(user), user, recoveryCode });
   } catch (err) {
     console.error('POST /auth/login failed', err);
     res.status(500).json({ error: 'internal error' });
