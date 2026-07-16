@@ -16,7 +16,7 @@ export function BackupBanner({ onDismiss }: { onDismiss: () => void }) {
         the app without one.
       </p>
       <div className="mt-4 flex gap-6">
-        <Link href="/more/account" onClick={onDismiss} className="font-bold text-primary">
+        <Link href="/more" onClick={onDismiss} className="font-bold text-primary">
           Sign in
         </Link>
         <button type="button" onClick={onDismiss} className="font-semibold text-muted">
