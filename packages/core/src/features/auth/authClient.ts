@@ -6,6 +6,12 @@
 export interface AuthResult {
   token: string;
   user: { id: string; email: string };
+  /**
+   * One-time recovery code, returned by register and reset. Shown to the user
+   * once so they can recover their account if they forget their password. Not
+   * returned by login.
+   */
+  recoveryCode?: string;
 }
 
 /** Thrown on any auth failure, carrying a user-facing message + HTTP status. */
@@ -35,7 +41,12 @@ async function post(url: string, body: unknown): Promise<AuthResult> {
     throw new AuthError(`Couldn't reach the server: ${(err as Error).message}`);
   }
 
-  let payload: { token?: string; user?: { id: string; email: string }; error?: string } = {};
+  let payload: {
+    token?: string;
+    user?: { id: string; email: string };
+    recoveryCode?: string;
+    error?: string;
+  } = {};
   try {
     payload = (await res.json()) as typeof payload;
   } catch {
@@ -45,7 +56,7 @@ async function post(url: string, body: unknown): Promise<AuthResult> {
   if (!res.ok || !payload.token || !payload.user) {
     throw new AuthError(payload.error || `Request failed (HTTP ${res.status})`, res.status);
   }
-  return { token: payload.token, user: payload.user };
+  return { token: payload.token, user: payload.user, recoveryCode: payload.recoveryCode };
 }
 
 export function register(baseUrl: string, email: string, password: string): Promise<AuthResult> {
@@ -54,6 +65,19 @@ export function register(baseUrl: string, email: string, password: string): Prom
 
 export function login(baseUrl: string, email: string, password: string): Promise<AuthResult> {
   return post(endpoint(baseUrl, '/auth/login'), { email, password });
+}
+
+/**
+ * Reset a forgotten password using the one-time recovery code from registration.
+ * Returns a fresh session token and a NEW recovery code (the old one is consumed).
+ */
+export function resetPassword(
+  baseUrl: string,
+  email: string,
+  recoveryCode: string,
+  newPassword: string,
+): Promise<AuthResult> {
+  return post(endpoint(baseUrl, '/auth/reset'), { email, recoveryCode, newPassword });
 }
 
 /** Permanently delete the signed-in account and its server-side data. */

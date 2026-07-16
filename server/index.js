@@ -34,6 +34,9 @@ const {
   signToken,
   verifyToken,
   newUserId,
+  generateRecoveryCode,
+  hashRecoveryCode,
+  verifyRecoveryCode,
   MIN_PASSWORD_LENGTH,
 } = require('./auth');
 
@@ -51,6 +54,9 @@ async function ensureSchema() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )
   `);
+  // Recovery code (bcrypt hash) for password reset without email. Added via
+  // ALTER so existing deployments upgrade in place.
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS recovery_code_hash TEXT`);
   // One snapshot per user (FK to users; cascades on account deletion).
   await pool.query(`
     CREATE TABLE IF NOT EXISTS snapshots (
@@ -92,18 +98,55 @@ app.post('/auth/register', async (req, res) => {
   try {
     const id = newUserId();
     const passwordHash = await hashPassword(password);
-    await pool.query('INSERT INTO users (id, email, password_hash) VALUES ($1, $2, $3)', [
-      id,
-      email,
-      passwordHash,
-    ]);
+    const recoveryCode = generateRecoveryCode();
+    const recoveryHash = await hashRecoveryCode(recoveryCode);
+    await pool.query(
+      'INSERT INTO users (id, email, password_hash, recovery_code_hash) VALUES ($1, $2, $3, $4)',
+      [id, email, passwordHash, recoveryHash],
+    );
     const user = { id, email };
-    res.json({ token: signToken(user), user });
+    // recoveryCode is returned exactly once — the client must show it to the user.
+    res.json({ token: signToken(user), user, recoveryCode });
   } catch (err) {
     if (err && err.code === '23505') {
       return res.status(409).json({ error: 'an account with that email already exists' });
     }
     console.error('POST /auth/register failed', err);
+    res.status(500).json({ error: 'internal error' });
+  }
+});
+
+app.post('/auth/reset', async (req, res) => {
+  if (!isAuthConfigured()) return res.status(500).json({ error: 'server is missing JWT_SECRET' });
+  const email = normalizeEmail(req.body && req.body.email);
+  const recoveryCode = req.body && req.body.recoveryCode;
+  const newPassword = req.body && req.body.newPassword;
+  if (!isValidPassword(newPassword)) {
+    return res
+      .status(400)
+      .json({ error: `password must be at least ${MIN_PASSWORD_LENGTH} characters` });
+  }
+  try {
+    const { rows } = await pool.query(
+      'SELECT id, email, recovery_code_hash FROM users WHERE email = $1',
+      [email],
+    );
+    const row = rows[0];
+    const ok = row && (await verifyRecoveryCode(recoveryCode || '', row.recovery_code_hash));
+    if (!ok) return res.status(401).json({ error: 'incorrect email or recovery code' });
+    // Rotate both the password and the recovery code (single-use).
+    const passwordHash = await hashPassword(newPassword);
+    const nextCode = generateRecoveryCode();
+    const nextHash = await hashRecoveryCode(nextCode);
+    await pool.query('UPDATE users SET password_hash = $1, recovery_code_hash = $2 WHERE id = $3', [
+      passwordHash,
+      nextHash,
+      row.id,
+    ]);
+    const user = { id: row.id, email: row.email };
+    res.json({ token: signToken(user), user, recoveryCode: nextCode });
+  } catch (err) {
+    console.error('POST /auth/reset failed', err);
     res.status(500).json({ error: 'internal error' });
   }
 });
