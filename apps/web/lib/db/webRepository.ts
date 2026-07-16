@@ -38,6 +38,16 @@ const PERSIST_DEBOUNCE_MS = 400;
 export class WebRepository extends InMemoryRepository {
   private timer: ReturnType<typeof setTimeout> | null = null;
   private pending = false;
+  private onMutate: (() => void) | null = null;
+
+  /**
+   * Register a callback fired after each *user* mutation (not after
+   * applySnapshot, which is the result of a sync — avoids a sync loop). Used to
+   * trigger auto-sync.
+   */
+  setOnMutate(cb: (() => void) | null): void {
+    this.onMutate = cb;
+  }
 
   async init(): Promise<void> {
     await super.init();
@@ -49,11 +59,16 @@ export class WebRepository extends InMemoryRepository {
     }
   }
 
-  /** Write the current snapshot to IndexedDB, coalescing bursts of edits. */
-  private schedulePersist(): void {
+  /**
+   * Write the current snapshot to IndexedDB, coalescing bursts of edits. When
+   * `notify` is true (every user mutation) also signal the auto-sync listener;
+   * applySnapshot passes false so a sync-driven write doesn't retrigger a sync.
+   */
+  private schedulePersist(notify = true): void {
     this.pending = true;
     if (this.timer) clearTimeout(this.timer);
     this.timer = setTimeout(() => void this.flush(), PERSIST_DEBOUNCE_MS);
+    if (notify) this.onMutate?.();
   }
 
   /** Immediately persist any pending changes (e.g. on beforeunload). */
@@ -182,6 +197,6 @@ export class WebRepository extends InMemoryRepository {
 
   async applySnapshot(snapshot: Snapshot): Promise<void> {
     await super.applySnapshot(snapshot);
-    this.schedulePersist();
+    this.schedulePersist(false);
   }
 }
