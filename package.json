@@ -60,7 +60,7 @@
     "test:core": "npm run test --workspace @tfc/core",
     "typecheck:web": "npm run typecheck --workspace @tfc/web",
     "test:web": "npm run test --workspace @tfc/web",
-    "prepare": "husky"
+    "prepare": "husky || true"
   },
   "jest": {
     "preset": "jest-expo",
