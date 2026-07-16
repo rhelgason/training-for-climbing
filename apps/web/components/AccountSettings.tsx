@@ -9,6 +9,7 @@ import {
   login,
   now,
   register,
+  requestPasswordReset,
   resetPassword,
   runSync,
   trackEvent,
@@ -21,42 +22,10 @@ import { clearSession, getSession, saveSession, type AuthSession } from '../lib/
 import { clearCachedSuggestion } from '../lib/coach/cache';
 
 type Mode = 'login' | 'register' | 'reset';
+type ResetStep = 'request' | 'confirm';
 
 const inputClass =
   'w-full rounded-xl border border-border bg-surface-alt/60 px-4 py-2.5 text-base text-text placeholder:text-muted focus:border-primary focus:outline-none';
-
-/** A one-time recovery code callout the user must acknowledge. */
-function RecoveryCodeCallout({ code, onDone }: { code: string; onDone: () => void }) {
-  const [copied, setCopied] = useState(false);
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(code);
-      setCopied(true);
-    } catch {
-      // clipboard may be unavailable; the code is shown regardless
-    }
-  };
-  return (
-    <Card className="border-warning/50 bg-warning/5">
-      <h3 className="font-bold text-warning">Save your recovery code</h3>
-      <p className="mt-1 text-sm leading-6 text-muted">
-        This is the <strong>only</strong> way to reset your password — there’s no email recovery.
-        Store it somewhere safe. You won’t see it again.
-      </p>
-      <p className="my-3 select-all rounded-lg border border-border bg-background px-4 py-3 text-center font-mono text-lg tracking-widest">
-        {code}
-      </p>
-      <div className="flex gap-2">
-        <Button variant="secondary" onClick={copy} className="flex-1">
-          {copied ? 'Copied ✓' : 'Copy'}
-        </Button>
-        <Button onClick={onDone} className="flex-1">
-          I’ve saved it
-        </Button>
-      </div>
-    </Card>
-  );
-}
 
 export function AccountSettings() {
   const repo = useRepository();
@@ -64,13 +33,12 @@ export function AccountSettings() {
   const [ready, setReady] = useState(false);
 
   const [mode, setMode] = useState<Mode>('login');
+  const [resetStep, setResetStep] = useState<ResetStep>('request');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [recoveryCodeInput, setRecoveryCodeInput] = useState('');
+  const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
-  // Shown once after register/reset until the user acknowledges it.
-  const [newRecoveryCode, setNewRecoveryCode] = useState<string | null>(null);
 
   useEffect(() => {
     setSession(getSession());
@@ -86,7 +54,7 @@ export function AccountSettings() {
   };
 
   const afterAuth = async (
-    result: { token: string; user: { id: string; email: string }; recoveryCode?: string },
+    result: { token: string; user: { id: string; email: string } },
     event: 'signed_in' | 'signed_up',
   ) => {
     const next: AuthSession = {
@@ -100,9 +68,15 @@ export function AccountSettings() {
     const syncedAt = await doSync(next);
     setSession({ ...next, lastSyncedAt: syncedAt });
     setPassword('');
-    setRecoveryCodeInput('');
+    setCode('');
     setStatus('Synced');
-    if (result.recoveryCode) setNewRecoveryCode(result.recoveryCode);
+  };
+
+  const handleError = (err: unknown) => {
+    const message = err instanceof AuthError ? err.message : String((err as Error).message ?? err);
+    log.error('auth failed', err);
+    setStatus(null);
+    window.alert(message);
   };
 
   const submit = async () => {
@@ -127,19 +101,33 @@ export function AccountSettings() {
   };
 
   const submitReset = async () => {
-    if (!email.trim() || !recoveryCodeInput.trim() || !password) {
-      window.alert('Enter your email, recovery code, and a new password.');
+    if (resetStep === 'request') {
+      if (!email.trim()) {
+        window.alert('Enter your email.');
+        return;
+      }
+      setBusy(true);
+      setStatus('Emailing a reset code…');
+      try {
+        await requestPasswordReset(API_BASE, email.trim());
+        setResetStep('confirm');
+        setStatus(`If an account exists for ${email.trim()}, a 6-digit code is on its way.`);
+      } catch (err) {
+        handleError(err);
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+    // confirm step
+    if (!code.trim() || !password) {
+      window.alert('Enter the code from your email and a new password.');
       return;
     }
     setBusy(true);
     setStatus('Resetting password…');
     try {
-      const result = await resetPassword(
-        API_BASE,
-        email.trim(),
-        recoveryCodeInput.trim(),
-        password,
-      );
+      const result = await resetPassword(API_BASE, email.trim(), code.trim(), password);
       await afterAuth(result, 'signed_in');
     } catch (err) {
       handleError(err);
@@ -148,11 +136,12 @@ export function AccountSettings() {
     }
   };
 
-  const handleError = (err: unknown) => {
-    const message = err instanceof AuthError ? err.message : String((err as Error).message ?? err);
-    log.error('auth failed', err);
+  const startReset = () => {
+    setMode('reset');
+    setResetStep('request');
     setStatus(null);
-    window.alert(message);
+    setCode('');
+    setPassword('');
   };
 
   const syncNow = async () => {
@@ -221,9 +210,6 @@ export function AccountSettings() {
     return (
       <section className="flex flex-col gap-4">
         <h2 className="display text-xl font-bold">Account</h2>
-        {newRecoveryCode && (
-          <RecoveryCodeCallout code={newRecoveryCode} onDone={() => setNewRecoveryCode(null)} />
-        )}
         <Card>
           <p className="text-sm text-muted">Signed in as</p>
           <p className="text-lg font-semibold">{session.email}</p>
@@ -256,61 +242,66 @@ export function AccountSettings() {
     mode === 'register' ? 'Create account' : mode === 'reset' ? 'Reset password' : 'Sign in';
   return (
     <section className="flex flex-col gap-4">
-      <h2 className="display text-xl font-bold">Account</h2>
-      {newRecoveryCode && (
-        <RecoveryCodeCallout code={newRecoveryCode} onDone={() => setNewRecoveryCode(null)} />
-      )}
+      <h2 className="display text-xl font-bold">{title}</h2>
       <p className="-mt-2 text-sm leading-6 text-muted">
         {mode === 'reset'
-          ? 'Enter your recovery code to set a new password.'
+          ? resetStep === 'request'
+            ? 'Enter your email and we’ll send a reset code.'
+            : 'Enter the code from your email and a new password.'
           : mode === 'register'
             ? 'Create an account to back up your training and sync it across devices.'
             : 'Sign in to sync your training across devices.'}
       </p>
 
       <Card className="flex flex-col gap-3">
-        <div>
-          <label className="mb-1.5 block text-sm font-semibold">Email</label>
-          <input
-            className={inputClass}
-            type="email"
-            placeholder="you@example.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            autoCapitalize="none"
-            autoCorrect="off"
-          />
-        </div>
-
-        {mode === 'reset' && (
+        {/* Email — shown for all modes except the reset "confirm" step. */}
+        {!(mode === 'reset' && resetStep === 'confirm') && (
           <div>
-            <label className="mb-1.5 block text-sm font-semibold">Recovery code</label>
+            <label className="mb-1.5 block text-sm font-semibold">Email</label>
             <input
-              className={`${inputClass} font-mono tracking-widest`}
-              type="text"
-              placeholder="XXXX-XXXX-XXXX-XXXX"
-              value={recoveryCodeInput}
-              onChange={(e) => setRecoveryCodeInput(e.target.value)}
-              autoCapitalize="characters"
+              className={inputClass}
+              type="email"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoCapitalize="none"
               autoCorrect="off"
             />
           </div>
         )}
 
-        <div>
-          <label className="mb-1.5 block text-sm font-semibold">
-            {mode === 'reset' ? 'New password' : 'Password'}
-          </label>
-          <input
-            className={inputClass}
-            type="password"
-            placeholder="At least 8 characters"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoCapitalize="none"
-            autoCorrect="off"
-          />
-        </div>
+        {mode === 'reset' && resetStep === 'confirm' && (
+          <div>
+            <label className="mb-1.5 block text-sm font-semibold">Reset code</label>
+            <input
+              className={`${inputClass} text-center font-mono text-lg tracking-[0.4em]`}
+              type="text"
+              inputMode="numeric"
+              placeholder="123456"
+              maxLength={6}
+              value={code}
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+            />
+          </div>
+        )}
+
+        {/* Password — for login, register, and the reset confirm step. */}
+        {!(mode === 'reset' && resetStep === 'request') && (
+          <div>
+            <label className="mb-1.5 block text-sm font-semibold">
+              {mode === 'reset' ? 'New password' : 'Password'}
+            </label>
+            <input
+              className={inputClass}
+              type="password"
+              placeholder="At least 8 characters"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoCapitalize="none"
+              autoCorrect="off"
+            />
+          </div>
+        )}
 
         {status ? <p className="text-sm text-primary">{status}</p> : null}
       </Card>
@@ -321,7 +312,9 @@ export function AccountSettings() {
           : mode === 'register'
             ? 'Create account'
             : mode === 'reset'
-              ? 'Reset password'
+              ? resetStep === 'request'
+                ? 'Email me a reset code'
+                : 'Reset password'
               : 'Sign in'}
       </Button>
 
@@ -351,14 +344,7 @@ export function AccountSettings() {
           </button>
         )}
         {mode !== 'reset' && (
-          <button
-            type="button"
-            className="text-muted"
-            onClick={() => {
-              setMode('reset');
-              setStatus(null);
-            }}
-          >
+          <button type="button" className="text-muted" onClick={startReset}>
             Forgot password?
           </button>
         )}
