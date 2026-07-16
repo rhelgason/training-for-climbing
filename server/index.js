@@ -3,10 +3,8 @@
  *
  * Each account has its own private snapshot. Endpoints:
  *   GET  /health             → { ok: true, coach: boolean }
- *   POST /auth/register       → { token, user }                   (email + password)
- *   POST /auth/login          → { token, user }                   (email + password)
- *   POST /auth/request-reset  → { ok: true }                      (email; emails a code)
- *   POST /auth/reset          → { token, user }                   (email + code + newPassword)
+ *   POST /auth/register      → { token, user }                    (email + password)
+ *   POST /auth/login         → { token, user }                    (email + password)
  *   GET    /snapshot         → { data: Snapshot | null }          (auth)
  *   PUT    /snapshot <json>  → { ok: true }                       (auth)
  *   DELETE /account          → { ok: true }                       (auth)
@@ -22,13 +20,10 @@
  *   PGSSL=disable    – turn off TLS for local Postgres (Railway needs TLS, the default)
  *   GEMINI_API_KEY   – free LLM key enabling the AI coach (see llm.js / README)
  *   LLM_PROVIDER     – 'gemini' (default) | 'groq'
- *   RESEND_API_KEY | BREVO_API_KEY – enables email password reset (see email.js)
- *   EMAIL_FROM       – reset email sender, e.g. "Training for Climbing <you@domain>"
  */
 const express = require('express');
 const { Pool } = require('pg');
 const { generateCoachSuggestion, isLlmConfigured } = require('./llm');
-const { isEmailConfigured, sendResetEmail, RESET_TTL_MIN } = require('./email');
 const {
   isAuthConfigured,
   normalizeEmail,
@@ -39,9 +34,6 @@ const {
   signToken,
   verifyToken,
   newUserId,
-  hashRecoveryCode,
-  verifyRecoveryCode,
-  generateResetCode,
   MIN_PASSWORD_LENGTH,
 } = require('./auth');
 
@@ -59,10 +51,6 @@ async function ensureSchema() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )
   `);
-  // Email password-reset: a short-lived, single-use code (bcrypt hash + expiry).
-  // Added via ALTER so existing deployments upgrade in place.
-  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_code_hash TEXT`);
-  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_expires_at TIMESTAMPTZ`);
   // One snapshot per user (FK to users; cascades on account deletion).
   await pool.query(`
     CREATE TABLE IF NOT EXISTS snapshots (
@@ -88,12 +76,7 @@ const app = express();
 app.use(express.json({ limit: '10mb' }));
 
 app.get('/health', (_req, res) =>
-  res.json({
-    ok: true,
-    coach: isLlmConfigured(),
-    auth: isAuthConfigured(),
-    email: isEmailConfigured(),
-  }),
+  res.json({ ok: true, coach: isLlmConfigured(), auth: isAuthConfigured() }),
 );
 
 app.post('/auth/register', async (req, res) => {
@@ -121,74 +104,6 @@ app.post('/auth/register', async (req, res) => {
       return res.status(409).json({ error: 'an account with that email already exists' });
     }
     console.error('POST /auth/register failed', err);
-    res.status(500).json({ error: 'internal error' });
-  }
-});
-
-// Step 1 of reset: email a short-lived code. Always responds 200 (even for an
-// unknown email) so the endpoint can't be used to probe which emails exist.
-app.post('/auth/request-reset', async (req, res) => {
-  if (!isAuthConfigured()) return res.status(500).json({ error: 'server is missing JWT_SECRET' });
-  if (!isEmailConfigured()) {
-    return res.status(503).json({ error: 'email is not configured on the server' });
-  }
-  const email = normalizeEmail(req.body && req.body.email);
-  if (!isValidEmail(email)) return res.status(400).json({ error: 'enter a valid email' });
-  try {
-    const { rows } = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
-    const row = rows[0];
-    if (row) {
-      const code = generateResetCode();
-      const codeHash = await hashRecoveryCode(code);
-      const expires = new Date(Date.now() + RESET_TTL_MIN * 60 * 1000);
-      await pool.query(
-        'UPDATE users SET reset_code_hash = $1, reset_expires_at = $2 WHERE id = $3',
-        [codeHash, expires, row.id],
-      );
-      try {
-        await sendResetEmail(email, code);
-      } catch (mailErr) {
-        console.error('reset email failed', mailErr);
-        return res.status(502).json({ error: "couldn't send the reset email — try again later" });
-      }
-    }
-    res.json({ ok: true });
-  } catch (err) {
-    console.error('POST /auth/request-reset failed', err);
-    res.status(500).json({ error: 'internal error' });
-  }
-});
-
-// Step 2 of reset: verify the emailed code (unexpired) and set the new password.
-app.post('/auth/reset', async (req, res) => {
-  if (!isAuthConfigured()) return res.status(500).json({ error: 'server is missing JWT_SECRET' });
-  const email = normalizeEmail(req.body && req.body.email);
-  const code = req.body && req.body.code;
-  const newPassword = req.body && req.body.newPassword;
-  if (!isValidPassword(newPassword)) {
-    return res
-      .status(400)
-      .json({ error: `password must be at least ${MIN_PASSWORD_LENGTH} characters` });
-  }
-  try {
-    const { rows } = await pool.query(
-      'SELECT id, email, reset_code_hash, reset_expires_at FROM users WHERE email = $1',
-      [email],
-    );
-    const row = rows[0];
-    const notExpired = row && row.reset_expires_at && new Date(row.reset_expires_at) > new Date();
-    const ok = notExpired && (await verifyRecoveryCode(code || '', row.reset_code_hash));
-    if (!ok) return res.status(401).json({ error: 'incorrect or expired reset code' });
-    const passwordHash = await hashPassword(newPassword);
-    // Consume the code so it can't be reused.
-    await pool.query(
-      'UPDATE users SET password_hash = $1, reset_code_hash = NULL, reset_expires_at = NULL WHERE id = $2',
-      [passwordHash, row.id],
-    );
-    const user = { id: row.id, email: row.email };
-    res.json({ token: signToken(user), user });
-  } catch (err) {
-    console.error('POST /auth/reset failed', err);
     res.status(500).json({ error: 'internal error' });
   }
 });

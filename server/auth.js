@@ -61,41 +61,6 @@ function newUserId() {
   return crypto.randomUUID();
 }
 
-// Recovery code: human-readable, unambiguous (no 0/O/1/I), grouped for legibility.
-const RECOVERY_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-
-/** Generate a one-time recovery code like "K7QM-2XFD-9WRP-J4TB". */
-function generateRecoveryCode() {
-  const bytes = crypto.randomBytes(16);
-  let out = '';
-  for (let i = 0; i < 16; i += 1) {
-    out += RECOVERY_ALPHABET[bytes[i] % RECOVERY_ALPHABET.length];
-    if (i % 4 === 3 && i !== 15) out += '-';
-  }
-  return out;
-}
-
-/** Normalise user-entered codes: uppercase, strip spaces/dashes for comparison. */
-function normalizeRecoveryCode(code) {
-  return String(code || '')
-    .toUpperCase()
-    .replace(/[^A-Z0-9]/g, '');
-}
-
-function hashRecoveryCode(code) {
-  return bcrypt.hash(normalizeRecoveryCode(code), BCRYPT_ROUNDS);
-}
-
-function verifyRecoveryCode(code, hash) {
-  if (!hash) return Promise.resolve(false);
-  return bcrypt.compare(normalizeRecoveryCode(code), hash);
-}
-
-/** A 6-digit numeric code emailed on demand for password reset. */
-function generateResetCode() {
-  return String(crypto.randomInt(0, 1000000)).padStart(6, '0');
-}
-
 module.exports = {
   isAuthConfigured,
   normalizeEmail,
@@ -106,10 +71,5 @@ module.exports = {
   signToken,
   verifyToken,
   newUserId,
-  generateRecoveryCode,
-  normalizeRecoveryCode,
-  hashRecoveryCode,
-  verifyRecoveryCode,
-  generateResetCode,
   MIN_PASSWORD_LENGTH,
 };

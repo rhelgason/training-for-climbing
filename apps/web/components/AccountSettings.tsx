@@ -9,8 +9,6 @@ import {
   login,
   now,
   register,
-  requestPasswordReset,
-  resetPassword,
   runSync,
   trackEvent,
 } from '@tfc/core';
@@ -21,8 +19,7 @@ import { API_BASE } from '../lib/config';
 import { clearSession, getSession, saveSession, type AuthSession } from '../lib/auth/session';
 import { clearCachedSuggestion } from '../lib/coach/cache';
 
-type Mode = 'login' | 'register' | 'reset';
-type ResetStep = 'request' | 'confirm';
+type Mode = 'login' | 'register';
 
 const inputClass =
   'w-full rounded-xl border border-border bg-surface-alt/60 px-4 py-2.5 text-base text-text placeholder:text-muted focus:border-primary focus:outline-none';
@@ -33,10 +30,8 @@ export function AccountSettings() {
   const [ready, setReady] = useState(false);
 
   const [mode, setMode] = useState<Mode>('login');
-  const [resetStep, setResetStep] = useState<ResetStep>('request');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
 
@@ -53,34 +48,7 @@ export function AccountSettings() {
     return syncedAt;
   };
 
-  const afterAuth = async (
-    result: { token: string; user: { id: string; email: string } },
-    event: 'signed_in' | 'signed_up',
-  ) => {
-    const next: AuthSession = {
-      token: result.token,
-      userId: result.user.id,
-      email: result.user.email,
-    };
-    saveSession(next);
-    trackEvent(event);
-    setStatus('Syncing…');
-    const syncedAt = await doSync(next);
-    setSession({ ...next, lastSyncedAt: syncedAt });
-    setPassword('');
-    setCode('');
-    setStatus('Synced');
-  };
-
-  const handleError = (err: unknown) => {
-    const message = err instanceof AuthError ? err.message : String((err as Error).message ?? err);
-    log.error('auth failed', err);
-    setStatus(null);
-    window.alert(message);
-  };
-
   const submit = async () => {
-    if (mode === 'reset') return submitReset();
     if (!email.trim() || !password) {
       window.alert('Enter your email and password.');
       return;
@@ -92,56 +60,27 @@ export function AccountSettings() {
         mode === 'register'
           ? await register(API_BASE, email.trim(), password)
           : await login(API_BASE, email.trim(), password);
-      await afterAuth(result, mode === 'register' ? 'signed_up' : 'signed_in');
+      const next: AuthSession = {
+        token: result.token,
+        userId: result.user.id,
+        email: result.user.email,
+      };
+      saveSession(next);
+      trackEvent(mode === 'register' ? 'signed_up' : 'signed_in');
+      setStatus('Syncing…');
+      const syncedAt = await doSync(next);
+      setSession({ ...next, lastSyncedAt: syncedAt });
+      setPassword('');
+      setStatus('Synced');
     } catch (err) {
-      handleError(err);
+      const message =
+        err instanceof AuthError ? err.message : String((err as Error).message ?? err);
+      log.error('auth failed', err);
+      setStatus(null);
+      window.alert(message);
     } finally {
       setBusy(false);
     }
-  };
-
-  const submitReset = async () => {
-    if (resetStep === 'request') {
-      if (!email.trim()) {
-        window.alert('Enter your email.');
-        return;
-      }
-      setBusy(true);
-      setStatus('Emailing a reset code…');
-      try {
-        await requestPasswordReset(API_BASE, email.trim());
-        setResetStep('confirm');
-        setStatus(`If an account exists for ${email.trim()}, a 6-digit code is on its way.`);
-      } catch (err) {
-        handleError(err);
-      } finally {
-        setBusy(false);
-      }
-      return;
-    }
-    // confirm step
-    if (!code.trim() || !password) {
-      window.alert('Enter the code from your email and a new password.');
-      return;
-    }
-    setBusy(true);
-    setStatus('Resetting password…');
-    try {
-      const result = await resetPassword(API_BASE, email.trim(), code.trim(), password);
-      await afterAuth(result, 'signed_in');
-    } catch (err) {
-      handleError(err);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const startReset = () => {
-    setMode('reset');
-    setResetStep('request');
-    setStatus(null);
-    setCode('');
-    setPassword('');
   };
 
   const syncNow = async () => {
@@ -237,118 +176,58 @@ export function AccountSettings() {
     );
   }
 
-  // ── Signed out: login / register / reset ───────────────────────────────
-  const title =
-    mode === 'register' ? 'Create account' : mode === 'reset' ? 'Reset password' : 'Sign in';
+  // ── Signed out: login / register ───────────────────────────────────────
   return (
     <section className="flex flex-col gap-4">
-      <h2 className="display text-xl font-bold">{title}</h2>
+      <h2 className="display text-xl font-bold">
+        {mode === 'register' ? 'Create account' : 'Sign in'}
+      </h2>
       <p className="-mt-2 text-sm leading-6 text-muted">
-        {mode === 'reset'
-          ? resetStep === 'request'
-            ? 'Enter your email and we’ll send a reset code.'
-            : 'Enter the code from your email and a new password.'
-          : mode === 'register'
-            ? 'Create an account to back up your training and sync it across devices.'
-            : 'Sign in to sync your training across devices.'}
+        {mode === 'register'
+          ? 'Create an account to back up your training and sync it across devices.'
+          : 'Sign in to sync your training across devices.'}
       </p>
 
       <Card className="flex flex-col gap-3">
-        {/* Email — shown for all modes except the reset "confirm" step. */}
-        {!(mode === 'reset' && resetStep === 'confirm') && (
-          <div>
-            <label className="mb-1.5 block text-sm font-semibold">Email</label>
-            <input
-              className={inputClass}
-              type="email"
-              placeholder="you@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              autoCapitalize="none"
-              autoCorrect="off"
-            />
-          </div>
-        )}
-
-        {mode === 'reset' && resetStep === 'confirm' && (
-          <div>
-            <label className="mb-1.5 block text-sm font-semibold">Reset code</label>
-            <input
-              className={`${inputClass} text-center font-mono text-lg tracking-[0.4em]`}
-              type="text"
-              inputMode="numeric"
-              placeholder="123456"
-              maxLength={6}
-              value={code}
-              onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
-            />
-          </div>
-        )}
-
-        {/* Password — for login, register, and the reset confirm step. */}
-        {!(mode === 'reset' && resetStep === 'request') && (
-          <div>
-            <label className="mb-1.5 block text-sm font-semibold">
-              {mode === 'reset' ? 'New password' : 'Password'}
-            </label>
-            <input
-              className={inputClass}
-              type="password"
-              placeholder="At least 8 characters"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoCapitalize="none"
-              autoCorrect="off"
-            />
-          </div>
-        )}
-
+        <div>
+          <label className="mb-1.5 block text-sm font-semibold">Email</label>
+          <input
+            className={inputClass}
+            type="email"
+            placeholder="you@example.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            autoCapitalize="none"
+            autoCorrect="off"
+          />
+        </div>
+        <div>
+          <label className="mb-1.5 block text-sm font-semibold">Password</label>
+          <input
+            className={inputClass}
+            type="password"
+            placeholder="At least 8 characters"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoCapitalize="none"
+            autoCorrect="off"
+          />
+        </div>
         {status ? <p className="text-sm text-primary">{status}</p> : null}
       </Card>
 
       <Button onClick={submit} disabled={busy}>
-        {busy
-          ? 'Please wait…'
-          : mode === 'register'
-            ? 'Create account'
-            : mode === 'reset'
-              ? resetStep === 'request'
-                ? 'Email me a reset code'
-                : 'Reset password'
-              : 'Sign in'}
+        {busy ? 'Please wait…' : mode === 'register' ? 'Create account' : 'Sign in'}
       </Button>
-
-      <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-sm">
-        {mode !== 'register' && (
-          <button
-            type="button"
-            className="font-semibold text-primary"
-            onClick={() => {
-              setMode('register');
-              setStatus(null);
-            }}
-          >
-            Create a new account
-          </button>
-        )}
-        {mode !== 'login' && (
-          <button
-            type="button"
-            className="font-semibold text-primary"
-            onClick={() => {
-              setMode('login');
-              setStatus(null);
-            }}
-          >
-            I already have an account
-          </button>
-        )}
-        {mode !== 'reset' && (
-          <button type="button" className="text-muted" onClick={startReset}>
-            Forgot password?
-          </button>
-        )}
-      </div>
+      <Button
+        variant="secondary"
+        onClick={() => {
+          setMode(mode === 'register' ? 'login' : 'register');
+          setStatus(null);
+        }}
+      >
+        {mode === 'register' ? 'I already have an account' : 'Create a new account'}
+      </Button>
     </section>
   );
 }
