@@ -7,6 +7,11 @@ export default defineConfig({
       '@': path.resolve(__dirname, '.'),
     },
   },
+  // Components rely on the automatic JSX runtime (as under Next/SWC), so no
+  // explicit React import is needed in source files.
+  esbuild: {
+    jsx: 'automatic',
+  },
   test: {
     environment: 'jsdom',
     include: ['**/*.test.ts', '**/*.test.tsx'],
