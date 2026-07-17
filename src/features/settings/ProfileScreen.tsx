@@ -1,13 +1,20 @@
+import {
+  ABILITY_TIER_LABELS,
+  ABILITY_TIERS,
+  type AbilityTier,
+  type ClimbDiscipline,
+  DISCIPLINE_LABELS,
+  DISCIPLINES,
+  effectiveProfile,
+  type ProfilePatch,
+  type ProfileSettings,
+} from '@tfc/core';
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text } from 'react-native';
 
 import { Card } from '../../components/Card';
 import { OptionChips, type ChipOption } from '../../components/OptionChips';
 import { Screen } from '../../components/Screen';
-import { ABILITY_TIERS, ABILITY_TIER_LABELS, type AbilityTier } from '../../content/planning';
-import { DISCIPLINES, DISCIPLINE_LABELS, type ClimbDiscipline } from '../../content/climbing';
-import { effectiveProfile, type ProfileSettings } from '../../content/profile';
-import type { ProfilePatch } from '../../db/types';
 import { useRepository } from '../../providers/RepositoryProvider';
 import { colors, fontSize, spacing } from '../../theme';
 

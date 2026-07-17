@@ -1,21 +1,23 @@
+import {
+  ABILITY_TIERS,
+  type AbilityTier,
+  buildSessionPlan,
+  effectiveProfile,
+  type HierarchyAreaId,
+  REST_GUIDANCE,
+  restGuidanceFor,
+  tierInfo,
+  TRAINING_HIERARCHY,
+} from '@tfc/core';
 import React, { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { Card } from '../../components/Card';
 import { OptionChips, type ChipOption } from '../../components/OptionChips';
 import { Screen } from '../../components/Screen';
-import {
-  ABILITY_TIERS,
-  REST_GUIDANCE,
-  TRAINING_HIERARCHY,
-  type AbilityTier,
-  type HierarchyAreaId,
-} from '../../content/planning';
-import { effectiveProfile } from '../../content/profile';
 import { trackEvent } from '../../lib/logger';
 import { useRepository } from '../../providers/RepositoryProvider';
 import { colors, fontSize, spacing } from '../../theme';
-import { buildSessionPlan, restGuidanceFor, tierInfo } from './program';
 
 const TIER_OPTIONS: ChipOption<AbilityTier>[] = ABILITY_TIERS.map((t) => ({
   label: t.label,

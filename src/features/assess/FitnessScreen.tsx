@@ -1,3 +1,10 @@
+import {
+  type BenchmarkRecord,
+  daysSinceLastEvaluation,
+  FITNESS_TESTS,
+  retestDue,
+  trendForTest,
+} from '@tfc/core';
 import React, { useCallback, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
@@ -6,13 +13,10 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { Screen } from '../../components/Screen';
-import { FITNESS_TESTS } from '../../content/fitnessEvaluation';
-import type { BenchmarkRecord } from '../../db/types';
 import { now } from '../../lib/clock';
 import { useRepository } from '../../providers/RepositoryProvider';
 import type { AssessStackParamList } from '../../navigation/types';
 import { colors, fontSize, spacing } from '../../theme';
-import { daysSinceLastEvaluation, retestDue, trendForTest } from './fitness';
 
 type Props = NativeStackScreenProps<AssessStackParamList, 'Fitness'>;
 

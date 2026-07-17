@@ -1,3 +1,4 @@
+import { type ClimbRecord, DISCIPLINE_LABELS, ENVIRONMENT_LABELS, OUTCOME_LABELS } from '@tfc/core';
 import React, { useCallback, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
@@ -6,8 +7,6 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { Screen } from '../../components/Screen';
-import { DISCIPLINE_LABELS, ENVIRONMENT_LABELS, OUTCOME_LABELS } from '../../content/climbing';
-import type { ClimbRecord } from '../../db/types';
 import { useRepository } from '../../providers/RepositoryProvider';
 import type { ProgressStackParamList } from '../../navigation/types';
 import { colors, fontSize, spacing } from '../../theme';

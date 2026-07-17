@@ -1,12 +1,11 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- platform-conditional lazy load of the native SQLite module */
+import { InMemoryRepository, type Repository } from '@tfc/core';
 import { Platform } from 'react-native';
 
 import { log } from '../lib/logger';
-import { InMemoryRepository } from './inMemoryRepository';
-import type { Repository } from './repository';
 
-export type { Repository } from './repository';
-export type { AssessmentRecord, NewAssessment, UsageEventRecord } from './types';
+export type { Repository } from '@tfc/core';
+export type { AssessmentRecord, NewAssessment, UsageEventRecord } from '@tfc/core';
 
 /**
  * Build the Repository for the current platform. Native uses SQLite; anything

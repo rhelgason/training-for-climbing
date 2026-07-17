@@ -1,3 +1,11 @@
+import {
+  type CheckinRecord,
+  EMOTION_MAX,
+  EMOTION_MIN,
+  ENERGY_MAX,
+  quadrantOf,
+  readingsForDay,
+} from '@tfc/core';
 import React, { useCallback, useState } from 'react';
 import { Dimensions, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
@@ -7,12 +15,10 @@ import Svg, { Circle, Line, Polyline, Text as SvgText } from 'react-native-svg';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { Screen } from '../../components/Screen';
-import type { CheckinRecord } from '../../db/types';
 import { now } from '../../lib/clock';
 import { useRepository } from '../../providers/RepositoryProvider';
 import type { TrainStackParamList } from '../../navigation/types';
 import { colors, fontSize, spacing, triadColors } from '../../theme';
-import { EMOTION_MAX, EMOTION_MIN, ENERGY_MAX, quadrantOf, readingsForDay } from './energyEmotion';
 
 type Props = NativeStackScreenProps<TrainStackParamList, 'EnergyEmotion'>;
 

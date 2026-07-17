@@ -1,9 +1,8 @@
+import { type CoachSuggestion, InMemoryRepository } from '@tfc/core';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { InMemoryRepository } from '../../db/inMemoryRepository';
 import type { SyncConfig } from '../sync/syncConfig';
 import { refreshCoachSuggestion } from './coach';
 import { getCachedSuggestion } from './coachCache';
-import type { CoachSuggestion } from './types';
 
 const config: SyncConfig = { url: 'https://srv.example.com', token: 'secret' };
 

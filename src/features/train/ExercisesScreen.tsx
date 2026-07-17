@@ -1,18 +1,18 @@
+import {
+  CATEGORY_FILTERS,
+  type CategoryFilter,
+  categoryFilterLabel,
+  EXERCISE_CATEGORY_LABELS,
+  EXERCISES,
+  filterByCategory,
+} from '@tfc/core';
 import React, { useMemo, useState } from 'react';
 import { StyleSheet, Text } from 'react-native';
 
 import { Card } from '../../components/Card';
 import { OptionChips, type ChipOption } from '../../components/OptionChips';
 import { Screen } from '../../components/Screen';
-import { EXERCISES } from '../../content/exercises';
-import { EXERCISE_CATEGORY_LABELS } from '../../content/types';
 import { colors, fontSize, spacing } from '../../theme';
-import {
-  CATEGORY_FILTERS,
-  categoryFilterLabel,
-  filterByCategory,
-  type CategoryFilter,
-} from './exercises';
 
 const FILTER_OPTIONS: ChipOption<CategoryFilter>[] = CATEGORY_FILTERS.map((f) => ({
   label: categoryFilterLabel(f),

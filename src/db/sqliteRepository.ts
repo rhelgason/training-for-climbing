@@ -1,41 +1,47 @@
+import {
+  type AbilityTier,
+  type ActivityTag,
+  type AssessmentRecord,
+  type BenchmarkRecord,
+  type CheckinRecord,
+  type ClimbDiscipline,
+  type ClimbEnvironment,
+  type ClimbOutcome,
+  type ClimbPatch,
+  type ClimbRecord,
+  type GoalHorizon,
+  type GoalPatch,
+  type GoalRecord,
+  type GoalStatus,
+  type GradeSystem,
+  type JournalEntry,
+  type JournalIntensity,
+  type JournalPatch,
+  type MacrocyclePeriodPatch,
+  type MacrocyclePeriodRecord,
+  type NewAssessment,
+  type NewBenchmark,
+  type NewCheckin,
+  type NewClimb,
+  type NewGoal,
+  type NewJournal,
+  type NewMacrocyclePeriod,
+  PROFILE_DEFAULTS,
+  PROFILE_ID,
+  type ProfilePatch,
+  type ProfileRecord,
+  type Repository,
+  type Responses,
+  type Snapshot,
+  type SyncTable,
+  type TombstoneRecord,
+  type TriadArea,
+  type UsageEventRecord,
+} from '@tfc/core';
 import * as SQLite from 'expo-sqlite';
 
 import { log } from '../lib/logger';
 import { newId } from '../lib/ids';
-import type { TriadArea } from '../content/types';
-import type { AbilityTier, GoalHorizon, GoalStatus } from '../content/planning';
-import type { Responses } from '../features/assess/scoring';
-import type { Repository } from './repository';
-import type {
-  AssessmentRecord,
-  BenchmarkRecord,
-  CheckinRecord,
-  ClimbPatch,
-  ClimbRecord,
-  GoalPatch,
-  GoalRecord,
-  MacrocyclePeriodPatch,
-  MacrocyclePeriodRecord,
-  JournalEntry,
-  JournalPatch,
-  NewAssessment,
-  NewBenchmark,
-  NewCheckin,
-  NewClimb,
-  NewGoal,
-  NewJournal,
-  NewMacrocyclePeriod,
-  ProfilePatch,
-  ProfileRecord,
-  GradeSystem,
-  Snapshot,
-  SyncTable,
-  TombstoneRecord,
-  UsageEventRecord,
-} from './types';
-import type { ClimbDiscipline, ClimbEnvironment, ClimbOutcome } from '../content/climbing';
-import type { ActivityTag, JournalIntensity } from '../content/journal';
-import { PROFILE_DEFAULTS, PROFILE_ID } from '../content/profile';
 
 const DB_NAME = 'training-for-climbing.db';
 

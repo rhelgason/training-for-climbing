@@ -1,15 +1,14 @@
+import { type CoachSuggestion, InMemoryRepository } from '@tfc/core';
 import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { InMemoryRepository } from '../../db/inMemoryRepository';
 import { RepositoryProvider } from '../../providers/RepositoryProvider';
 import { saveSession } from '../auth/session';
 import { saveCachedSuggestion } from '../coach/coachCache';
 import { now } from '../../lib/clock';
 import { TrainHomeScreen } from './TrainHomeScreen';
-import type { CoachSuggestion } from '../coach/types';
 
 // Run focus effects like mount effects (no NavigationContainer in unit tests).
 jest.mock('@react-navigation/native', () => {

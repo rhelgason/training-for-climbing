@@ -1,3 +1,14 @@
+import {
+  ACTIVITY_LABELS,
+  buildDailyRecommendation,
+  type DailyRecommendation,
+  dayIndex,
+  flaggedPromptsForArea,
+  INTENSITY_LABELS,
+  type JournalEntry,
+  relativeTime,
+  trainingDates,
+} from '@tfc/core';
 import React, { useCallback, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
@@ -6,18 +17,12 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { Screen } from '../../components/Screen';
-import { ACTIVITY_LABELS, INTENSITY_LABELS } from '../../content/journal';
-import type { JournalEntry } from '../../db/types';
 import { now } from '../../lib/clock';
 import { trackEvent } from '../../lib/logger';
 import { useRepository } from '../../providers/RepositoryProvider';
 import type { TrainStackParamList } from '../../navigation/types';
 import { colors, fontSize, spacing } from '../../theme';
-import { flaggedPromptsForArea } from '../assess/scoring';
-import { dayIndex, trainingDates } from './log';
-import { buildDailyRecommendation, type DailyRecommendation } from '../today/recommend';
 import { useCoach } from '../coach/useCoach';
-import { relativeTime } from '../coach/format';
 import { useBackupNudge } from '../auth/useBackupNudge';
 import { BackupBanner } from '../auth/BackupBanner';
 import { useOnboarding } from '../onboarding/useOnboarding';

@@ -1,3 +1,4 @@
+import { activeGoals } from '@tfc/core';
 import React, { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Text } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
@@ -8,7 +9,6 @@ import { Screen } from '../../components/Screen';
 import { useRepository } from '../../providers/RepositoryProvider';
 import type { PlanStackParamList } from '../../navigation/types';
 import { colors, fontSize, spacing } from '../../theme';
-import { activeGoals } from './goals';
 
 type Props = NativeStackScreenProps<PlanStackParamList, 'PlanHome'>;
 

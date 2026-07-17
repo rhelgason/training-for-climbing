@@ -1,3 +1,4 @@
+import { TRIAD_AREAS, TRIAD_LABELS } from '@tfc/core';
 import React, { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
@@ -6,7 +7,6 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { Screen } from '../../components/Screen';
-import { TRIAD_AREAS, TRIAD_LABELS } from '../../content/types';
 import type { AssessmentRecord } from '../../db';
 import { useRepository } from '../../providers/RepositoryProvider';
 import { trackEvent } from '../../lib/logger';

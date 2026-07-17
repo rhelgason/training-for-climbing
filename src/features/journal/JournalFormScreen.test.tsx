@@ -1,9 +1,9 @@
+import { InMemoryRepository } from '@tfc/core';
 import React from 'react';
 import { Alert } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { InMemoryRepository } from '../../db/inMemoryRepository';
 import { RepositoryProvider } from '../../providers/RepositoryProvider';
 import { JournalFormScreen } from './JournalFormScreen';
 

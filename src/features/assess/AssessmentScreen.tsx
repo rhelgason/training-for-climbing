@@ -1,3 +1,11 @@
+import {
+  evaluate,
+  isComplete,
+  RATING_LABELS,
+  type Responses,
+  SELF_ASSESSMENT_QUESTIONS,
+  unansweredQuestionIds,
+} from '@tfc/core';
 import React, { useMemo, useState } from 'react';
 import { Alert, StyleSheet, Text, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -6,12 +14,10 @@ import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { RatingSelector } from '../../components/RatingSelector';
 import { Screen } from '../../components/Screen';
-import { RATING_LABELS, SELF_ASSESSMENT_QUESTIONS } from '../../content/selfAssessment';
 import { useRepository } from '../../providers/RepositoryProvider';
 import { trackEvent } from '../../lib/logger';
 import type { AssessStackParamList } from '../../navigation/types';
 import { colors, fontSize, spacing } from '../../theme';
-import { evaluate, isComplete, unansweredQuestionIds, type Responses } from './scoring';
 
 type Props = NativeStackScreenProps<AssessStackParamList, 'Assessment'>;
 

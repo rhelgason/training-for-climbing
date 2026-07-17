@@ -1,3 +1,13 @@
+import {
+  GOAL_DEADLINE_OPTIONS,
+  GOAL_HORIZONS,
+  type GoalHorizon,
+  type GoalRecord,
+  TRIAD_AREAS,
+  TRIAD_LABELS,
+  type TriadArea,
+  validateGoalInput,
+} from '@tfc/core';
 import React, { useEffect, useState } from 'react';
 import { Alert, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -5,15 +15,11 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Button } from '../../components/Button';
 import { OptionChips, type ChipOption } from '../../components/OptionChips';
 import { Screen } from '../../components/Screen';
-import { GOAL_DEADLINE_OPTIONS, GOAL_HORIZONS, type GoalHorizon } from '../../content/planning';
-import { TRIAD_AREAS, TRIAD_LABELS, type TriadArea } from '../../content/types';
-import type { GoalRecord } from '../../db/types';
 import { now } from '../../lib/clock';
 import { trackEvent } from '../../lib/logger';
 import { useRepository } from '../../providers/RepositoryProvider';
 import type { PlanStackParamList } from '../../navigation/types';
 import { colors, fontSize, radius, spacing } from '../../theme';
-import { validateGoalInput } from './goals';
 
 type Props = NativeStackScreenProps<PlanStackParamList, 'GoalForm'>;
 

@@ -1,3 +1,11 @@
+import {
+  GOAL_HORIZON_LABELS,
+  type GoalRecord,
+  groupGoalsByHorizon,
+  HORIZON_ORDER,
+  isOverdue,
+  TRIAD_LABELS,
+} from '@tfc/core';
 import React, { useCallback, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
@@ -6,15 +14,11 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { Screen } from '../../components/Screen';
-import { GOAL_HORIZON_LABELS } from '../../content/planning';
-import { TRIAD_LABELS } from '../../content/types';
-import type { GoalRecord } from '../../db/types';
 import { now } from '../../lib/clock';
 import { trackEvent } from '../../lib/logger';
 import { useRepository } from '../../providers/RepositoryProvider';
 import type { PlanStackParamList } from '../../navigation/types';
 import { colors, fontSize, spacing } from '../../theme';
-import { groupGoalsByHorizon, HORIZON_ORDER, isOverdue } from './goals';
 
 type Props = NativeStackScreenProps<PlanStackParamList, 'Goals'>;
 

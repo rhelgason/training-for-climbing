@@ -2,8 +2,8 @@
  * Local cache of the latest AI coach suggestion, so it shows instantly and works
  * offline. One entry (the most recent); replaced on each successful refresh.
  */
+import { type CoachSuggestion } from '@tfc/core';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { CoachSuggestion } from './types';
 
 const KEY = 'tfc.coachSuggestion';
 

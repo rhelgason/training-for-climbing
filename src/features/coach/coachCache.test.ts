@@ -1,6 +1,6 @@
+import { type CoachSuggestion } from '@tfc/core';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { clearCachedSuggestion, getCachedSuggestion, saveCachedSuggestion } from './coachCache';
-import type { CoachSuggestion } from './types';
 
 const suggestion: CoachSuggestion = {
   focusArea: 'physical',

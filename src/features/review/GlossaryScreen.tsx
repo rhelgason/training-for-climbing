@@ -1,10 +1,9 @@
+import { filterGlossary, GLOSSARY } from '@tfc/core';
 import React, { useMemo, useState } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Card } from '../../components/Card';
 import { Screen } from '../../components/Screen';
-import { GLOSSARY } from '../../content/glossary';
-import { filterGlossary } from './filterGlossary';
 import { trackEvent } from '../../lib/logger';
 import { colors, fontSize, radius, spacing } from '../../theme';
 

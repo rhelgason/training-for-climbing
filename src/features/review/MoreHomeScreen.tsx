@@ -1,3 +1,4 @@
+import { GLOSSARY } from '@tfc/core';
 import React from 'react';
 import { StyleSheet, Text } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -5,7 +6,6 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { Screen } from '../../components/Screen';
-import { GLOSSARY } from '../../content/glossary';
 import type { MoreStackParamList } from '../../navigation/types';
 import { colors, fontSize, spacing } from '../../theme';
 

@@ -1,10 +1,10 @@
+import { InMemoryRepository } from '@tfc/core';
 import React from 'react';
 import { Alert } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { InMemoryRepository } from '../../db/inMemoryRepository';
 import { RepositoryProvider } from '../../providers/RepositoryProvider';
 import { getSession, saveSession } from './session';
 import { AccountScreen } from './AccountScreen';

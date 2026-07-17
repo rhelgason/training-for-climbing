@@ -1,10 +1,9 @@
+import { InMemoryRepository, SELF_ASSESSMENT_QUESTIONS } from '@tfc/core';
 import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { InMemoryRepository } from '../../db/inMemoryRepository';
 import { RepositoryProvider } from '../../providers/RepositoryProvider';
-import { SELF_ASSESSMENT_QUESTIONS } from '../../content/selfAssessment';
 import { AssessmentScreen } from './AssessmentScreen';
 
 const initialMetrics = {

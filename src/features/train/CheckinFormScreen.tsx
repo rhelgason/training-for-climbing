@@ -1,3 +1,4 @@
+import { EMOTION_MAX, EMOTION_MIN, ENERGY_MAX, ENERGY_MIN, quadrantOf } from '@tfc/core';
 import React, { useState } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -11,7 +12,6 @@ import { trackEvent } from '../../lib/logger';
 import { useRepository } from '../../providers/RepositoryProvider';
 import type { TrainStackParamList } from '../../navigation/types';
 import { colors, fontSize, radius, spacing } from '../../theme';
-import { EMOTION_MAX, EMOTION_MIN, ENERGY_MAX, ENERGY_MIN, quadrantOf } from './energyEmotion';
 
 type Props = NativeStackScreenProps<TrainStackParamList, 'CheckinForm'>;
 

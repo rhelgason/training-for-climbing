@@ -1,3 +1,4 @@
+import { formatYmd, parseYmd, validatePeriodInput } from '@tfc/core';
 import React, { useEffect, useState } from 'react';
 import { Alert, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -8,7 +9,6 @@ import { trackEvent } from '../../lib/logger';
 import { useRepository } from '../../providers/RepositoryProvider';
 import type { PlanStackParamList } from '../../navigation/types';
 import { colors, fontSize, radius, spacing } from '../../theme';
-import { formatYmd, parseYmd, validatePeriodInput } from './macrocycle';
 
 type Props = NativeStackScreenProps<PlanStackParamList, 'MacrocycleForm'>;
 

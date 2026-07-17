@@ -1,3 +1,29 @@
+import {
+  type AssessmentRecord,
+  type BenchmarkRecord,
+  type ClimbDiscipline,
+  type ClimbRecord,
+  countInLastDays,
+  DISCIPLINE_LABELS,
+  DISCIPLINES,
+  effectiveProfile,
+  firstTryRate,
+  FITNESS_TESTS,
+  hardestSend,
+  type JournalEntry,
+  monthlyCounts,
+  OUTCOME_LABELS,
+  type ProfileRecord,
+  type PyramidRow,
+  reassessDue,
+  sendPyramid,
+  sendRate,
+  trainingDates,
+  trendForTest,
+  TRIAD_LABELS,
+  triadSeries,
+  weeklyCounts,
+} from '@tfc/core';
 import React, { useCallback, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
@@ -7,40 +33,10 @@ import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { LineChart } from '../../components/LineChart';
 import { Screen } from '../../components/Screen';
-import {
-  DISCIPLINES,
-  DISCIPLINE_LABELS,
-  OUTCOME_LABELS,
-  type ClimbDiscipline,
-} from '../../content/climbing';
-import { TRIAD_LABELS } from '../../content/types';
-import { FITNESS_TESTS } from '../../content/fitnessEvaluation';
-import { effectiveProfile } from '../../content/profile';
-import type {
-  AssessmentRecord,
-  BenchmarkRecord,
-  ClimbRecord,
-  JournalEntry,
-  ProfileRecord,
-} from '../../db/types';
 import { now } from '../../lib/clock';
-import { trainingDates } from '../train/log';
-import { reassessDue } from '../assess/reassessment';
-import { trendForTest } from '../assess/fitness';
 import { useRepository } from '../../providers/RepositoryProvider';
 import type { ProgressStackParamList } from '../../navigation/types';
 import { colors, fontSize, radius, spacing, triadColors } from '../../theme';
-import {
-  countInLastDays,
-  firstTryRate,
-  hardestSend,
-  monthlyCounts,
-  sendPyramid,
-  sendRate,
-  triadSeries,
-  weeklyCounts,
-  type PyramidRow,
-} from './dashboard';
 
 type Props = NativeStackScreenProps<ProgressStackParamList, 'Dashboard'>;
 

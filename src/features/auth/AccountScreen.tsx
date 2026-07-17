@@ -1,3 +1,4 @@
+import { AuthError, deleteAccount, HttpRemoteStore, login, register, runSync } from '@tfc/core';
 import React, { useEffect, useState } from 'react';
 import { Alert, StyleSheet, Text, TextInput } from 'react-native';
 
@@ -8,11 +9,8 @@ import { log, trackEvent } from '../../lib/logger';
 import { now } from '../../lib/clock';
 import { useRepository } from '../../providers/RepositoryProvider';
 import { colors, fontSize, radius, spacing } from '../../theme';
-import { runSync } from '../sync/engine';
-import { HttpRemoteStore } from '../sync/httpRemote';
 import { defaultSyncUrl } from '../sync/syncConfig';
 import { clearCachedSuggestion } from '../coach/coachCache';
-import { AuthError, deleteAccount, login, register } from './authClient';
 import { clearSession, getSession, saveSession, type AuthSession } from './session';
 
 type Mode = 'login' | 'register';

@@ -1,3 +1,4 @@
+import { evaluate, groupFlaggedByArea, TRIAD_LABELS, WEAKNESS_THRESHOLD } from '@tfc/core';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -6,13 +7,10 @@ import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { Screen } from '../../components/Screen';
 import { TriadBars } from '../../components/TriadBars';
-import { WEAKNESS_THRESHOLD } from '../../content/selfAssessment';
-import { TRIAD_LABELS } from '../../content/types';
 import type { AssessmentRecord } from '../../db';
 import { useRepository } from '../../providers/RepositoryProvider';
 import type { AssessStackParamList } from '../../navigation/types';
 import { colors, fontSize, spacing } from '../../theme';
-import { evaluate, groupFlaggedByArea } from './scoring';
 
 type Props = NativeStackScreenProps<AssessStackParamList, 'Results'>;
 

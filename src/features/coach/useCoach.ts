@@ -6,14 +6,13 @@
  * missing or stale and the coach is enabled). Tapping "refresh" forces a call.
  * Any failure leaves the screen on the deterministic baseline.
  */
+import { type CoachSuggestion, type Repository } from '@tfc/core';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import type { Repository } from '../../db/repository';
 import { now } from '../../lib/clock';
 import { getSyncConfig, isSyncConfigured } from '../sync/syncConfig';
 import { refreshCoachSuggestion } from './coach';
 import { getCachedSuggestion } from './coachCache';
-import type { CoachSuggestion } from './types';
 
 export type CoachStatus = 'idle' | 'loading' | 'ready' | 'error';
 

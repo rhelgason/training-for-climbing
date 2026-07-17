@@ -1,8 +1,7 @@
+import { TRIAD_AREAS, TRIAD_LABELS, type TriadScores } from '@tfc/core';
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { TRIAD_AREAS, TRIAD_LABELS } from '../content/types';
-import type { TriadScores } from '../features/assess/scoring';
 import { colors, fontSize, radius, spacing, triadColors } from '../theme';
 
 interface Props {

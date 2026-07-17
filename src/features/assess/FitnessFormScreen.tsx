@@ -1,11 +1,10 @@
+import { FITNESS_TESTS, type NewBenchmark } from '@tfc/core';
 import React, { useState } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import { Button } from '../../components/Button';
 import { Screen } from '../../components/Screen';
-import { FITNESS_TESTS } from '../../content/fitnessEvaluation';
-import type { NewBenchmark } from '../../db/types';
 import { now } from '../../lib/clock';
 import { trackEvent } from '../../lib/logger';
 import { useRepository } from '../../providers/RepositoryProvider';

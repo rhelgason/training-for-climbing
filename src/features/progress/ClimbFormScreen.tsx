@@ -1,3 +1,15 @@
+import {
+  type ClimbDiscipline,
+  type ClimbEnvironment,
+  type ClimbOutcome,
+  DISCIPLINE_LABELS,
+  DISCIPLINES,
+  ENVIRONMENT_LABELS,
+  ENVIRONMENTS,
+  gradesForDiscipline,
+  OUTCOME_LABELS,
+  OUTCOMES,
+} from '@tfc/core';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, StyleSheet, Text, TextInput } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -5,18 +17,6 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Button } from '../../components/Button';
 import { OptionChips, type ChipOption } from '../../components/OptionChips';
 import { Screen } from '../../components/Screen';
-import {
-  DISCIPLINES,
-  DISCIPLINE_LABELS,
-  ENVIRONMENTS,
-  ENVIRONMENT_LABELS,
-  OUTCOMES,
-  OUTCOME_LABELS,
-  type ClimbDiscipline,
-  type ClimbEnvironment,
-  type ClimbOutcome,
-} from '../../content/climbing';
-import { gradesForDiscipline } from '../../content/grades';
 import { now } from '../../lib/clock';
 import { trackEvent } from '../../lib/logger';
 import { useRepository } from '../../providers/RepositoryProvider';

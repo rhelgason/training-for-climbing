@@ -1,5 +1,5 @@
+import { type TriadArea } from '@tfc/core';
 /** Lightweight design tokens shared across the app. */
-import type { TriadArea } from '../content/types';
 
 export const colors = {
   background: '#0f1115',

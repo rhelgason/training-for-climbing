@@ -3,13 +3,15 @@
  * context, asks the server for a suggestion, and caches it. Glue around the pure
  * `buildCoachContext` and the `requestCoachSuggestion` client.
  */
-import type { Repository } from '../../db/repository';
+import {
+  buildCoachContext,
+  type CoachSuggestion,
+  type Repository,
+  requestCoachSuggestion,
+} from '@tfc/core';
 import { now } from '../../lib/clock';
 import type { SyncConfig } from '../sync/syncConfig';
-import { buildCoachContext } from './context';
-import { requestCoachSuggestion } from './coachClient';
 import { saveCachedSuggestion } from './coachCache';
-import type { CoachSuggestion } from './types';
 
 /**
  * Fetch a fresh AI suggestion and cache it. Throws `CoachUnavailableError` when

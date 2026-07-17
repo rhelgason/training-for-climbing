@@ -1,3 +1,4 @@
+import { effectiveProfile, reassessDue } from '@tfc/core';
 import React, { useCallback, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, type NavigationProp } from '@react-navigation/native';
@@ -6,12 +7,10 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { Screen } from '../../components/Screen';
-import { effectiveProfile } from '../../content/profile';
 import { now } from '../../lib/clock';
 import { useRepository } from '../../providers/RepositoryProvider';
 import type { AssessStackParamList } from '../../navigation/types';
 import { colors, fontSize, spacing } from '../../theme';
-import { reassessDue } from './reassessment';
 
 type Props = NativeStackScreenProps<AssessStackParamList, 'AssessHome'>;
 

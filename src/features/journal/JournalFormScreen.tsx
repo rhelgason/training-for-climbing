@@ -1,3 +1,11 @@
+import {
+  ACTIVITY_LABELS,
+  ACTIVITY_TAGS,
+  type ActivityTag,
+  INTENSITIES,
+  INTENSITY_LABELS,
+  type JournalIntensity,
+} from '@tfc/core';
 import React, { useEffect, useState } from 'react';
 import { Alert, StyleSheet, Text, TextInput } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -5,14 +13,6 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Button } from '../../components/Button';
 import { OptionChips, type ChipOption } from '../../components/OptionChips';
 import { Screen } from '../../components/Screen';
-import {
-  ACTIVITY_TAGS,
-  ACTIVITY_LABELS,
-  INTENSITIES,
-  INTENSITY_LABELS,
-  type ActivityTag,
-  type JournalIntensity,
-} from '../../content/journal';
 import { now } from '../../lib/clock';
 import { trackEvent } from '../../lib/logger';
 import { useRepository } from '../../providers/RepositoryProvider';
