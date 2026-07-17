@@ -15,7 +15,7 @@ import {
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { Screen } from '@/components/Screen';
-import { useRepository } from '@/lib/db/RepositoryProvider';
+import { useRepository, useSync } from '@/lib/db/RepositoryProvider';
 
 function formatDate(ms: number): string {
   return new Date(ms).toLocaleDateString(undefined, {
@@ -27,6 +27,7 @@ function formatDate(ms: number): string {
 
 export default function GoalsScreen() {
   const repo = useRepository();
+  const { dataVersion } = useSync();
   const [goals, setGoals] = useState<GoalRecord[] | null>(null);
 
   useEffect(() => {
@@ -37,7 +38,7 @@ export default function GoalsScreen() {
     return () => {
       on = false;
     };
-  }, [repo]);
+  }, [repo, dataVersion]);
 
   const refresh = () => repo.listGoals().then(setGoals);
 

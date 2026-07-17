@@ -8,7 +8,7 @@ import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { Screen } from '@/components/Screen';
 import { PageHeader } from '@/components/PageHeader';
-import { useRepository } from '@/lib/db/RepositoryProvider';
+import { useRepository, useSync } from '@/lib/db/RepositoryProvider';
 import { colors, triadColors } from '@/lib/theme';
 
 function formatDate(ms: number): string {
@@ -21,6 +21,7 @@ function formatDate(ms: number): string {
 
 export default function HistoryScreen() {
   const repo = useRepository();
+  const { dataVersion } = useSync();
   const router = useRouter();
   const [items, setItems] = useState<AssessmentRecord[] | null>(null);
 
@@ -33,7 +34,7 @@ export default function HistoryScreen() {
     return () => {
       active = false;
     };
-  }, [repo]);
+  }, [repo, dataVersion]);
 
   if (items === null) {
     return (

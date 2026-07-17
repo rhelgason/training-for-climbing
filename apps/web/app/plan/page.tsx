@@ -5,10 +5,11 @@ import Link from 'next/link';
 import { activeGoals, type GoalRecord } from '@tfc/core';
 import { Card } from '@/components/Card';
 import { Screen } from '@/components/Screen';
-import { useRepository } from '@/lib/db/RepositoryProvider';
+import { useRepository, useSync } from '@/lib/db/RepositoryProvider';
 
 export default function PlanHome() {
   const repo = useRepository();
+  const { dataVersion } = useSync();
   const [activeCount, setActiveCount] = useState<number | null>(null);
 
   useEffect(() => {
@@ -19,7 +20,7 @@ export default function PlanHome() {
     return () => {
       on = false;
     };
-  }, [repo]);
+  }, [repo, dataVersion]);
 
   return (
     <Screen>

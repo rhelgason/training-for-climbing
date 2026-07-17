@@ -7,7 +7,7 @@ import { DISCIPLINE_LABELS, ENVIRONMENT_LABELS, OUTCOME_LABELS, type ClimbRecord
 import { Button } from '../../../components/Button';
 import { Card } from '../../../components/Card';
 import { Screen } from '../../../components/Screen';
-import { useRepository } from '../../../lib/db/RepositoryProvider';
+import { useRepository, useSync } from '../../../lib/db/RepositoryProvider';
 
 function formatDate(ms: number): string {
   return new Date(ms).toLocaleDateString(undefined, {
@@ -19,6 +19,7 @@ function formatDate(ms: number): string {
 
 export default function ClimbsScreen() {
   const repo = useRepository();
+  const { dataVersion } = useSync();
   const router = useRouter();
   const [climbs, setClimbs] = useState<ClimbRecord[] | null>(null);
 
@@ -30,7 +31,7 @@ export default function ClimbsScreen() {
     return () => {
       on = false;
     };
-  }, [repo]);
+  }, [repo, dataVersion]);
 
   const remove = async (climb: ClimbRecord) => {
     if (!window.confirm(`Delete climb? ${climb.grade} · ${formatDate(climb.date)}`)) return;

@@ -21,7 +21,7 @@ import { Card } from '../../components/Card';
 import { Screen } from '../../components/Screen';
 import { GettingStarted, type OnboardingStep } from '../../components/GettingStarted';
 import { BackupBanner } from '../../components/BackupBanner';
-import { useRepository } from '../../lib/db/RepositoryProvider';
+import { useRepository, useSync } from '../../lib/db/RepositoryProvider';
 import { useCoach } from '../../lib/coach/useCoach';
 import { useBackupNudge } from '../../lib/auth/useBackupNudge';
 import { useOnboarding } from '../../lib/onboarding/useOnboarding';
@@ -51,6 +51,7 @@ interface LoadState {
 
 export default function TrainHome() {
   const repo = useRepository();
+  const { dataVersion } = useSync();
   const router = useRouter();
   const [state, setState] = useState<LoadState | null>(null);
   const coach = useCoach(repo);
@@ -95,7 +96,7 @@ export default function TrainHome() {
     return () => {
       on = false;
     };
-  }, [repo]);
+  }, [repo, dataVersion]);
 
   if (state === null) return <Screen />;
   const { journals, recommendation: rec, todayJournalId, hasAssessment, hasGoal } = state;

@@ -14,7 +14,7 @@ import {
 } from '@tfc/core';
 import { Card } from './Card';
 import { OptionChips, type ChipOption } from './OptionChips';
-import { useRepository } from '../lib/db/RepositoryProvider';
+import { useRepository, useSync } from '../lib/db/RepositoryProvider';
 
 const TIER_OPTIONS: ChipOption<AbilityTier>[] = ABILITY_TIERS.map((t) => ({
   label: ABILITY_TIER_LABELS[t.id],
@@ -36,11 +36,12 @@ const AI_OPTIONS: ChipOption<'on' | 'off'>[] = [
 /** Training preferences (formerly the separate Profile screen). */
 export function TrainingPreferences() {
   const repo = useRepository();
+  const { dataVersion } = useSync();
   const [settings, setSettings] = useState<ProfileSettings | null>(null);
 
   useEffect(() => {
     repo.getProfile().then((p) => setSettings(effectiveProfile(p)));
-  }, [repo]);
+  }, [repo, dataVersion]);
 
   const update = async (patch: ProfilePatch) => {
     const saved = await repo.saveProfile(patch);

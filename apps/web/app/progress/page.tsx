@@ -33,7 +33,7 @@ import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { LineChart } from '../../components/LineChart';
 import { Screen } from '../../components/Screen';
-import { useRepository } from '../../lib/db/RepositoryProvider';
+import { useRepository, useSync } from '../../lib/db/RepositoryProvider';
 import { colors, triadColors } from '../../lib/theme';
 
 interface LoadState {
@@ -74,6 +74,7 @@ function Pyramid({ rows }: { rows: PyramidRow[] }) {
 
 export default function DashboardScreen() {
   const repo = useRepository();
+  const { dataVersion } = useSync();
   const [state, setState] = useState<LoadState | null>(null);
 
   useEffect(() => {
@@ -90,7 +91,7 @@ export default function DashboardScreen() {
     return () => {
       on = false;
     };
-  }, [repo]);
+  }, [repo, dataVersion]);
 
   if (state === null) return <Screen />;
   const { climbs, journals, assessments, benchmarks, profile } = state;

@@ -3,6 +3,7 @@ import './globals.css';
 import { RepositoryProvider } from '../lib/db/RepositoryProvider';
 import { TabBar } from '../components/TabBar';
 import { Sidebar } from '../components/Sidebar';
+import { SyncIndicator } from '../components/SyncIndicator';
 
 export const metadata: Metadata = {
   title: 'Training for Climbing',
@@ -38,6 +39,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <TabBar />
             </div>
           </div>
+          <SyncIndicator />
         </RepositoryProvider>
       </body>
     </html>

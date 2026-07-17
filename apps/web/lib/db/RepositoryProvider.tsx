@@ -1,6 +1,14 @@
 'use client';
 
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import {
   HttpRemoteStore,
   log,
@@ -18,7 +26,19 @@ import { getSession, getSyncConfig, saveSession } from '../auth/session';
 const PUSH_DEBOUNCE_MS = 1500;
 const INITIAL_SYNC_TIMEOUT_MS = 6000;
 
+export type SyncStatus = 'idle' | 'syncing' | 'error' | 'offline';
+
+interface SyncState {
+  status: SyncStatus;
+  lastSyncedAt: number | null;
+  /** Bumps after every completed sync so screens can re-read fresh data. */
+  dataVersion: number;
+  /** Trigger a sync now (used by the indicator's retry + manual refresh). */
+  refresh: () => void;
+}
+
 const RepositoryContext = createContext<Repository | null>(null);
+const SyncContext = createContext<SyncState | null>(null);
 
 /**
  * Creates and initialises the browser Repository once, wires usage events + auto
@@ -26,38 +46,58 @@ const RepositoryContext = createContext<Repository | null>(null);
  * in, until an initial pull from the server completes so other devices' data
  * shows on load).
  *
- * Auto-sync: after each local mutation we debounce-push to the server, and we
- * pull whenever the tab regains focus. Sign-in/out and manual "Sync now" still
- * work via the Account screen.
+ * Also exposes sync status (see useSync) for the status indicator and for screens
+ * that want to re-read after a background pull (via `dataVersion`).
  */
 export function RepositoryProvider({ children }: { children: ReactNode }) {
   const repo = useMemo(() => new WebRepository(), []);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
+  const [status, setStatus] = useState<SyncStatus>('idle');
+  const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
+  const [dataVersion, setDataVersion] = useState(0);
+  // Latest refresh fn, so the context value can stay stable.
+  const refreshRef = useRef<() => void>(() => {});
+
   useEffect(() => {
+    setLastSyncedAt(getSession()?.lastSyncedAt ?? null);
+
     let cancelled = false;
     let syncing = false;
     let dirtyDuringSync = false;
     let pushTimer: ReturnType<typeof setTimeout> | null = null;
 
-    // Pull remote, merge, push merged back. Serialised: overlapping requests are
-    // coalesced into one follow-up run.
     const runOnce = async (): Promise<void> => {
       const cfg = getSyncConfig();
-      if (!cfg) return;
+      if (!cfg) {
+        if (!cancelled) setStatus('idle');
+        return;
+      }
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        if (!cancelled) setStatus('offline');
+        return;
+      }
       if (syncing) {
         dirtyDuringSync = true;
         return;
       }
       syncing = true;
+      if (!cancelled) setStatus('syncing');
       try {
         await repo.flush();
         await runSync(repo, new HttpRemoteStore(API_BASE, cfg.token));
+        const syncedAt = now();
         const s = getSession();
-        if (s) saveSession({ ...s, lastSyncedAt: now() });
+        if (s) saveSession({ ...s, lastSyncedAt: syncedAt });
+        if (!cancelled) {
+          setLastSyncedAt(syncedAt);
+          setDataVersion((v) => v + 1);
+          setStatus('idle');
+        }
       } catch (err) {
         log.error('auto-sync failed', err);
+        if (!cancelled) setStatus('error');
       } finally {
         syncing = false;
         if (dirtyDuringSync && !cancelled) {
@@ -73,14 +113,14 @@ export function RepositoryProvider({ children }: { children: ReactNode }) {
       pushTimer = setTimeout(() => void runOnce(), PUSH_DEBOUNCE_MS);
     };
 
+    refreshRef.current = () => void runOnce();
+
     (async () => {
       try {
         await repo.init();
         registerEventSink((event) => {
           repo.recordEvent(event).catch((err) => log.error('failed to persist event', err));
         });
-        // When signed in, pull before first render so a fresh device shows the
-        // account's data — but cap the wait so a slow/cold server can't hang load.
         if (getSyncConfig()) {
           await Promise.race([
             runOnce(),
@@ -97,12 +137,17 @@ export function RepositoryProvider({ children }: { children: ReactNode }) {
       }
     })();
 
-    // Push after local edits; pull when the tab regains focus.
     repo.setOnMutate(scheduleSync);
     const onVisible = () => {
       if (document.visibilityState === 'visible') void runOnce();
     };
+    const onOnline = () => void runOnce();
+    const onOffline = () => {
+      if (getSyncConfig() && !cancelled) setStatus('offline');
+    };
     document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('online', onOnline);
+    window.addEventListener('offline', onOffline);
     const flush = () => void repo.flush();
     window.addEventListener('beforeunload', flush);
 
@@ -111,11 +156,18 @@ export function RepositoryProvider({ children }: { children: ReactNode }) {
       registerEventSink(null);
       repo.setOnMutate(null);
       document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('offline', onOffline);
       window.removeEventListener('beforeunload', flush);
       if (pushTimer) clearTimeout(pushTimer);
       void repo.flush();
     };
   }, [repo]);
+
+  const sync = useMemo<SyncState>(
+    () => ({ status, lastSyncedAt, dataVersion, refresh: () => refreshRef.current() }),
+    [status, lastSyncedAt, dataVersion],
+  );
 
   if (error) {
     return (
@@ -134,12 +186,23 @@ export function RepositoryProvider({ children }: { children: ReactNode }) {
     );
   }
 
-  return <RepositoryContext.Provider value={repo}>{children}</RepositoryContext.Provider>;
+  return (
+    <RepositoryContext.Provider value={repo}>
+      <SyncContext.Provider value={sync}>{children}</SyncContext.Provider>
+    </RepositoryContext.Provider>
+  );
 }
 
 /** Access the initialised Repository. Throws if used outside the provider. */
 export function useRepository(): Repository {
   const ctx = useContext(RepositoryContext);
   if (!ctx) throw new Error('useRepository must be used within a RepositoryProvider');
+  return ctx;
+}
+
+/** Access cloud-sync status (for the indicator + data-freshness on screens). */
+export function useSync(): SyncState {
+  const ctx = useContext(SyncContext);
+  if (!ctx) throw new Error('useSync must be used within a RepositoryProvider');
   return ctx;
 }

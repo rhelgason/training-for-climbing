@@ -14,7 +14,7 @@ import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { Screen } from '@/components/Screen';
 import { PageHeader } from '@/components/PageHeader';
-import { useRepository } from '@/lib/db/RepositoryProvider';
+import { useRepository, useSync } from '@/lib/db/RepositoryProvider';
 
 function deltaText(delta: number | null): string {
   if (delta === null || delta === 0) return '';
@@ -50,6 +50,7 @@ function ResultLine({
 
 export default function FitnessScreen() {
   const repo = useRepository();
+  const { dataVersion } = useSync();
   const [benchmarks, setBenchmarks] = useState<BenchmarkRecord[] | null>(null);
 
   useEffect(() => {
@@ -60,7 +61,7 @@ export default function FitnessScreen() {
     return () => {
       on = false;
     };
-  }, [repo]);
+  }, [repo, dataVersion]);
 
   if (benchmarks === null) {
     return (

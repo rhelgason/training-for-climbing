@@ -6,7 +6,7 @@ import { effectiveProfile, now, reassessDue } from '@tfc/core';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { Screen } from '@/components/Screen';
-import { useRepository } from '@/lib/db/RepositoryProvider';
+import { useRepository, useSync } from '@/lib/db/RepositoryProvider';
 
 interface LoadState {
   count: number;
@@ -16,6 +16,7 @@ interface LoadState {
 
 export default function AssessHome() {
   const repo = useRepository();
+  const { dataVersion } = useSync();
   const [state, setState] = useState<LoadState | null>(null);
 
   useEffect(() => {
@@ -28,7 +29,7 @@ export default function AssessHome() {
     return () => {
       active = false;
     };
-  }, [repo]);
+  }, [repo, dataVersion]);
 
   const count = state?.count ?? null;
   const due = state?.due ?? false;

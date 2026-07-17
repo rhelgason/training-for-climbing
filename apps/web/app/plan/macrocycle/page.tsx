@@ -13,7 +13,7 @@ import {
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { Screen } from '@/components/Screen';
-import { useRepository } from '@/lib/db/RepositoryProvider';
+import { useRepository, useSync } from '@/lib/db/RepositoryProvider';
 
 interface LoadState {
   periods: MacrocyclePeriodRecord[];
@@ -22,6 +22,7 @@ interface LoadState {
 
 export default function MacrocycleScreen() {
   const repo = useRepository();
+  const { dataVersion } = useSync();
   const [state, setState] = useState<LoadState | null>(null);
 
   useEffect(() => {
@@ -34,7 +35,7 @@ export default function MacrocycleScreen() {
     return () => {
       on = false;
     };
-  }, [repo]);
+  }, [repo, dataVersion]);
 
   if (state === null) return <Screen />;
   const { periods, trainingDates: dates } = state;
