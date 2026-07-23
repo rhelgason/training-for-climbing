@@ -28,7 +28,7 @@ function renderForm(repo: InMemoryRepository, navigation: Partial<Nav>) {
 }
 
 describe('FitnessFormScreen', () => {
-  it('saves only the tests that were filled in, including a bilateral test', async () => {
+  it('saves only the tests that were filled in', async () => {
     const repo = new InMemoryRepository();
     const goBack = jest.fn();
     const view = await renderForm(repo, { goBack });
@@ -37,8 +37,7 @@ describe('FitnessFormScreen', () => {
 
     await act(async () => {
       fireEvent.changeText(view.getByTestId('fitness-max-pullups'), '12');
-      fireEvent.changeText(view.getByTestId('fitness-one-arm-lockoff-left'), '5');
-      fireEvent.changeText(view.getByTestId('fitness-one-arm-lockoff-right'), '7');
+      fireEvent.changeText(view.getByTestId('fitness-finger-strength-hang'), '0.3');
     });
 
     await act(async () => {
@@ -47,10 +46,9 @@ describe('FitnessFormScreen', () => {
 
     await waitFor(() => expect(goBack).toHaveBeenCalled());
     const saved = await repo.listBenchmarks();
-    // max-pullups (1) + one-arm-lockoff left/right (2) = 3 records, nothing else.
-    expect(saved).toHaveLength(3);
+    // max-pullups (1) + finger-strength-hang (1) = 2 records, nothing else.
+    expect(saved).toHaveLength(2);
     expect(saved.find((b) => b.testId === 'max-pullups')?.value).toBe(12);
-    expect(saved.find((b) => b.side === 'left')?.value).toBe(5);
-    expect(saved.find((b) => b.side === 'right')?.value).toBe(7);
+    expect(saved.find((b) => b.testId === 'finger-strength-hang')?.value).toBe(0.3);
   });
 });

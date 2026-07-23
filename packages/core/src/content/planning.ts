@@ -1,6 +1,6 @@
 /**
  * Planning content — Eric J. Hörst, *Training for Climbing* (3rd ed.).
- * Goal-setting (Chapter 2) and program design / periodization (Chapter 8).
+ * Goal-setting (Chapter 2) and program design / periodization (Chapter 10).
  */
 
 // --- Goals (Chapter 2) ---
@@ -76,18 +76,24 @@ export const GOAL_DEADLINE_OPTIONS: Record<GoalHorizon, GoalDeadlineOption[]> = 
 
 export type GoalStatus = 'active' | 'done' | 'archived';
 
-// --- Program design / periodization (Chapter 8) ---
+// --- Program design / periodization (Chapter 10) ---
 
-/** Ability tiers drive how training time is split (technique/mental vs. conditioning). */
+/**
+ * Ability tiers drive how training time is split three ways, per the book's
+ * time-allocation figures (Figs 10.5–10.7): actual climbing vs. climbing-specific
+ * strength training vs. general conditioning. The three percentages sum to 100.
+ */
 export type AbilityTier = 'beginner' | 'intermediate' | 'elite';
 
 export interface AbilityTierInfo {
   id: AbilityTier;
   label: string;
-  /** Suggested % of training time on technique, tactics, and the mental game. */
-  techniqueMentalPct: number;
-  /** Suggested % of training time on general + sport-specific conditioning. */
-  conditioningPct: number;
+  /** Suggested % of time spent actually climbing (skill, tactics, mileage). */
+  climbingPct: number;
+  /** Suggested % of time on climbing-specific strength (fingers, pull, power). */
+  specificStrengthPct: number;
+  /** Suggested % of time on general conditioning (mobility, core, antagonist, aerobic). */
+  generalConditioningPct: number;
   guidance: string;
 }
 
@@ -95,26 +101,29 @@ export const ABILITY_TIERS: AbilityTierInfo[] = [
   {
     id: 'beginner',
     label: 'Beginner',
-    techniqueMentalPct: 70,
-    conditioningPct: 30,
+    climbingPct: 75,
+    specificStrengthPct: 5,
+    generalConditioningPct: 20,
     guidance:
-      'Most gains come from climbing skill and the mental game. Spend the bulk of your time learning movement; keep conditioning light.',
+      'Almost all gains come from climbing skill and the mental game. Spend the bulk of your time learning movement, with only light climbing-specific strength work.',
   },
   {
     id: 'intermediate',
     label: 'Intermediate',
-    techniqueMentalPct: 70,
-    conditioningPct: 30,
+    climbingPct: 60,
+    specificStrengthPct: 30,
+    generalConditioningPct: 10,
     guidance:
-      'Technique and tactics still dominate, but begin layering in more structured strength and endurance work.',
+      'Actual climbing still dominates, but climbing-specific strength (fingers, pull, power) now earns a real share of your time.',
   },
   {
     id: 'elite',
     label: 'Elite',
-    techniqueMentalPct: 40,
-    conditioningPct: 60,
+    climbingPct: 50,
+    specificStrengthPct: 40,
+    generalConditioningPct: 10,
     guidance:
-      'With highly honed skills, more time is well spent maximizing strength, power, and anaerobic endurance.',
+      'With highly honed skills, split your time roughly evenly between climbing and maximizing sport-specific strength, power, and anaerobic endurance.',
   },
 ];
 
@@ -176,7 +185,7 @@ export const TRAINING_HIERARCHY: HierarchyArea[] = [
   },
 ];
 
-/** Rest guidance from the microcycle discussion (Chapter 8). */
+/** Rest guidance from the microcycle discussion (Chapter 10). */
 export const REST_GUIDANCE = {
   strengthPowerSkill:
     'Rest 3+ minutes between sets/climbs when training skill, max strength, or power — quality over fatigue.',

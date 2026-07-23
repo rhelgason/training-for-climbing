@@ -61,7 +61,7 @@ describe('DashboardScreen', () => {
 
     const view = await renderScreen(repo);
     await waitFor(() => expect(view.getByText('Fitness benchmarks')).toBeTruthy());
-    expect(view.getByText('Max pull-ups')).toBeTruthy();
+    expect(view.getByText('Strength-endurance — max pull-ups')).toBeTruthy();
   });
 
   it('surfaces the reassessment nudge once the cadence has elapsed', async () => {

@@ -36,11 +36,16 @@ export function tierInfo(tier: AbilityTier): AbilityTierInfo {
   return info;
 }
 
-/** Recommended split of training time for an ability tier. */
+/** Recommended three-way split of training time for an ability tier. */
 export function focusSplit(tier: AbilityTier): {
-  techniqueMentalPct: number;
-  conditioningPct: number;
+  climbingPct: number;
+  specificStrengthPct: number;
+  generalConditioningPct: number;
 } {
   const info = tierInfo(tier);
-  return { techniqueMentalPct: info.techniqueMentalPct, conditioningPct: info.conditioningPct };
+  return {
+    climbingPct: info.climbingPct,
+    specificStrengthPct: info.specificStrengthPct,
+    generalConditioningPct: info.generalConditioningPct,
+  };
 }

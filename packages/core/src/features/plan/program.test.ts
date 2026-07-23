@@ -27,13 +27,16 @@ describe('restGuidanceFor', () => {
 });
 
 describe('focusSplit / tierInfo', () => {
-  it('returns the tier split and the splits sum to 100', () => {
+  it('returns the tier split and the three parts sum to 100', () => {
     for (const tier of ['beginner', 'intermediate', 'elite'] as const) {
       const split = focusSplit(tier);
-      expect(split.techniqueMentalPct + split.conditioningPct).toBe(100);
+      expect(split.climbingPct + split.specificStrengthPct + split.generalConditioningPct).toBe(
+        100,
+      );
     }
-    expect(focusSplit('beginner').techniqueMentalPct).toBe(70);
-    expect(focusSplit('elite').conditioningPct).toBe(60);
+    expect(focusSplit('beginner').climbingPct).toBe(75);
+    expect(focusSplit('intermediate').specificStrengthPct).toBe(30);
+    expect(focusSplit('elite').specificStrengthPct).toBe(40);
   });
 
   it('exposes tier guidance', () => {

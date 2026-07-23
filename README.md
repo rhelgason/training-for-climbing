@@ -114,9 +114,9 @@ engine (`src/features/sync/`) is backend-agnostic and unit-tested with an in-mem
   free at this scale (default **Gemini 2.5 Flash** free tier), cached for offline display, and
   **falls back to the deterministic baseline** whenever it's off, offline, or rate-limited. See
   [`server/README.md`](server/README.md).
-- **Phase 4 — Track (done):** the **Fitness Evaluation** (Appendix D — 10 benchmarks with
-  per-test trend and an annual-retest reminder) and the **Macrocycle planner** (Appendix B —
-  annual training blocks with training days pulled from your journal + climbs).
+- **Phase 4 — Track (done):** the **Fitness self-tests** (Chapters 8 & 9 — 9 finger and
+  pull-muscle benchmarks with per-test trend and a retest reminder) and the **Macrocycle planner**
+  (Appendix B — annual training blocks with training days pulled from your journal + climbs).
 - **Progress tab (done):** log ascents (indoor/outdoor, boulder/lead/top-rope, grade, outcome)
   and a dashboard — personal bests, send pyramids, send/onsight rates, 30-day volume, the triad
   trend, **weekly training consistency**, **fitness-benchmark trends**, and a **reassessment nudge**
