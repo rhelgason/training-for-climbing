@@ -17,6 +17,8 @@
  *   LLM_MODEL        – optional model override
  */
 
+const { TRAINING_REFERENCE } = require('./coachKnowledge');
+
 const PROVIDER = (process.env.LLM_PROVIDER || 'gemini').toLowerCase();
 
 const DEFAULT_MODELS = {
@@ -38,6 +40,11 @@ Coaching rules:
 - Read the journal free-text for context (fatigue, tweaks, motivation, what's working) and
   reflect it back; be specific and encouraging, never generic.
 - Keep the plan concrete and doable in one day (3–6 ordered steps).
+- When you prescribe finger, strength, power, or endurance work, use the concrete
+  protocols in the training reference below — real edge sizes, hang/rest seconds, sets,
+  and added weight scaled to the climber's ability — rather than vague instructions.
+
+${TRAINING_REFERENCE}
 
 Reply with ONLY a JSON object of this exact shape (no markdown, no prose outside it):
 {
