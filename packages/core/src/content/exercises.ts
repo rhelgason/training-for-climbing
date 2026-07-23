@@ -1,11 +1,64 @@
 /**
- * Exercise library — Eric J. Hörst, *Training for Climbing*, Chapters 6 (general
- * conditioning) and 7 (climbing-specific exercises). Names follow the book; the
- * brief descriptions are paraphrased.
+ * Exercise library — Eric J. Hörst, *Training for Climbing* (3rd ed., 2016).
+ * Draws on the four physical-training chapters:
+ *   • Ch 6 — Mobility, Stability, Antagonist training
+ *   • Ch 7 — Core, Legs, and Aerobic training
+ *   • Ch 8 — Finger training (strength & endurance)
+ *   • Ch 9 — Pull-muscle and power training
+ * Names follow the book; the brief descriptions are paraphrased.
  */
 import type { Exercise } from './types';
 
 export const EXERCISES: Exercise[] = [
+  // --- Mobility & self-myofascial release (Ch 6) ---
+  {
+    id: 'foam-rolling',
+    name: 'Foam rolling (self-myofascial release)',
+    category: 'mobility',
+    triadArea: 'physical',
+    hierarchyAreaId: 'conditioning',
+    description:
+      'Roll the upper back, glutes, hip flexors, and IT band, pausing 15–30 s on trigger points to release tight fascia. A daily habit that aids recovery and mobility.',
+  },
+  {
+    id: 'forearm-self-massage',
+    name: 'Forearm & elbow self-massage',
+    category: 'mobility',
+    triadArea: 'physical',
+    hierarchyAreaId: 'conditioning',
+    description:
+      'Pin-and-stretch the forearm flexors, extensors, and pronators (by hand or with an Armaid/Rubbit) to head off elbow tendinosis. Never press directly on a tendon or the epicondyle.',
+  },
+
+  // --- Stability: rotator cuff & scapula (Ch 6) ---
+  {
+    id: 'rotator-cuff-rotations',
+    name: 'Rotator-cuff internal & external rotation',
+    category: 'stability',
+    triadArea: 'physical',
+    hierarchyAreaId: 'conditioning',
+    description:
+      'Light dumbbell internal and external rotations (20–25 reps, 2 sets each) to balance and protect the shoulder. External load is roughly half the internal load.',
+  },
+  {
+    id: 'scapular-t-y',
+    name: 'Scapular “T” and “Y” raises',
+    category: 'stability',
+    triadArea: 'physical',
+    hierarchyAreaId: 'conditioning',
+    description:
+      'Prone or TRX raises that retract (T) and depress/upward-rotate (Y) the scapula, training the mid and lower trapezius and rhomboids for a stable pulling base.',
+  },
+  {
+    id: 'scapular-pushups-pullups',
+    name: 'Scapular push-ups & pull-ups',
+    category: 'stability',
+    triadArea: 'physical',
+    hierarchyAreaId: 'conditioning',
+    description:
+      'Protraction (scapular push-up, serratus anterior) and depression/retraction (scapular pull-up) drills that build shoulder-girdle control for hard pulling.',
+  },
+
   // --- Finger & forearm (max finger strength) ---
   {
     id: 'bouldering',
@@ -288,6 +341,73 @@ export const EXERCISES: Exercise[] = [
     triadArea: 'physical',
     hierarchyAreaId: 'conditioning',
     description: 'Triceps and chest pressing to round out antagonist conditioning.',
+  },
+
+  // --- Legs & posterior chain (Ch 7) ---
+  {
+    id: 'deadlift',
+    name: 'Barbell deadlift',
+    category: 'legs',
+    triadArea: 'physical',
+    hierarchyAreaId: 'conditioning',
+    description:
+      'Low-rep, heavy posterior-chain strength (warm-up set of 6, then 5/4/3) trained for neural strength without bulk. Twice a week at most; wear a belt near your max.',
+  },
+  {
+    id: 'sumo-deadlift',
+    name: 'Sumo deadlift',
+    category: 'legs',
+    triadArea: 'physical',
+    hierarchyAreaId: 'conditioning',
+    description:
+      'Wide-stance dumbbell/kettlebell deadlift (2 × 15) for hips, glutes, and hamstrings — a climbing-friendly way to load the posterior chain.',
+  },
+  {
+    id: 'barbell-squat',
+    name: 'Barbell squat',
+    category: 'legs',
+    triadArea: 'physical',
+    hierarchyAreaId: 'conditioning',
+    description:
+      'Low-rep squats (2 × 5–8, never more) for leg drive on high steps and slabs. Start light and build toward body weight over a year or two; avoid hypertrophy.',
+  },
+  {
+    id: 'dumbbell-snatch',
+    name: 'One-arm dumbbell snatch',
+    category: 'legs',
+    triadArea: 'physical',
+    hierarchyAreaId: 'conditioning',
+    description:
+      'Explosive full-body pull from floor to overhead (5–10 reps) that trains power through the posterior chain and total-body coordination.',
+  },
+
+  // --- Aerobic (Ch 7) ---
+  {
+    id: 'aerobic-base',
+    name: 'Steady-state aerobic training',
+    category: 'aerobic',
+    triadArea: 'physical',
+    hierarchyAreaId: 'stamina',
+    description:
+      'At least 30 minutes of sustained moderate-intensity work (running preferred; also rowing, biking, swimming), several days a week, to build recovery and general stamina.',
+  },
+  {
+    id: 'aerobic-intervals',
+    name: 'Aerobic (threshold) intervals',
+    category: 'aerobic',
+    triadArea: 'physical',
+    hierarchyAreaId: 'stamina',
+    description:
+      'Tempo/threshold intervals — e.g. 1 min hard / 2 min easy for ~20 min, or fast/slow track laps — to raise aerobic power that speeds pump recovery between hard efforts.',
+  },
+  {
+    id: 'arc-traverses',
+    name: 'ARC traverses',
+    category: 'aerobic',
+    triadArea: 'physical',
+    hierarchyAreaId: 'stamina',
+    description:
+      'Long, continuous easy climbing at a low, no-pump intensity (RPE 4–6) for ~30 min to build local aerobic capacity and capillarity in the forearms.',
   },
 
   // --- Flexibility ---

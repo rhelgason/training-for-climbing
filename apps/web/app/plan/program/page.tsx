@@ -60,7 +60,8 @@ export default function ProgramBuilderScreen() {
         <OptionChips options={TIER_OPTIONS} selected={tier} onSelect={onSelectTier} />
         <Card className="mt-4">
           <p className="text-base font-bold text-primary">
-            {info.techniqueMentalPct}% technique &amp; mental · {info.conditioningPct}% conditioning
+            {info.climbingPct}% climbing · {info.specificStrengthPct}% specific strength ·{' '}
+            {info.generalConditioningPct}% general conditioning
           </p>
           <p className="mt-1 text-sm leading-5 text-muted">{info.guidance}</p>
         </Card>

@@ -65,7 +65,8 @@ export function ProgramBuilderScreen() {
       />
       <Card style={styles.tierCard}>
         <Text style={styles.split}>
-          {info.techniqueMentalPct}% technique &amp; mental · {info.conditioningPct}% conditioning
+          {info.climbingPct}% climbing · {info.specificStrengthPct}% specific strength ·{' '}
+          {info.generalConditioningPct}% general conditioning
         </Text>
         <Text style={styles.guidance}>{info.guidance}</Text>
       </Card>

@@ -26,11 +26,14 @@ export interface AssessmentQuestion {
   id: number;
   /** The statement the climber rates. */
   prompt: string;
-  /** Which triad column this question contributes to (book Figure 2.1). */
+  /** Which triad column this question contributes to (book Table 2.1). */
   triad: TriadArea;
 }
 
-/** A single physical benchmark in the Fitness Evaluation (Appendix D). */
+/**
+ * A single physical self-test. The 3rd edition splits these across the finger
+ * self-tests (Chapter 8) and the pull-muscle self-tests (Chapter 9).
+ */
 export interface FitnessTest {
   id: string;
   name: string;
@@ -39,8 +42,8 @@ export interface FitnessTest {
   /** What is recorded (the evaluation metric). */
   metric: string;
   /** Unit of the recorded value, used for input + charts. */
-  unit: 'reps' | 'seconds' | 'ratio' | 'inches' | 'cycles';
-  /** Some tests record left and right separately (e.g. one-arm lock-off). */
+  unit: 'reps' | 'seconds' | 'ratio' | 'inches' | 'lb';
+  /** Some tests record left and right separately (e.g. a one-arm test). */
   bilateral?: boolean;
 }
 
@@ -50,24 +53,32 @@ export interface GlossaryEntry {
   definition: string;
 }
 
-/** Display grouping for exercises (book Chapters 6–7). */
+/** Display grouping for exercises (book Chapters 6–9). */
 export type ExerciseCategory =
+  | 'mobility'
+  | 'flexibility'
+  | 'stability'
   | 'finger-forearm'
   | 'pull'
   | 'power'
   | 'endurance'
+  | 'aerobic'
   | 'core'
-  | 'antagonist'
-  | 'flexibility';
+  | 'legs'
+  | 'antagonist';
 
 export const EXERCISE_CATEGORY_LABELS: Record<ExerciseCategory, string> = {
+  mobility: 'Mobility & self-massage',
+  flexibility: 'Flexibility',
+  stability: 'Stability',
   'finger-forearm': 'Finger & forearm',
   pull: 'Pull muscles',
   power: 'Power',
   endurance: 'Endurance',
+  aerobic: 'Aerobic',
   core: 'Core',
+  legs: 'Legs & posterior chain',
   antagonist: 'Antagonist',
-  flexibility: 'Flexibility',
 };
 
 /** A training exercise from the book's conditioning chapters. */

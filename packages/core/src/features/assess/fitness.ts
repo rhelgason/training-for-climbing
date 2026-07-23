@@ -1,5 +1,5 @@
 /**
- * Pure helpers for the Fitness Evaluation (Appendix D). No I/O — unit-testable.
+ * Pure helpers for the fitness self-tests (Chapters 8 & 9). No I/O — unit-testable.
  * The book says to take the 10-part test annually and compare results over time.
  */
 import type { BenchmarkRecord } from '../../db/types';

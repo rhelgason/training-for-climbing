@@ -11,9 +11,19 @@ export const GLOSSARY: GlossaryEntry[] = [
       'Light movement after hard exercise that speeds recovery by helping clear lactate from the blood.',
   },
   {
+    term: 'Aerobic energy system',
+    definition:
+      'ATP production by oxidizing glycogen, fat, and even lactate; the low-to-moderate-power pathway that dominates efforts beyond ~2 minutes and powers recovery between them.',
+  },
+  {
     term: 'Anaerobic endurance',
     definition:
       'The ability to sustain moderate-to-high intensity effort over time; climbers often call it power endurance.',
+  },
+  {
+    term: 'Anaerobic glycolysis',
+    definition:
+      'ATP production from breaking down glycogen without oxygen; its by-products (mainly hydrogen ions) drive the deep forearm pump and rapid fatigue of sustained hard climbing.',
   },
   {
     term: 'Antagonist',
@@ -50,6 +60,11 @@ export const GLOSSARY: GlossaryEntry[] = [
     term: 'Contact strength',
     definition:
       'Initial grip strength the instant you touch a hold; tied to how fast motor units are recruited.',
+  },
+  {
+    term: 'Creatine phosphate (CP)',
+    definition:
+      'A high-energy molecule stored in muscle that rapidly regenerates ATP for all-out efforts under ~10–12 seconds; it is replenished aerobically during rest.',
   },
   {
     term: 'Crimp grip',
@@ -97,6 +112,11 @@ export const GLOSSARY: GlossaryEntry[] = [
     definition: 'Stored chains of glucose in muscle and liver, used as fuel during exercise.',
   },
   {
+    term: 'Golgi tendon organ',
+    definition:
+      'A tension sensor in the tendon that reflexively inhibits a contraction to protect the muscle; reactive/power training gradually reduces this inhibition.',
+  },
+  {
     term: 'Hangdogging',
     definition: 'Working a route bolt-to-bolt, hanging on the rope to rest and rehearse moves.',
   },
@@ -140,6 +160,11 @@ export const GLOSSARY: GlossaryEntry[] = [
     definition: 'Practicing several different tasks in mixed order; opposite of blocked practice.',
   },
   {
+    term: 'Reactive training',
+    definition:
+      'Plyometric-style training (e.g. campus work) that trains fast, forceful contractions by exploiting the muscle’s stretch-shortening cycle.',
+  },
+  {
     term: 'Redpoint',
     definition: 'Leading a route bottom-to-top in one clean push after practice.',
   },
@@ -159,6 +184,11 @@ export const GLOSSARY: GlossaryEntry[] = [
       'Muscle fibers that contract slowly; used most in moderate-intensity endurance work.',
   },
   {
+    term: 'Stabilizer muscle',
+    definition:
+      'A muscle that steadies a joint so the prime movers can do their work — for climbers, chiefly the rotator cuff and scapular muscles supporting the shoulder.',
+  },
+  {
     term: 'Tabata',
     definition:
       'A brutal interval protocol: 20 s max effort, 10 s rest, repeated up to eight times.',
@@ -167,6 +197,11 @@ export const GLOSSARY: GlossaryEntry[] = [
     term: 'Tendinosis',
     definition:
       'Chronic tendon pain from accumulated micro-injuries that fail to heal — not primarily inflammation.',
+  },
+  {
+    term: 'Trigger point',
+    definition:
+      'A tender knot in muscle or fascia; foam rolling and self-massage help release it and restore mobility.',
   },
   {
     term: 'Variable practice',
