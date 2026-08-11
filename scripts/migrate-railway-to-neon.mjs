@@ -28,8 +28,8 @@ import pg from 'pg';
 const { Client } = pg;
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 
-function required(name) {
-  const value = process.env[name];
+/** Read explicitly rather than by computed key — eslint forbids process.env[name]. */
+function required(name, value) {
   if (!value) {
     console.error(`Missing ${name}. See the usage comment at the top of this file.`);
     process.exit(1);
@@ -43,8 +43,8 @@ function connect(connectionString) {
 }
 
 async function main() {
-  const railwayUrl = required('RAILWAY_DATABASE_URL');
-  const neonUrl = required('NEON_DATABASE_URL');
+  const railwayUrl = required('RAILWAY_DATABASE_URL', process.env.RAILWAY_DATABASE_URL);
+  const neonUrl = required('NEON_DATABASE_URL', process.env.NEON_DATABASE_URL);
 
   const source = connect(railwayUrl);
   const target = connect(neonUrl);
