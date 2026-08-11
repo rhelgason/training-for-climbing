@@ -14,7 +14,10 @@
   },
   "dependencies": {
     "@tfc/core": "*",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.2",
     "next": "^15.1.6",
+    "pg": "^8.13.1",
     "react": "19.1.0",
     "react-dom": "19.1.0"
   },
@@ -23,7 +26,10 @@
     "@testing-library/dom": "^10.4.0",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.1.0",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/jsonwebtoken": "^9.0.7",
     "@types/node": "^20.17.0",
+    "@types/pg": "^8.11.10",
     "@types/react": "~19.1.10",
     "@types/react-dom": "~19.1.0",
     "eslint": "^9.39.4",
