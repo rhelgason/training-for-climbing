@@ -196,7 +196,7 @@ export function AccountScreen() {
             <Text style={styles.label}>Server URL</Text>
             <TextInput
               style={styles.input}
-              placeholder="https://your-app.up.railway.app"
+              placeholder="https://your-app.vercel.app/api"
               placeholderTextColor={colors.textMuted}
               value={url}
               onChangeText={setUrl}
