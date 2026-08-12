@@ -5,6 +5,7 @@ import {
   AuthError,
   HttpRemoteStore,
   deleteAccount,
+  isSessionExpired,
   log,
   login,
   now,
@@ -92,6 +93,14 @@ export function AccountSettings() {
       setSession({ ...session, lastSyncedAt: syncedAt });
       setStatus('Synced');
     } catch (err) {
+      // A rejected token can't be retried into working — drop back to the
+      // sign-in form rather than leaving a dead session in place.
+      if (isSessionExpired(err)) {
+        log.warn('session expired during manual sync; signing out');
+        signOut();
+        window.alert('Your session has expired. Please sign in again.');
+        return;
+      }
       log.error('sync failed', err);
       setStatus('Sync failed');
       window.alert(String((err as Error).message ?? err));

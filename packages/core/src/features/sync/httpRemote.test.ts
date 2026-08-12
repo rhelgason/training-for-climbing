@@ -1,3 +1,4 @@
+import { AuthError, isSessionExpired } from '../auth/authClient';
 import { HttpRemoteStore } from './httpRemote';
 import { emptySnapshot } from './merge';
 
@@ -32,8 +33,41 @@ describe('HttpRemoteStore', () => {
   });
 
   it('throws on a failed download', async () => {
+    mockFetch(() => ({ ok: false, status: 500 }));
+    await expect(new HttpRemoteStore('https://x.app', 't').download()).rejects.toThrow(/500/);
+  });
+
+  // A 401 is special: the token is dead, so retrying can't help. It surfaces as
+  // an AuthError that callers recognise via isSessionExpired and turn into a
+  // re-sign-in prompt rather than a generic "sync failed".
+  it('reports a 401 download as an expired session, not a transient failure', async () => {
     mockFetch(() => ({ ok: false, status: 401 }));
-    await expect(new HttpRemoteStore('https://x.app', 't').download()).rejects.toThrow(/401/);
+
+    const err = await new HttpRemoteStore('https://x.app', 't').download().catch((e) => e);
+
+    expect(err).toBeInstanceOf(AuthError);
+    expect((err as AuthError).status).toBe(401);
+    expect(isSessionExpired(err)).toBe(true);
+    expect((err as Error).message).toMatch(/sign in again/i);
+  });
+
+  it('reports a 401 upload as an expired session too', async () => {
+    mockFetch(() => ({ ok: false, status: 401 }));
+
+    const err = await new HttpRemoteStore('https://x.app', 't')
+      .upload(emptySnapshot())
+      .catch((e) => e);
+
+    expect(isSessionExpired(err)).toBe(true);
+  });
+
+  it('does not mistake other failures for an expired session', async () => {
+    mockFetch(() => ({ ok: false, status: 503 }));
+
+    const err = await new HttpRemoteStore('https://x.app', 't').download().catch((e) => e);
+
+    expect(isSessionExpired(err)).toBe(false);
+    expect(err).not.toBeInstanceOf(AuthError);
   });
 
   it('uploads with PUT, JSON body, and bearer auth', async () => {

@@ -27,6 +27,19 @@ export function SyncIndicator() {
     return <div className={`${base} border-warning/40 bg-warning/10 text-warning`}>⚠ Offline</div>;
   }
 
+  // The session was rejected (expired, or the signing secret was rotated).
+  // Retrying can't help, so point at sign-in instead of offering it.
+  if (status === 'signed-out') {
+    return (
+      <div className={`${base} border-warning/40 bg-warning/10 text-warning`}>
+        Session expired
+        <a href="/more" className="underline underline-offset-2">
+          Sign in
+        </a>
+      </div>
+    );
+  }
+
   // error
   return (
     <div className={`${base} border-danger/40 bg-danger/10 text-danger`}>

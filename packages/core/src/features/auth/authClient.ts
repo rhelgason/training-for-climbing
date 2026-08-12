@@ -19,6 +19,16 @@ export class AuthError extends Error {
   }
 }
 
+/**
+ * True when an error means the stored session token is no longer accepted —
+ * it expired, or the server's signing secret was rotated. Callers should clear
+ * the session and prompt a fresh sign-in rather than showing a generic failure,
+ * since retrying can never succeed.
+ */
+export function isSessionExpired(err: unknown): boolean {
+  return err instanceof AuthError && err.status === 401;
+}
+
 function endpoint(baseUrl: string, path: string): string {
   return `${baseUrl.replace(/\/+$/, '')}${path}`;
 }

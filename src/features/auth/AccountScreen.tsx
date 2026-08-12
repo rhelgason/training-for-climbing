@@ -1,4 +1,12 @@
-import { AuthError, deleteAccount, HttpRemoteStore, login, register, runSync } from '@tfc/core';
+import {
+  AuthError,
+  deleteAccount,
+  HttpRemoteStore,
+  isSessionExpired,
+  login,
+  register,
+  runSync,
+} from '@tfc/core';
 import React, { useEffect, useState } from 'react';
 import { Alert, StyleSheet, Text, TextInput } from 'react-native';
 
@@ -95,6 +103,15 @@ export function AccountScreen() {
       setSession({ ...session, lastSyncedAt: syncedAt });
       setStatus('Synced');
     } catch (err) {
+      // A rejected token can't be retried into working — drop back to the
+      // sign-in form rather than leaving a dead session in place. Local data
+      // is untouched; the app stays fully usable offline.
+      if (isSessionExpired(err)) {
+        log.warn('session expired during sync; signing out');
+        await signOut();
+        Alert.alert('Session expired', 'Please sign in again to resume syncing.');
+        return;
+      }
       log.error('sync failed', err);
       setStatus('Sync failed');
       Alert.alert('Sync failed', String((err as Error).message ?? err));

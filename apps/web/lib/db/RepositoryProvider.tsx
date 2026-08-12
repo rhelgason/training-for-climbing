@@ -11,6 +11,7 @@ import {
 } from 'react';
 import {
   HttpRemoteStore,
+  isSessionExpired,
   log,
   now,
   registerEventSink,
@@ -20,13 +21,13 @@ import {
 } from '@tfc/core';
 import { WebRepository } from './webRepository';
 import { API_BASE } from '../config';
-import { getSession, getSyncConfig, saveSession } from '../auth/session';
+import { clearSession, getSession, getSyncConfig, saveSession } from '../auth/session';
 
 /** Debounce a push after local edits; cap the blocking initial pull. */
 const PUSH_DEBOUNCE_MS = 1500;
 const INITIAL_SYNC_TIMEOUT_MS = 6000;
 
-export type SyncStatus = 'idle' | 'syncing' | 'error' | 'offline';
+export type SyncStatus = 'idle' | 'syncing' | 'error' | 'offline' | 'signed-out';
 
 interface SyncState {
   status: SyncStatus;
@@ -96,8 +97,21 @@ export function RepositoryProvider({ children }: { children: ReactNode }) {
           setStatus('idle');
         }
       } catch (err) {
-        log.error('auto-sync failed', err);
-        if (!cancelled) setStatus('error');
+        // An expired/invalidated token can't be retried into working, so drop
+        // the session and ask for a fresh sign-in instead of looping on errors.
+        // Local data is untouched — the app stays fully usable offline.
+        if (isSessionExpired(err)) {
+          log.warn('session expired during sync; signing out');
+          clearSession();
+          trackEvent('signed_out');
+          if (!cancelled) {
+            setLastSyncedAt(null);
+            setStatus('signed-out');
+          }
+        } else {
+          log.error('auto-sync failed', err);
+          if (!cancelled) setStatus('error');
+        }
       } finally {
         syncing = false;
         if (dirtyDuringSync && !cancelled) {
