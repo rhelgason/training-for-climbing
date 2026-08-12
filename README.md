@@ -49,7 +49,7 @@ src/
     coach/      # AI coach: context builder + client + cache + fallback (tested)
     progress/   # climb logging + dashboard (trends, consistency, benchmarks) (tested)
     auth/       # accounts: email/password sign-in, session, Account screen
-    sync/       # backend-agnostic snapshot sync engine + HTTP (Railway) remote
+    sync/       # backend-agnostic snapshot sync engine + HTTP remote
     review/     # "More": settings/profile entry, glossary, account
     settings/   # Profile/Settings singleton (ability tier, AI toggle, cadence)
   db/           # Repository interface + InMemory + SQLite implementations
@@ -75,13 +75,13 @@ src/
 The app is local-first and works fully offline. Sign-in is opt-in: each user creates an
 **account** (email + password) and gets their **own private data**, so friends can share one
 server without seeing each other's training. Sync uses a **snapshot + last-write-wins** model
-(merged per record by `updatedAt`; deletes propagate via tombstones), talking to your own
-Express + Postgres server in [`server/`](server/) deployed to **Railway**.
+(merged per record by `updatedAt`; deletes propagate via tombstones), talking to the **web
+app's own API routes** on Vercel, backed by Neon Postgres.
 
-1. Deploy the server to Railway (Postgres plugin + a service rooted at `server/`, with a
-   `JWT_SECRET` secret) — see [`server/README.md`](server/README.md). You get an HTTPS URL.
-2. Set `EXPO_PUBLIC_SYNC_URL` to that URL (copy `.env.example` to `.env`) so it's baked into the
-   build and nobody types it.
+1. Deploy the web app to Vercel with `DATABASE_URL`, `JWT_SECRET`, and (optionally)
+   `GEMINI_API_KEY` set — see [`apps/web/README.md`](apps/web/README.md). You get an HTTPS URL.
+2. Set `EXPO_PUBLIC_SYNC_URL` to that URL **plus `/api`** (copy `.env.example` to `.env`) so it's
+   baked into the build and nobody types it.
 3. In the app: **More → Account**, create an account (or sign in) with an email + password — the
    first sync runs automatically, and the AI coach (if enabled) authenticates as the same user.
 
@@ -123,7 +123,7 @@ engine (`src/features/sync/`) is backend-agnostic and unit-tested with an in-mem
   (cadence from Profile).
 - **Profile/Settings (done):** a singleton profile — ability tier, default discipline, reassess
   cadence, and the AI-coach toggle — under the **More** tab.
-- **Accounts & cloud sync (done):** optional email/password accounts on your own Railway server,
-  each with private snapshot sync across devices (see above).
+- **Accounts & cloud sync (done):** optional email/password accounts on your own Vercel
+  deployment, each with private snapshot sync across devices (see above).
 
 See the plan file for the full phased roadmap.
