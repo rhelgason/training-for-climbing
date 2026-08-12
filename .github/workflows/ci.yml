@@ -32,8 +32,6 @@ jobs:
         run: npm run lint
       - name: Format check
         run: npm run format:check
-      - name: Server syntax check
-        run: node --check server/index.js && node --check server/llm.js && node --check server/auth.js
       - name: Test with coverage (mobile)
         run: npm run test:coverage -- --ci --maxWorkers=2
       - name: Upload coverage artifact

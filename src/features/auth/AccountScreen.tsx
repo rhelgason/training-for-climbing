@@ -271,8 +271,7 @@ export function AccountScreen() {
       />
 
       <Text style={styles.footnote}>
-        Your password is sent over HTTPS and stored only as a secure hash on your server. See
-        server/README for one-time setup.
+        Your password is sent over HTTPS and stored only as a secure hash on your server.
       </Text>
     </Screen>
   );

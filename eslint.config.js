@@ -14,7 +14,6 @@ module.exports = [
       'coverage/**',
       'ios/**',
       'android/**',
-      'server/**',
       // Workspaces lint themselves with their own configs.
       'packages/**',
       'apps/**',

@@ -86,8 +86,10 @@ app's own API routes** on Vercel, backed by Neon Postgres.
    first sync runs automatically, and the AI coach (if enabled) authenticates as the same user.
 
 Auth is a JWT session token; passwords are stored only as a bcrypt hash server-side. The merge
-engine (`src/features/sync/`) is backend-agnostic and unit-tested with an in-memory remote;
-`HttpRemoteStore` and the auth client are unit-tested with a mocked `fetch`.
+engine (`packages/core/src/features/sync/`) is backend-agnostic and unit-tested with an in-memory
+remote; `HttpRemoteStore` and the auth client are unit-tested with a mocked `fetch`. A rejected
+token (expired, or the signing secret rotated) clears the session and prompts a fresh sign-in
+rather than retrying forever.
 
 ## Status
 
@@ -113,7 +115,7 @@ engine (`src/features/sync/`) is backend-agnostic and unit-tested with an in-mem
   last ~10 journal entries (structured `{ focusArea, headline, plan, rationale, watchOuts }`). It's
   free at this scale (default **Gemini 2.5 Flash** free tier), cached for offline display, and
   **falls back to the deterministic baseline** whenever it's off, offline, or rate-limited. See
-  [`server/README.md`](server/README.md).
+  [`apps/web/README.md`](apps/web/README.md).
 - **Phase 4 — Track (done):** the **Fitness self-tests** (Chapters 8 & 9 — 9 finger and
   pull-muscle benchmarks with per-test trend and a retest reminder) and the **Macrocycle planner**
   (Appendix B — annual training blocks with training days pulled from your journal + climbs).
