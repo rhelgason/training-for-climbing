@@ -32,6 +32,19 @@ describe('buildDailyRecommendation', () => {
     expect(rec.streak).toBe(3);
   });
 
+  it('recommends rest when the 3 days were yesterday and before, today unlogged', () => {
+    // The plan is read before today happens, so a run that ends yesterday is
+    // the one that matters. Counting only from today would advise rest solely
+    // after the climber had already trained.
+    const rec = buildDailyRecommendation(input({ trainingDates: trainDates(-1, -2, -3) }));
+    expect(rec.kind).toBe('rest');
+  });
+
+  it('does not recommend rest when the run was broken by a day off', () => {
+    const rec = buildDailyRecommendation(input({ trainingDates: trainDates(-1, -2, -4) }));
+    expect(rec.kind).toBe('train');
+  });
+
   it('prompts an assessment when none has been taken', () => {
     const rec = buildDailyRecommendation(input({ weakestArea: null }));
     expect(rec.kind).toBe('assess');

@@ -201,6 +201,40 @@ export function consecutiveHardDays(history: LoadEvent[], nowMs: number): number
 }
 
 /**
+ * The run of hard days the climber arrives at today *with* — the question a
+ * plan actually has to answer.
+ *
+ * `consecutiveHardDays` counts from today, so before today is logged it always
+ * returns 0. That makes it useless for deciding whether to train: it can only
+ * tell you to rest after you already trained. This counts the run ending
+ * yesterday instead, and only includes today if today is already on the books
+ * (someone logging mid-session and reopening the app).
+ */
+export function priorHardDayRun(history: LoadEvent[], nowMs: number): number {
+  const hardDays = new Set(history.filter(isHardDay).map((e) => e.day));
+  const today = dayIndex(nowMs);
+  let day = hardDays.has(today) ? today : today - 1;
+  let count = 0;
+  while (hardDays.has(day)) {
+    count += 1;
+    day -= 1;
+  }
+  return count;
+}
+
+/**
+ * Whole days since the last day with any logged load, or null if there is none.
+ * Calendar-based, so a week away from the app reads as a week of rest rather
+ * than as "no data".
+ */
+export function daysSinceAnyLoad(history: LoadEvent[], nowMs: number): number | null {
+  const today = dayIndex(nowMs);
+  const past = history.filter((e) => e.day <= today && !e.focuses.every((f) => f === 'rest'));
+  if (past.length === 0) return null;
+  return today - Math.max(...past.map((e) => e.day));
+}
+
+/**
  * The last `count` logged days, newest first, with everything the coach needs to
  * reason about "what did I just do to myself". This is the payload that makes
  * yesterday's session visibly shape today's plan.
