@@ -6,13 +6,37 @@ const config: SyncConfig = { url: 'https://coach.example.com/', token: 'secret' 
 
 const context: CoachContext = {
   generatedAt: 1,
-  profile: { abilityTier: 'intermediate' },
+  profile: {
+    abilityTier: 'intermediate',
+    styleFocus: 'all-round',
+    daysPerWeek: 3,
+    sessionLength: 'standard',
+    equipment: ['boulder-wall'],
+  },
+  today: {
+    environment: 'Indoor',
+    equipment: ['boulder-wall'],
+    sessionLength: 'standard',
+    readiness: 'ok',
+  },
+  schedule: {
+    restDay: false,
+    suggestedFocus: 'skill',
+    allowed: [{ focus: 'skill', label: 'Skill & movement', reason: 'Due', usedThisWeek: 0 }],
+    blocked: [],
+    trainingDaysThisWeek: 0,
+    plannedDaysPerWeek: 3,
+    hardDaysInARow: 0,
+    recentLoadSummary: 'No training logged in the last few days.',
+  },
+  recentDays: [],
   assessment: null,
   fitness: [],
   climbing: { sessionsLast30Days: 0, sendRate: 0, hardestSends: [] },
   goals: [],
   journals: [],
   training: { currentStreak: 0, daysLast14: 0 },
+  baselinePlan: ['Warm up'],
 };
 
 const suggestion: CoachSuggestion = {
