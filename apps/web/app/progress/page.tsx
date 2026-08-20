@@ -8,6 +8,7 @@ import {
   OUTCOME_LABELS,
   TRIAD_LABELS,
   FITNESS_TESTS,
+  TRACKABLE_PROTOCOLS,
   effectiveProfile,
   now,
   trainingDates,
@@ -103,14 +104,21 @@ export default function DashboardScreen() {
   const trainingByWeek = weeklyCounts(trainDates, nowMs, 8);
   const maxWeekly = Math.max(...trainingByWeek.map((w) => w.count), 1);
 
-  // Fitness tests with at least one recorded benchmark (non-bilateral side).
-  const benchmarkTrends = FITNESS_TESTS.map((t) => ({
-    test: t,
-    trend: trendForTest(benchmarks, t.id),
-    history: benchmarks
-      .filter((b) => b.testId === t.id && b.side === undefined)
-      .sort((a, b) => a.date - b.date),
-  })).filter((x) => x.trend !== null);
+  // Anything with a recorded benchmark, from either catalog: the self-tests
+  // and the protocol numbers logged inline from the daily plan.
+  const trackable: { id: string; name: string; unit: string }[] = [
+    ...FITNESS_TESTS.map((t) => ({ id: t.id, name: t.name, unit: t.unit as string })),
+    ...TRACKABLE_PROTOCOLS.map((p) => ({ id: p.id, name: p.name, unit: p.unit as string })),
+  ];
+  const benchmarkTrends = trackable
+    .map((test) => ({
+      test,
+      trend: trendForTest(benchmarks, test.id),
+      history: benchmarks
+        .filter((b) => b.testId === test.id && b.side === undefined)
+        .sort((a, b) => a.date - b.date),
+    }))
+    .filter((x) => x.trend !== null);
 
   const bests = DISCIPLINES.map((d) => ({ discipline: d, climb: hardestSend(climbs, d) })).filter(
     (b): b is { discipline: ClimbDiscipline; climb: ClimbRecord } => b.climb !== null,

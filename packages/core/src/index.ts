@@ -18,6 +18,7 @@ export * from './content/glossary';
 export * from './content/journal';
 export * from './content/planning';
 export * from './content/prescriptions';
+export * from './content/protocols';
 export * from './content/profile';
 export * from './content/selfAssessment';
 export * from './content/trainingContext';
