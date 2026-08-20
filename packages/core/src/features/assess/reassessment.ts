@@ -1,3 +1,4 @@
+import { dayIndex } from '../../lib/day';
 /**
  * Self-assessment reassessment nudge — the book's "Cycle of Improvement": reassess
  * periodically so training keeps targeting the right weakness. Cadence comes from
@@ -6,8 +7,6 @@
  */
 import type { AssessmentRecord } from '../../db/types';
 
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
-
 /** Whole days since the most recent self-assessment, or null if none taken. */
 export function daysSinceLastAssessment(
   assessments: AssessmentRecord[],
@@ -15,7 +14,7 @@ export function daysSinceLastAssessment(
 ): number | null {
   if (assessments.length === 0) return null;
   const latest = Math.max(...assessments.map((a) => a.createdAt));
-  return Math.floor(nowMs / MS_PER_DAY) - Math.floor(latest / MS_PER_DAY);
+  return dayIndex(nowMs) - dayIndex(latest);
 }
 
 /**

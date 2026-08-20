@@ -30,13 +30,7 @@ import type {
   UsageEventRecord,
 } from './types';
 import { PROFILE_DEFAULTS, PROFILE_ID } from '../content/profile';
-
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
-
-/** Same calendar day? Inlined so the db layer stays free of feature imports. */
-function sameDay(a: number, b: number): boolean {
-  return Math.floor(a / MS_PER_DAY) === Math.floor(b / MS_PER_DAY);
-}
+import { sameDay } from '../lib/day';
 
 /**
  * In-memory Repository. Used in unit tests and as a safe fallback (e.g. web,
@@ -295,7 +289,7 @@ export class InMemoryRepository implements Repository {
   async saveDailyContext(input: NewDailyContext): Promise<DailyContextRecord> {
     const ts = Date.now();
     // One row per calendar day: re-saving today edits rather than duplicates.
-    const existing = this.dailyContexts.find((c) => sameDay(c.date, input.date));
+    const existing = this.newestOnDay(input.date);
     if (existing) {
       Object.assign(existing, input, {
         equipment: [...input.equipment],
@@ -324,7 +318,20 @@ export class InMemoryRepository implements Repository {
   }
 
   async getDailyContext(dateMs: number): Promise<DailyContextRecord | null> {
-    return this.dailyContexts.find((c) => sameDay(c.date, dateMs)) ?? null;
+    return this.newestOnDay(dateMs);
+  }
+
+  /**
+   * The most recently edited context for a day.
+   *
+   * Two devices can each create a row for the same day before syncing, and the
+   * merge unions by id — so "one row per day" is only true locally. Picking the
+   * newest keeps the answer deterministic and matches last-write-wins.
+   */
+  private newestOnDay(dateMs: number): DailyContextRecord | null {
+    const onDay = this.dailyContexts.filter((c) => sameDay(c.date, dateMs));
+    if (onDay.length === 0) return null;
+    return onDay.reduce((newest, c) => (c.updatedAt > newest.updatedAt ? c : newest));
   }
 
   async updateDailyContext(

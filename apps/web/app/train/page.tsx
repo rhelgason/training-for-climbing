@@ -141,10 +141,15 @@ export default function TrainHome() {
         });
         journalId = saved.id;
       }
-      // Record each protocol number the climber actually did. Skipped steps
-      // are excluded — an untouched block is not a result.
+      // Record each protocol number the climber actually did. Two exclusions,
+      // both about not inventing results: a step they unticked wasn't done, and
+      // a step that was never on screen (because the AI rewrote the session)
+      // was never confirmed — saving its seeded value would silently duplicate
+      // last session's number as if it happened again.
+      const shown = new Set(coach.suggestion ? coach.suggestion.plan : plan.plan);
       for (const step of plan.steps) {
-        if (!step.protocolId || skippedSteps.includes(step.text)) continue;
+        if (!step.protocolId) continue;
+        if (!shown.has(step.text) || skippedSteps.includes(step.text)) continue;
         const value = metrics[step.protocolId];
         if (typeof value !== 'number') continue;
         await repo.saveBenchmark({ testId: step.protocolId, value, date: now() });

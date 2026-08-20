@@ -41,6 +41,8 @@ import {
   type SessionLength,
   type Snapshot,
   type StyleFocus,
+  dayStartMs,
+  nextDayStartMs,
   type SyncTable,
   type TombstoneRecord,
   type TriadArea,
@@ -52,8 +54,6 @@ import { log } from '../lib/logger';
 import { newId } from '../lib/ids';
 
 const DB_NAME = 'training-for-climbing.db';
-
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 /** Map a logical sync table to its physical SQLite table name. */
 const SQL_TABLE: Record<SyncTable, string> = {
@@ -839,11 +839,12 @@ export class SqliteRepository implements Repository {
   }
 
   async getDailyContext(dateMs: number): Promise<DailyContextRecord | null> {
-    const start = Math.floor(dateMs / MS_PER_DAY) * MS_PER_DAY;
+    // Local-day bounds, not UTC — see lib/day. Ordered by updated_at so a
+    // duplicate arriving from another device doesn't shadow the newer answer.
     const row = await this.getDb().getFirstAsync<DailyContextRow>(
-      `SELECT * FROM daily_contexts WHERE date >= ? AND date < ? ORDER BY date DESC LIMIT 1`,
-      start,
-      start + MS_PER_DAY,
+      `SELECT * FROM daily_contexts WHERE date >= ? AND date < ? ORDER BY updated_at DESC LIMIT 1`,
+      dayStartMs(dateMs),
+      nextDayStartMs(dateMs),
     );
     return row ? rowToDailyContext(row) : null;
   }
@@ -1151,7 +1152,16 @@ export class SqliteRepository implements Repository {
       }
       // Apply deletions, then persist the tombstones.
       for (const t of snapshot.tombstones) {
-        await db.runAsync(`DELETE FROM ${SQL_TABLE[t.table]} WHERE id = ?`, t.id);
+        // A newer client can send a tombstone for a table this build doesn't
+        // know. Interpolating `undefined` into the SQL would throw and abort
+        // the whole transaction, losing an otherwise good sync — so skip the
+        // delete but still record the tombstone so it isn't dropped on upload.
+        const table = SQL_TABLE[t.table];
+        if (table) {
+          await db.runAsync(`DELETE FROM ${table} WHERE id = ?`, t.id);
+        } else {
+          log.warn(`applySnapshot: unknown tombstone table "${t.table}"; skipping delete`);
+        }
         await db.runAsync(
           `INSERT OR REPLACE INTO tombstones (table_name, id, deleted_at)
            VALUES (?, ?, MAX(?, COALESCE((SELECT deleted_at FROM tombstones WHERE table_name = ? AND id = ?), 0)))`,

@@ -41,13 +41,21 @@ describe('readingsForDay', () => {
     emotion: 0,
   });
 
+  // Built from local wall-clock times: "today" is the climber's calendar day,
+  // so an evening reading belongs to the day they think it does.
+  const at = (dayOffset: number, hour: number) => new Date(2026, 7, 20 + dayOffset, hour).getTime();
+
   it('returns only the given day’s readings, oldest-first', () => {
     const checkins = [
-      mk('a', base + 9 * 60 * 60 * 1000),
-      mk('b', base + 2 * 60 * 60 * 1000),
-      mk('c', base - DAY), // previous day
+      mk('a', at(0, 9)),
+      mk('b', at(0, 2)),
+      mk('c', at(-1, 9)), // previous day
     ];
-    const result = readingsForDay(checkins, base + DAY / 2);
-    expect(result.map((r) => r.id)).toEqual(['b', 'a']);
+    expect(readingsForDay(checkins, at(0, 12)).map((r) => r.id)).toEqual(['b', 'a']);
+  });
+
+  it('keeps an evening reading on the same day as a morning one', () => {
+    const checkins = [mk('morning', at(0, 8)), mk('evening', at(0, 21))];
+    expect(readingsForDay(checkins, at(0, 8)).map((r) => r.id)).toEqual(['morning', 'evening']);
   });
 });
