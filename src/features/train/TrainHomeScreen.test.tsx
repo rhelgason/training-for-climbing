@@ -66,7 +66,9 @@ describe('TrainHomeScreen', () => {
 
     const view = await renderScreen(repo);
     await waitFor(() => expect(view.getByText('Today')).toBeTruthy());
-    expect(view.getByText(/Focus on Mental/)).toBeTruthy();
+    // The scheduler picks the focus, so the headline names the session rather
+    // than the triad area — but it still targets the weakest area.
+    expect(view.getByText('Today: Mental game')).toBeTruthy();
     expect(view.getByText("Today's plan")).toBeTruthy();
     // No coach button when AI is disabled.
     expect(view.queryByText('Get AI suggestion')).toBeNull();
