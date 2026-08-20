@@ -10,6 +10,12 @@ export interface CachedCoachSuggestion {
   suggestion: CoachSuggestion;
   /** Epoch ms the suggestion was generated. */
   generatedAt: number;
+  /**
+   * Fingerprint of the context this was generated for. When today's check-in
+   * changes, the cached advice no longer matches what the app is showing, so
+   * the key changing is what invalidates it.
+   */
+  contextKey?: string;
 }
 
 export function getCachedSuggestion(): CachedCoachSuggestion | null {

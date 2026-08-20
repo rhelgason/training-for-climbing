@@ -14,10 +14,13 @@ import {
   loadHistory,
   now,
   relativeTime,
+  sessionFocus,
   trackEvent,
   trainingDates,
   type DailyRecommendation,
   type JournalEntry,
+  type JournalIntensity,
+  type SessionFocusId,
 } from '@tfc/core';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
@@ -60,18 +63,70 @@ export default function TrainHome() {
   const { dataVersion } = useSync();
   const router = useRouter();
   const [state, setState] = useState<LoadState | null>(null);
-  const coach = useCoach(repo);
   const backup = useBackupNudge();
   const onboarding = useOnboarding();
   const daily = useDailyContext(repo, dataVersion);
   const [feedback, setFeedback] = useState<'up' | 'down' | null>(null);
+  const [marking, setMarking] = useState(false);
+
+  const today = daily.value;
+  // Fingerprints today's context for the coach cache — changing any of these
+  // makes yesterday's AI advice wrong, so it forces a regeneration.
+  const contextKey = today
+    ? [
+        dayIndex(now()),
+        today.environment,
+        today.sessionLength,
+        today.readiness,
+        [...today.equipment].sort().join(','),
+      ].join('|')
+    : undefined;
+  const coach = useCoach(repo, contextKey);
 
   const sendFeedback = (rating: 'up' | 'down') => {
     setFeedback(rating);
     trackEvent('coach_feedback', { rating });
   };
 
-  const today = daily.value;
+  /**
+   * Record today as done with the focus that was actually prescribed.
+   *
+   * This is the step that keeps tomorrow honest. Without it the scheduler has
+   * to *infer* load from activity tags; with it, "yesterday was max strength"
+   * is a fact, and the 48-hour rule can be enforced rather than guessed at.
+   */
+  const markDone = async () => {
+    if (!state || marking) return;
+    const { recommendation: plan, todayJournalId } = state;
+    const focus = [plan.focus, ...plan.supportingFocuses].filter(Boolean) as SessionFocusId[];
+    const intensity: JournalIntensity = plan.focus
+      ? sessionFocus(plan.focus).intensity === 'high'
+        ? 'hard'
+        : sessionFocus(plan.focus).intensity === 'low'
+          ? 'easy'
+          : 'moderate'
+      : 'easy';
+    setMarking(true);
+    try {
+      let journalId = todayJournalId;
+      if (journalId) {
+        await repo.updateJournal(journalId, { focus, intensity });
+      } else {
+        const saved = await repo.saveJournal({
+          date: now(),
+          activities: plan.kind === 'rest' ? ['rest'] : ['climbing'],
+          focus: plan.kind === 'rest' ? ['rest'] : focus,
+          intensity: plan.kind === 'rest' ? 'easy' : intensity,
+        });
+        journalId = saved.id;
+      }
+      trackEvent('plan_completed', { focus: plan.focus ?? 'rest', kind: plan.kind });
+      // Open the log so they can add the free text the coach reads tomorrow.
+      router.push(`/train/journal/${journalId}`);
+    } finally {
+      setMarking(false);
+    }
+  };
 
   useEffect(() => {
     // Wait for today's context — the plan is built from it, and rendering a
@@ -294,8 +349,18 @@ export default function TrainHome() {
         </p>
       )}
 
+      <Button onClick={markDone} disabled={marking}>
+        {marking
+          ? 'Saving…'
+          : rec.kind === 'rest'
+            ? 'Log today as a rest day'
+            : 'I did this — log it'}
+      </Button>
+
       <Link href={todayJournalId ? `/train/journal/${todayJournalId}` : '/train/journal/new'}>
-        <Button>{todayJournalId ? "Edit today's log" : '+ Log today'}</Button>
+        <Button variant="secondary">
+          {todayJournalId ? "Edit today's log" : 'Log something else'}
+        </Button>
       </Link>
       <Link href="/train/energy-emotion">
         <Button variant="secondary">Energy &amp; emotion check-in</Button>
