@@ -20,6 +20,7 @@ export function emptySnapshot(): Snapshot {
     periods: [],
     benchmarks: [],
     checkins: [],
+    dailyContexts: [],
     profile: null,
     tombstones: [],
   };
@@ -42,6 +43,7 @@ export function normalizeSnapshot(snapshot: Partial<Snapshot> | null | undefined
     periods: snapshot.periods ?? empty.periods,
     benchmarks: snapshot.benchmarks ?? empty.benchmarks,
     checkins: snapshot.checkins ?? empty.checkins,
+    dailyContexts: snapshot.dailyContexts ?? empty.dailyContexts,
     profile: snapshot.profile ?? empty.profile,
     tombstones: snapshot.tombstones ?? empty.tombstones,
   };
@@ -100,6 +102,7 @@ export function mergeSnapshots(aIn: Partial<Snapshot>, bIn: Partial<Snapshot>): 
     periods: survive('periods', a.periods, b.periods),
     benchmarks: survive('benchmarks', a.benchmarks, b.benchmarks),
     checkins: survive('checkins', a.checkins, b.checkins),
+    dailyContexts: survive('dailyContexts', a.dailyContexts, b.dailyContexts),
     profile: !a.profile
       ? b.profile
       : !b.profile
@@ -120,6 +123,7 @@ export function mergeSnapshots(aIn: Partial<Snapshot>, bIn: Partial<Snapshot>): 
     ['periods', merged.periods],
     ['benchmarks', merged.benchmarks],
     ['checkins', merged.checkins],
+    ['dailyContexts', merged.dailyContexts],
   ] as const) {
     for (const r of list) surviving.add(`${table}:${r.id}`);
   }

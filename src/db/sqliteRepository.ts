@@ -9,6 +9,9 @@ import {
   type ClimbOutcome,
   type ClimbPatch,
   type ClimbRecord,
+  type DailyContextPatch,
+  type DailyContextRecord,
+  type EquipmentId,
   type GoalHorizon,
   type GoalPatch,
   type GoalRecord,
@@ -23,6 +26,7 @@ import {
   type NewBenchmark,
   type NewCheckin,
   type NewClimb,
+  type NewDailyContext,
   type NewGoal,
   type NewJournal,
   type NewMacrocyclePeriod,
@@ -30,9 +34,13 @@ import {
   PROFILE_ID,
   type ProfilePatch,
   type ProfileRecord,
+  type Readiness,
   type Repository,
   type Responses,
+  type SessionFocusId,
+  type SessionLength,
   type Snapshot,
+  type StyleFocus,
   type SyncTable,
   type TombstoneRecord,
   type TriadArea,
@@ -45,6 +53,8 @@ import { newId } from '../lib/ids';
 
 const DB_NAME = 'training-for-climbing.db';
 
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
 /** Map a logical sync table to its physical SQLite table name. */
 const SQL_TABLE: Record<SyncTable, string> = {
   assessments: 'assessments',
@@ -54,6 +64,7 @@ const SQL_TABLE: Record<SyncTable, string> = {
   periods: 'macrocycle_periods',
   benchmarks: 'benchmarks',
   checkins: 'checkins',
+  dailyContexts: 'daily_contexts',
 };
 
 interface ProfileRow {
@@ -65,6 +76,24 @@ interface ProfileRow {
   grade_system: string;
   reassess_weeks: number;
   ai_coach_enabled: number;
+  climber_context: string | null;
+  style_focus: string | null;
+  equipment: string | null;
+  days_per_week: number | null;
+  session_length: string | null;
+  onboarded_at: number | null;
+}
+
+interface DailyContextRow {
+  id: string;
+  created_at: number;
+  updated_at: number;
+  date: number;
+  environment: string;
+  equipment: string;
+  session_length: string;
+  readiness: string;
+  note: string | null;
 }
 
 interface AssessmentRow {
@@ -100,6 +129,7 @@ interface JournalRow {
   struggles: string | null;
   activities: string;
   intensity: string | null;
+  focus: string | null;
 }
 
 interface CheckinRow {
@@ -218,7 +248,8 @@ export class SqliteRepository implements Repository {
         wins TEXT,
         struggles TEXT,
         activities TEXT NOT NULL,
-        intensity TEXT
+        intensity TEXT,
+        focus TEXT
       );
       CREATE TABLE IF NOT EXISTS climbs (
         id TEXT PRIMARY KEY NOT NULL,
@@ -268,7 +299,24 @@ export class SqliteRepository implements Repository {
         default_discipline TEXT NOT NULL,
         grade_system TEXT NOT NULL,
         reassess_weeks INTEGER NOT NULL,
-        ai_coach_enabled INTEGER NOT NULL
+        ai_coach_enabled INTEGER NOT NULL,
+        climber_context TEXT,
+        style_focus TEXT,
+        equipment TEXT,
+        days_per_week INTEGER,
+        session_length TEXT,
+        onboarded_at INTEGER
+      );
+      CREATE TABLE IF NOT EXISTS daily_contexts (
+        id TEXT PRIMARY KEY NOT NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        date INTEGER NOT NULL,
+        environment TEXT NOT NULL,
+        equipment TEXT NOT NULL,
+        session_length TEXT NOT NULL,
+        readiness TEXT NOT NULL,
+        note TEXT
       );
       CREATE TABLE IF NOT EXISTS tombstones (
         table_name TEXT NOT NULL,
@@ -289,9 +337,36 @@ export class SqliteRepository implements Repository {
       CREATE INDEX IF NOT EXISTS idx_macrocycle_start ON macrocycle_periods (start_date ASC);
       CREATE INDEX IF NOT EXISTS idx_benchmarks_date ON benchmarks (date DESC);
       CREATE INDEX IF NOT EXISTS idx_checkins_time ON checkins (time DESC);
+      CREATE INDEX IF NOT EXISTS idx_daily_contexts_date ON daily_contexts (date DESC);
       CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events (timestamp DESC);
     `);
+    await this.migrate();
     log.info('SQLite repository initialised');
+  }
+
+  /**
+   * Add columns introduced after a user's database was first created.
+   * `CREATE TABLE IF NOT EXISTS` is a no-op on an existing table, so new columns
+   * have to be added explicitly. Guarded by PRAGMA so this is idempotent.
+   */
+  private async migrate(): Promise<void> {
+    const db = this.getDb();
+    const additions: [string, string][] = [
+      ['journals', 'focus TEXT'],
+      ['profile', 'climber_context TEXT'],
+      ['profile', 'style_focus TEXT'],
+      ['profile', 'equipment TEXT'],
+      ['profile', 'days_per_week INTEGER'],
+      ['profile', 'session_length TEXT'],
+      ['profile', 'onboarded_at INTEGER'],
+    ];
+    for (const [table, definition] of additions) {
+      const column = definition.split(' ')[0];
+      const columns = await db.getAllAsync<{ name: string }>(`PRAGMA table_info(${table})`);
+      if (columns.some((c) => c.name === column)) continue;
+      await db.execAsync(`ALTER TABLE ${table} ADD COLUMN ${definition}`);
+      log.info(`SQLite migration: added ${table}.${column}`);
+    }
   }
 
   async saveAssessment(input: NewAssessment): Promise<AssessmentRecord> {
@@ -420,10 +495,11 @@ export class SqliteRepository implements Repository {
       struggles: input.struggles,
       activities: [...input.activities],
       intensity: input.intensity,
+      focus: input.focus ? [...input.focus] : undefined,
     };
     await this.getDb().runAsync(
-      `INSERT INTO journals (id, created_at, updated_at, date, summary, wins, struggles, activities, intensity)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO journals (id, created_at, updated_at, date, summary, wins, struggles, activities, intensity, focus)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       record.id,
       record.createdAt,
       record.updatedAt,
@@ -433,6 +509,7 @@ export class SqliteRepository implements Repository {
       record.struggles ?? null,
       JSON.stringify(record.activities),
       record.intensity ?? null,
+      record.focus ? JSON.stringify(record.focus) : null,
     );
     return record;
   }
@@ -460,6 +537,7 @@ export class SqliteRepository implements Repository {
       struggles: 'struggles',
       activities: 'activities',
       intensity: 'intensity',
+      focus: 'focus',
     };
     const existing = await this.getJournal(id);
     if (!existing) return null;
@@ -469,6 +547,9 @@ export class SqliteRepository implements Repository {
       sets.push(`${COLUMNS[key]} = ?`);
       if (key === 'activities') {
         values.push(JSON.stringify(patch.activities ?? []));
+      } else if (key === 'focus') {
+        // Array-valued columns are stored as JSON; SQLite can't bind an array.
+        values.push(patch.focus ? JSON.stringify(patch.focus) : null);
       } else {
         values.push(patch[key] ?? null);
       }
@@ -701,6 +782,110 @@ export class SqliteRepository implements Repository {
     await this.recordTombstone('checkins', id);
   }
 
+  async saveDailyContext(input: NewDailyContext): Promise<DailyContextRecord> {
+    // One row per calendar day — re-saving today edits the existing row.
+    const existing = await this.getDailyContext(input.date);
+    if (existing) {
+      const updated = await this.updateDailyContext(existing.id, {
+        date: input.date,
+        environment: input.environment,
+        equipment: input.equipment,
+        sessionLength: input.sessionLength,
+        readiness: input.readiness,
+        note: input.note,
+      });
+      if (updated) return updated;
+    }
+    const ts = Date.now();
+    const record: DailyContextRecord = {
+      id: newId(),
+      createdAt: input.createdAt ?? ts,
+      updatedAt: input.updatedAt ?? ts,
+      date: input.date,
+      environment: input.environment,
+      equipment: [...input.equipment],
+      sessionLength: input.sessionLength,
+      readiness: input.readiness,
+      note: input.note,
+    };
+    await this.getDb().runAsync(
+      `INSERT INTO daily_contexts (id, created_at, updated_at, date, environment, equipment, session_length, readiness, note)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      record.id,
+      record.createdAt,
+      record.updatedAt,
+      record.date,
+      record.environment,
+      JSON.stringify(record.equipment),
+      record.sessionLength,
+      record.readiness,
+      record.note ?? null,
+    );
+    return record;
+  }
+
+  async listDailyContexts(): Promise<DailyContextRecord[]> {
+    const rows = await this.getDb().getAllAsync<DailyContextRow>(
+      `SELECT * FROM daily_contexts ORDER BY date DESC`,
+    );
+    return rows.map(rowToDailyContext);
+  }
+
+  async getDailyContext(dateMs: number): Promise<DailyContextRecord | null> {
+    const start = Math.floor(dateMs / MS_PER_DAY) * MS_PER_DAY;
+    const row = await this.getDb().getFirstAsync<DailyContextRow>(
+      `SELECT * FROM daily_contexts WHERE date >= ? AND date < ? ORDER BY date DESC LIMIT 1`,
+      start,
+      start + MS_PER_DAY,
+    );
+    return row ? rowToDailyContext(row) : null;
+  }
+
+  async updateDailyContext(
+    id: string,
+    patch: DailyContextPatch,
+  ): Promise<DailyContextRecord | null> {
+    const COLUMNS: Record<keyof DailyContextPatch, string> = {
+      date: 'date',
+      environment: 'environment',
+      equipment: 'equipment',
+      sessionLength: 'session_length',
+      readiness: 'readiness',
+      note: 'note',
+    };
+    const existing = await this.getDailyContextById(id);
+    if (!existing) return null;
+    const sets: string[] = ['updated_at = ?'];
+    const values: SQLite.SQLiteBindValue[] = [Math.max(Date.now(), existing.updatedAt + 1)];
+    (Object.keys(patch) as (keyof DailyContextPatch)[]).forEach((key) => {
+      sets.push(`${COLUMNS[key]} = ?`);
+      if (key === 'equipment') {
+        values.push(JSON.stringify(patch.equipment ?? []));
+      } else {
+        values.push(patch[key] ?? null);
+      }
+    });
+    values.push(id);
+    await this.getDb().runAsync(
+      `UPDATE daily_contexts SET ${sets.join(', ')} WHERE id = ?`,
+      ...values,
+    );
+    return this.getDailyContextById(id);
+  }
+
+  private async getDailyContextById(id: string): Promise<DailyContextRecord | null> {
+    const row = await this.getDb().getFirstAsync<DailyContextRow>(
+      `SELECT * FROM daily_contexts WHERE id = ?`,
+      id,
+    );
+    return row ? rowToDailyContext(row) : null;
+  }
+
+  async deleteDailyContext(id: string): Promise<void> {
+    await this.getDb().runAsync(`DELETE FROM daily_contexts WHERE id = ?`, id);
+    await this.recordTombstone('dailyContexts', id);
+  }
+
   async getProfile(): Promise<ProfileRecord | null> {
     const row = await this.getDb().getFirstAsync<ProfileRow>(
       `SELECT * FROM profile WHERE id = ?`,
@@ -726,6 +911,13 @@ export class SqliteRepository implements Repository {
         patch.reassessWeeks ?? existing?.reassessWeeks ?? PROFILE_DEFAULTS.reassessWeeks,
       aiCoachEnabled:
         patch.aiCoachEnabled ?? existing?.aiCoachEnabled ?? PROFILE_DEFAULTS.aiCoachEnabled,
+      climberContext: patch.climberContext ?? existing?.climberContext,
+      styleFocus: patch.styleFocus ?? existing?.styleFocus ?? PROFILE_DEFAULTS.styleFocus,
+      equipment: patch.equipment ?? existing?.equipment ?? [...PROFILE_DEFAULTS.equipment],
+      daysPerWeek: patch.daysPerWeek ?? existing?.daysPerWeek ?? PROFILE_DEFAULTS.daysPerWeek,
+      sessionLength:
+        patch.sessionLength ?? existing?.sessionLength ?? PROFILE_DEFAULTS.sessionLength,
+      onboardedAt: patch.onboardedAt ?? existing?.onboardedAt,
     };
     await this.upsertProfileRow(record);
     return record;
@@ -733,8 +925,8 @@ export class SqliteRepository implements Repository {
 
   private async upsertProfileRow(p: ProfileRecord): Promise<void> {
     await this.getDb().runAsync(
-      `INSERT OR REPLACE INTO profile (id, created_at, updated_at, ability_tier, default_discipline, grade_system, reassess_weeks, ai_coach_enabled)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT OR REPLACE INTO profile (id, created_at, updated_at, ability_tier, default_discipline, grade_system, reassess_weeks, ai_coach_enabled, climber_context, style_focus, equipment, days_per_week, session_length, onboarded_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       p.id,
       p.createdAt,
       p.updatedAt,
@@ -743,21 +935,37 @@ export class SqliteRepository implements Repository {
       p.gradeSystem,
       p.reassessWeeks,
       p.aiCoachEnabled ? 1 : 0,
+      p.climberContext ?? null,
+      p.styleFocus,
+      JSON.stringify(p.equipment),
+      p.daysPerWeek,
+      p.sessionLength,
+      p.onboardedAt ?? null,
     );
   }
 
   async exportSnapshot(): Promise<Snapshot> {
-    const [assessments, goals, journals, climbs, periods, benchmarks, checkins, tombRows] =
-      await Promise.all([
-        this.listAssessments(),
-        this.listGoals(),
-        this.listJournals(),
-        this.listClimbs(),
-        this.listMacrocyclePeriods(),
-        this.listBenchmarks(),
-        this.listCheckins(),
-        this.getDb().getAllAsync<TombstoneRow>(`SELECT * FROM tombstones`),
-      ]);
+    const [
+      assessments,
+      goals,
+      journals,
+      climbs,
+      periods,
+      benchmarks,
+      checkins,
+      dailyContexts,
+      tombRows,
+    ] = await Promise.all([
+      this.listAssessments(),
+      this.listGoals(),
+      this.listJournals(),
+      this.listClimbs(),
+      this.listMacrocyclePeriods(),
+      this.listBenchmarks(),
+      this.listCheckins(),
+      this.listDailyContexts(),
+      this.getDb().getAllAsync<TombstoneRow>(`SELECT * FROM tombstones`),
+    ]);
     const tombstones: TombstoneRecord[] = tombRows.map((t) => ({
       table: t.table_name as SyncTable,
       id: t.id,
@@ -772,6 +980,7 @@ export class SqliteRepository implements Repository {
       periods,
       benchmarks,
       checkins,
+      dailyContexts,
       profile,
       tombstones,
     };
@@ -812,8 +1021,8 @@ export class SqliteRepository implements Repository {
       }
       for (const j of snapshot.journals) {
         await db.runAsync(
-          `INSERT OR REPLACE INTO journals (id, created_at, updated_at, date, summary, wins, struggles, activities, intensity)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT OR REPLACE INTO journals (id, created_at, updated_at, date, summary, wins, struggles, activities, intensity, focus)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           j.id,
           j.createdAt,
           j.updatedAt,
@@ -823,6 +1032,7 @@ export class SqliteRepository implements Repository {
           j.struggles ?? null,
           JSON.stringify(j.activities),
           j.intensity ?? null,
+          j.focus ? JSON.stringify(j.focus) : null,
         );
       }
       for (const c of snapshot.climbs) {
@@ -879,12 +1089,27 @@ export class SqliteRepository implements Repository {
           c.note ?? null,
         );
       }
+      for (const c of snapshot.dailyContexts ?? []) {
+        await db.runAsync(
+          `INSERT OR REPLACE INTO daily_contexts (id, created_at, updated_at, date, environment, equipment, session_length, readiness, note)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          c.id,
+          c.createdAt,
+          c.updatedAt,
+          c.date,
+          c.environment,
+          JSON.stringify(c.equipment),
+          c.sessionLength,
+          c.readiness,
+          c.note ?? null,
+        );
+      }
       // Profile (singleton) — keep whichever is newer.
       if (snapshot.profile) {
         const p = snapshot.profile;
         await db.runAsync(
-          `INSERT INTO profile (id, created_at, updated_at, ability_tier, default_discipline, grade_system, reassess_weeks, ai_coach_enabled)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          `INSERT INTO profile (id, created_at, updated_at, ability_tier, default_discipline, grade_system, reassess_weeks, ai_coach_enabled, climber_context, style_focus, equipment, days_per_week, session_length, onboarded_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(id) DO UPDATE SET
              created_at = excluded.created_at,
              updated_at = excluded.updated_at,
@@ -892,7 +1117,13 @@ export class SqliteRepository implements Repository {
              default_discipline = excluded.default_discipline,
              grade_system = excluded.grade_system,
              reassess_weeks = excluded.reassess_weeks,
-             ai_coach_enabled = excluded.ai_coach_enabled
+             ai_coach_enabled = excluded.ai_coach_enabled,
+             climber_context = excluded.climber_context,
+             style_focus = excluded.style_focus,
+             equipment = excluded.equipment,
+             days_per_week = excluded.days_per_week,
+             session_length = excluded.session_length,
+             onboarded_at = excluded.onboarded_at
            WHERE excluded.updated_at >= profile.updated_at`,
           p.id,
           p.createdAt,
@@ -902,6 +1133,12 @@ export class SqliteRepository implements Repository {
           p.gradeSystem,
           p.reassessWeeks,
           p.aiCoachEnabled ? 1 : 0,
+          p.climberContext ?? null,
+          p.styleFocus,
+          JSON.stringify(p.equipment),
+          p.daysPerWeek,
+          p.sessionLength,
+          p.onboardedAt ?? null,
         );
       }
       // Apply deletions, then persist the tombstones.
@@ -945,6 +1182,20 @@ export class SqliteRepository implements Repository {
   }
 }
 
+function rowToDailyContext(row: DailyContextRow): DailyContextRecord {
+  return {
+    id: row.id,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    date: row.date,
+    environment: row.environment as ClimbEnvironment,
+    equipment: JSON.parse(row.equipment) as EquipmentId[],
+    sessionLength: row.session_length as SessionLength,
+    readiness: row.readiness as Readiness,
+    note: row.note ?? undefined,
+  };
+}
+
 function rowToProfile(row: ProfileRow): ProfileRecord {
   return {
     id: row.id,
@@ -955,6 +1206,15 @@ function rowToProfile(row: ProfileRow): ProfileRecord {
     gradeSystem: row.grade_system as GradeSystem,
     reassessWeeks: row.reassess_weeks,
     aiCoachEnabled: row.ai_coach_enabled === 1,
+    climberContext: row.climber_context ?? undefined,
+    // Columns added by a later migration are null on rows written before it.
+    styleFocus: (row.style_focus as StyleFocus | null) ?? PROFILE_DEFAULTS.styleFocus,
+    equipment: row.equipment
+      ? safeParse<EquipmentId[]>(row.equipment, [...PROFILE_DEFAULTS.equipment])
+      : [...PROFILE_DEFAULTS.equipment],
+    daysPerWeek: row.days_per_week ?? PROFILE_DEFAULTS.daysPerWeek,
+    sessionLength: (row.session_length as SessionLength | null) ?? PROFILE_DEFAULTS.sessionLength,
+    onboardedAt: row.onboarded_at ?? undefined,
   };
 }
 
@@ -997,6 +1257,7 @@ function rowToJournal(row: JournalRow): JournalEntry {
     struggles: row.struggles ?? undefined,
     activities: safeParse<ActivityTag[]>(row.activities, []),
     intensity: (row.intensity as JournalIntensity | null) ?? undefined,
+    focus: row.focus ? safeParse<SessionFocusId[]>(row.focus, []) : undefined,
   };
 }
 

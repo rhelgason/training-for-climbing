@@ -6,6 +6,8 @@ import type {
   CheckinRecord,
   ClimbPatch,
   ClimbRecord,
+  DailyContextPatch,
+  DailyContextRecord,
   GoalPatch,
   GoalRecord,
   MacrocyclePeriodPatch,
@@ -16,6 +18,7 @@ import type {
   NewBenchmark,
   NewCheckin,
   NewClimb,
+  NewDailyContext,
   NewGoal,
   NewJournal,
   NewMacrocyclePeriod,
@@ -27,6 +30,13 @@ import type {
   UsageEventRecord,
 } from './types';
 import { PROFILE_DEFAULTS, PROFILE_ID } from '../content/profile';
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+/** Same calendar day? Inlined so the db layer stays free of feature imports. */
+function sameDay(a: number, b: number): boolean {
+  return Math.floor(a / MS_PER_DAY) === Math.floor(b / MS_PER_DAY);
+}
 
 /**
  * In-memory Repository. Used in unit tests and as a safe fallback (e.g. web,
@@ -40,6 +50,7 @@ export class InMemoryRepository implements Repository {
   private periods: MacrocyclePeriodRecord[] = [];
   private benchmarks: BenchmarkRecord[] = [];
   private checkins: CheckinRecord[] = [];
+  private dailyContexts: DailyContextRecord[] = [];
   private profile: ProfileRecord | null = null;
   private tombstones: TombstoneRecord[] = [];
   private events: UsageEventRecord[] = [];
@@ -130,6 +141,7 @@ export class InMemoryRepository implements Repository {
       struggles: input.struggles,
       activities: [...input.activities],
       intensity: input.intensity,
+      focus: input.focus ? [...input.focus] : undefined,
     };
     this.journals.push(record);
     return record;
@@ -279,6 +291,56 @@ export class InMemoryRepository implements Repository {
     this.tombstone('checkins', id);
   }
 
+  async saveDailyContext(input: NewDailyContext): Promise<DailyContextRecord> {
+    const ts = Date.now();
+    // One row per calendar day: re-saving today edits rather than duplicates.
+    const existing = this.dailyContexts.find((c) => sameDay(c.date, input.date));
+    if (existing) {
+      Object.assign(existing, input, {
+        equipment: [...input.equipment],
+        updatedAt: Math.max(ts, existing.updatedAt + 1),
+      });
+      return existing;
+    }
+    const createdAt = input.createdAt ?? ts;
+    const record: DailyContextRecord = {
+      id: newId(),
+      createdAt,
+      updatedAt: input.updatedAt ?? createdAt,
+      date: input.date,
+      environment: input.environment,
+      equipment: [...input.equipment],
+      sessionLength: input.sessionLength,
+      readiness: input.readiness,
+      note: input.note,
+    };
+    this.dailyContexts.push(record);
+    return record;
+  }
+
+  async listDailyContexts(): Promise<DailyContextRecord[]> {
+    return [...this.dailyContexts].sort((a, b) => b.date - a.date);
+  }
+
+  async getDailyContext(dateMs: number): Promise<DailyContextRecord | null> {
+    return this.dailyContexts.find((c) => sameDay(c.date, dateMs)) ?? null;
+  }
+
+  async updateDailyContext(
+    id: string,
+    patch: DailyContextPatch,
+  ): Promise<DailyContextRecord | null> {
+    const context = this.dailyContexts.find((c) => c.id === id);
+    if (!context) return null;
+    Object.assign(context, patch, { updatedAt: Math.max(Date.now(), context.updatedAt + 1) });
+    return context;
+  }
+
+  async deleteDailyContext(id: string): Promise<void> {
+    this.dailyContexts = this.dailyContexts.filter((c) => c.id !== id);
+    this.tombstone('dailyContexts', id);
+  }
+
   async getProfile(): Promise<ProfileRecord | null> {
     return this.profile;
   }
@@ -310,6 +372,7 @@ export class InMemoryRepository implements Repository {
       periods: [...this.periods],
       benchmarks: [...this.benchmarks],
       checkins: [...this.checkins],
+      dailyContexts: [...this.dailyContexts],
       profile: this.profile,
       tombstones: [...this.tombstones],
     };
@@ -328,6 +391,7 @@ export class InMemoryRepository implements Repository {
     this.periods = upsert(this.periods, snapshot.periods);
     this.benchmarks = upsert(this.benchmarks, snapshot.benchmarks);
     this.checkins = upsert(this.checkins, snapshot.checkins);
+    this.dailyContexts = upsert(this.dailyContexts, snapshot.dailyContexts ?? []);
     if (
       snapshot.profile &&
       (!this.profile || snapshot.profile.updatedAt >= this.profile.updatedAt)
@@ -344,6 +408,7 @@ export class InMemoryRepository implements Repository {
       periods: (id) => (this.periods = this.periods.filter((r) => r.id !== id)),
       benchmarks: (id) => (this.benchmarks = this.benchmarks.filter((r) => r.id !== id)),
       checkins: (id) => (this.checkins = this.checkins.filter((r) => r.id !== id)),
+      dailyContexts: (id) => (this.dailyContexts = this.dailyContexts.filter((r) => r.id !== id)),
     };
     for (const t of snapshot.tombstones) {
       removals[t.table](t.id);
