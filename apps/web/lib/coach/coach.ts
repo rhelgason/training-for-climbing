@@ -18,14 +18,16 @@ export async function refreshCoachSuggestion(
   config: SyncConfig,
 ): Promise<CoachSuggestion> {
   const nowMs = now();
-  const [profile, assessments, benchmarks, climbs, goals, journals] = await Promise.all([
-    repo.getProfile(),
-    repo.listAssessments(),
-    repo.listBenchmarks(),
-    repo.listClimbs(),
-    repo.listGoals(),
-    repo.listJournals(),
-  ]);
+  const [profile, assessments, benchmarks, climbs, goals, journals, dailyContext] =
+    await Promise.all([
+      repo.getProfile(),
+      repo.listAssessments(),
+      repo.listBenchmarks(),
+      repo.listClimbs(),
+      repo.listGoals(),
+      repo.listJournals(),
+      repo.getDailyContext(nowMs),
+    ]);
 
   const context = buildCoachContext({
     profile,
@@ -34,6 +36,7 @@ export async function refreshCoachSuggestion(
     climbs,
     goals,
     journals,
+    dailyContext,
     nowMs,
   });
 

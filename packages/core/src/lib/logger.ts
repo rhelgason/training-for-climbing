@@ -75,7 +75,9 @@ export type UsageEvent =
   | { name: 'signed_in'; props?: Record<string, never> }
   | { name: 'signed_out'; props?: Record<string, never> }
   | { name: 'account_deleted'; props?: Record<string, never> }
-  | { name: 'coach_feedback'; props: { rating: 'up' | 'down' } };
+  | { name: 'coach_feedback'; props: { rating: 'up' | 'down' } }
+  | { name: 'onboarding_completed'; props: { goals: number; signedIn: boolean } }
+  | { name: 'daily_context_set'; props: { readiness: string; environment: string } };
 
 export type EventSink = (event: {
   name: UsageEvent['name'];
