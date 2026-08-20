@@ -13,6 +13,8 @@ import {
   type CheckinRecord,
   type ClimbPatch,
   type ClimbRecord,
+  type DailyContextPatch,
+  type DailyContextRecord,
   type GoalPatch,
   type GoalRecord,
   type JournalEntry,
@@ -23,6 +25,7 @@ import {
   type NewBenchmark,
   type NewCheckin,
   type NewClimb,
+  type NewDailyContext,
   type NewGoal,
   type NewJournal,
   type NewMacrocyclePeriod,
@@ -186,6 +189,26 @@ export class WebRepository extends InMemoryRepository {
 
   async deleteCheckin(id: string): Promise<void> {
     await super.deleteCheckin(id);
+    this.schedulePersist();
+  }
+
+  async saveDailyContext(input: NewDailyContext): Promise<DailyContextRecord> {
+    const r = await super.saveDailyContext(input);
+    this.schedulePersist();
+    return r;
+  }
+
+  async updateDailyContext(
+    id: string,
+    patch: DailyContextPatch,
+  ): Promise<DailyContextRecord | null> {
+    const r = await super.updateDailyContext(id, patch);
+    this.schedulePersist();
+    return r;
+  }
+
+  async deleteDailyContext(id: string): Promise<void> {
+    await super.deleteDailyContext(id);
     this.schedulePersist();
   }
 

@@ -3,6 +3,13 @@ import type { TriadArea } from '../content/types';
 import type { AbilityTier, GoalHorizon, GoalStatus } from '../content/planning';
 import type { ClimbDiscipline, ClimbEnvironment, ClimbOutcome } from '../content/climbing';
 import type { ActivityTag, JournalIntensity } from '../content/journal';
+import type {
+  EquipmentId,
+  Readiness,
+  SessionFocusId,
+  SessionLength,
+  StyleFocus,
+} from '../content/trainingContext';
 
 /** The grade scale a climber uses (only US YDS/V for now). */
 export type GradeSystem = 'yds-v';
@@ -20,12 +27,73 @@ export interface ProfileRecord {
   reassessWeeks: number;
   /** Opt-in to the AI coach (requires a server LLM key). */
   aiCoachEnabled: boolean;
+
+  // --- Training context, captured at sign-up and editable later. ---
+
+  /**
+   * Free-text "here's me as a climber" — years in, injuries, what they're
+   * working on, quirks of their gym. Read by the AI coach verbatim; the
+   * deterministic engine ignores it.
+   */
+  climberContext?: string;
+  /** What they're optimising for; biases which focus wins an otherwise free day. */
+  styleFocus: StyleFocus;
+  /** Equipment normally available (their usual gym / home setup). */
+  equipment: EquipmentId[];
+  /** How many days a week they can realistically train. */
+  daysPerWeek: number;
+  /** Their typical session length. */
+  sessionLength: SessionLength;
+  /** Set when the guided sign-up flow was completed; drives the welcome redirect. */
+  onboardedAt?: number;
 }
 
 export type ProfilePatch = Partial<
   Pick<
     ProfileRecord,
-    'abilityTier' | 'defaultDiscipline' | 'gradeSystem' | 'reassessWeeks' | 'aiCoachEnabled'
+    | 'abilityTier'
+    | 'defaultDiscipline'
+    | 'gradeSystem'
+    | 'reassessWeeks'
+    | 'aiCoachEnabled'
+    | 'climberContext'
+    | 'styleFocus'
+    | 'equipment'
+    | 'daysPerWeek'
+    | 'sessionLength'
+    | 'onboardedAt'
+  >
+>;
+
+/**
+ * What the climber has to work with *today* — the one-tap check-in above the
+ * daily plan. Separate from the journal on purpose: this is prospective ("what
+ * I can do"), the journal is retrospective ("what I did"). One row per day.
+ */
+export interface DailyContextRecord {
+  id: string;
+  createdAt: number;
+  updatedAt: number;
+  /** The day this context is for (epoch ms). */
+  date: number;
+  environment: ClimbEnvironment;
+  /** Equipment reachable today — overrides the profile's usual set. */
+  equipment: EquipmentId[];
+  sessionLength: SessionLength;
+  readiness: Readiness;
+  /** Optional free text, e.g. "at a friend's gym, no campus board". */
+  note?: string;
+}
+
+export type NewDailyContext = Omit<DailyContextRecord, 'id' | 'createdAt' | 'updatedAt'> & {
+  createdAt?: number;
+  updatedAt?: number;
+};
+
+export type DailyContextPatch = Partial<
+  Pick<
+    DailyContextRecord,
+    'date' | 'environment' | 'equipment' | 'sessionLength' | 'readiness' | 'note'
   >
 >;
 
@@ -107,6 +175,13 @@ export interface JournalEntry {
   /** Activity tags (climbing, fingerboard, strength, …, rest). */
   activities: ActivityTag[];
   intensity?: JournalIntensity;
+  /**
+   * What kind of training load the day actually applied. Recorded exactly when
+   * the day's prescribed plan is marked done, and inferred from the tags above
+   * otherwise. This is what lets the scheduler honour "48 hours between max-
+   * strength sessions" instead of guessing from a free-text blurb.
+   */
+  focus?: SessionFocusId[];
 }
 
 export type NewJournal = Omit<JournalEntry, 'id' | 'createdAt' | 'updatedAt'> & {
@@ -115,7 +190,10 @@ export type NewJournal = Omit<JournalEntry, 'id' | 'createdAt' | 'updatedAt'> & 
 };
 
 export type JournalPatch = Partial<
-  Pick<JournalEntry, 'date' | 'summary' | 'wins' | 'struggles' | 'activities' | 'intensity'>
+  Pick<
+    JournalEntry,
+    'date' | 'summary' | 'wins' | 'struggles' | 'activities' | 'intensity' | 'focus'
+  >
 >;
 
 /** A logged ascent — what you climbed on a given day. */
@@ -215,7 +293,8 @@ export type SyncTable =
   | 'climbs'
   | 'periods'
   | 'benchmarks'
-  | 'checkins';
+  | 'checkins'
+  | 'dailyContexts';
 
 /** Records that a record was deleted, so deletions propagate during sync. */
 export interface TombstoneRecord {
@@ -238,6 +317,7 @@ export interface Snapshot {
   periods: MacrocyclePeriodRecord[];
   benchmarks: BenchmarkRecord[];
   checkins: CheckinRecord[];
+  dailyContexts: DailyContextRecord[];
   /** Singleton profile (last-write-wins by updatedAt), or null if never set. */
   profile: ProfileRecord | null;
   tombstones: TombstoneRecord[];

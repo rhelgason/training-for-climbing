@@ -20,6 +20,7 @@ export * from './content/planning';
 export * from './content/prescriptions';
 export * from './content/profile';
 export * from './content/selfAssessment';
+export * from './content/trainingContext';
 export * from './content/grades';
 
 // ── Domain logic ───────────────────────────────────────────────────────────
@@ -28,10 +29,12 @@ export * from './features/assess/fitness';
 export * from './features/assess/reassessment';
 export * from './features/today/recommend';
 export * from './features/train/log';
+export * from './features/train/load';
 export * from './features/train/energyEmotion';
 export * from './features/train/exercises';
 export * from './features/plan/goals';
 export * from './features/plan/macrocycle';
+export * from './features/plan/microcycle';
 export * from './features/plan/program';
 export * from './features/progress/dashboard';
 export * from './features/review/filterGlossary';

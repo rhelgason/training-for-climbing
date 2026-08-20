@@ -178,10 +178,10 @@ describe('InMemoryRepository', () => {
     expect(await repo.getProfile()).toBeNull();
     const first = await repo.saveProfile({ abilityTier: 'elite' });
     expect(first.abilityTier).toBe('elite');
-    expect(first.aiCoachEnabled).toBe(false); // default preserved
-    const second = await repo.saveProfile({ aiCoachEnabled: true });
+    expect(first.aiCoachEnabled).toBe(true); // default preserved
+    const second = await repo.saveProfile({ aiCoachEnabled: false });
     expect(second.abilityTier).toBe('elite'); // prior value kept
-    expect(second.aiCoachEnabled).toBe(true);
+    expect(second.aiCoachEnabled).toBe(false);
     expect(second.updatedAt).toBeGreaterThan(first.updatedAt);
     expect(second.createdAt).toBe(first.createdAt);
   });
@@ -210,5 +210,67 @@ describe('InMemoryRepository', () => {
     const limited = await repo.listEvents(1);
     expect(limited).toHaveLength(1);
     expect(limited[0].name).toBe('assessment_completed');
+  });
+
+  describe('daily training context', () => {
+    const DAY = 24 * 60 * 60 * 1000;
+    const context = (date: number, overrides = {}) => ({
+      date,
+      environment: 'indoor' as const,
+      equipment: ['boulder-wall' as const],
+      sessionLength: 'standard' as const,
+      readiness: 'ok' as const,
+      ...overrides,
+    });
+
+    it('keeps one row per calendar day, editing rather than duplicating', async () => {
+      const repo = new InMemoryRepository();
+      const morning = 1000 * DAY + 8 * 60 * 60 * 1000;
+      const evening = 1000 * DAY + 20 * 60 * 60 * 1000;
+      const first = await repo.saveDailyContext(context(morning));
+      const second = await repo.saveDailyContext(context(evening, { readiness: 'tired' }));
+      expect(second.id).toBe(first.id);
+      expect(second.readiness).toBe('tired');
+      expect(await repo.listDailyContexts()).toHaveLength(1);
+    });
+
+    it('looks up a context by any time on that day', async () => {
+      const repo = new InMemoryRepository();
+      await repo.saveDailyContext(context(1000 * DAY + 60_000));
+      expect(await repo.getDailyContext(1000 * DAY + 23 * 60 * 60 * 1000)).not.toBeNull();
+      expect(await repo.getDailyContext(1001 * DAY)).toBeNull();
+    });
+
+    it('round-trips through the snapshot and propagates deletes', async () => {
+      const repo = new InMemoryRepository();
+      const saved = await repo.saveDailyContext(context(1000 * DAY));
+      const snap = await repo.exportSnapshot();
+      expect(snap.dailyContexts).toHaveLength(1);
+
+      const other = new InMemoryRepository();
+      await other.applySnapshot(snap);
+      expect(await other.listDailyContexts()).toHaveLength(1);
+
+      await repo.deleteDailyContext(saved.id);
+      const afterDelete = await repo.exportSnapshot();
+      expect(afterDelete.dailyContexts).toHaveLength(0);
+      expect(afterDelete.tombstones).toContainEqual(
+        expect.objectContaining({ table: 'dailyContexts', id: saved.id }),
+      );
+      await other.applySnapshot(afterDelete);
+      expect(await other.listDailyContexts()).toHaveLength(0);
+    });
+  });
+
+  it('persists the recorded focus on a journal entry', async () => {
+    const repo = new InMemoryRepository();
+    const saved = await repo.saveJournal({
+      date: 1,
+      activities: ['climbing'],
+      focus: ['maxStrength'],
+    });
+    expect(saved.focus).toEqual(['maxStrength']);
+    const updated = await repo.updateJournal(saved.id, { focus: ['powerEndurance'] });
+    expect(updated?.focus).toEqual(['powerEndurance']);
   });
 });

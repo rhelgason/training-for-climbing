@@ -3,6 +3,8 @@ import type {
   BenchmarkRecord,
   CheckinRecord,
   ClimbRecord,
+  DailyContextPatch,
+  DailyContextRecord,
   GoalPatch,
   GoalRecord,
   MacrocyclePeriodPatch,
@@ -14,6 +16,7 @@ import type {
   ClimbPatch,
   NewCheckin,
   NewClimb,
+  NewDailyContext,
   NewGoal,
   NewJournal,
   NewMacrocyclePeriod,
@@ -85,6 +88,19 @@ export interface Repository {
   /** Newest first (by reading time). */
   listCheckins(): Promise<CheckinRecord[]>;
   deleteCheckin(id: string): Promise<void>;
+
+  // --- Daily training context (one row per day) ---
+  /**
+   * Upsert today's context by calendar day — calling this twice on the same day
+   * edits one row rather than creating two.
+   */
+  saveDailyContext(input: NewDailyContext): Promise<DailyContextRecord>;
+  /** Newest first (by context date). */
+  listDailyContexts(): Promise<DailyContextRecord[]>;
+  /** The context for the calendar day containing `dateMs`, if one was recorded. */
+  getDailyContext(dateMs: number): Promise<DailyContextRecord | null>;
+  updateDailyContext(id: string, patch: DailyContextPatch): Promise<DailyContextRecord | null>;
+  deleteDailyContext(id: string): Promise<void>;
 
   // --- Profile (singleton settings) ---
   getProfile(): Promise<ProfileRecord | null>;

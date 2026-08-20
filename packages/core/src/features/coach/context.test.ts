@@ -163,6 +163,10 @@ describe('buildCoachContext', () => {
       gradeSystem: 'yds-v',
       reassessWeeks: 8,
       aiCoachEnabled: true,
+      styleFocus: 'boulder-power',
+      equipment: ['boulder-wall', 'hangboard'],
+      daysPerWeek: 4,
+      sessionLength: 'standard',
     };
     const ctx = buildCoachContext(input({ profile }));
     expect(ctx.profile.abilityTier).toBe('elite');
