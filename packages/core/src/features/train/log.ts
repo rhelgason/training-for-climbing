@@ -55,6 +55,26 @@ export function restRecommended(streak: number): boolean {
   return streak >= REST_AFTER_CONSECUTIVE_DAYS;
 }
 
+/**
+ * The run of training days the climber arrives at today *with*.
+ *
+ * `currentStreak` counts from today and so reads 0 until today is logged, which
+ * makes it the wrong input for deciding whether to train — it can only ever
+ * advise rest after the session has already happened. This counts the run
+ * ending yesterday, including today only if today is already logged.
+ */
+export function priorTrainingRun(dates: number[], nowMs: number): number {
+  const days = new Set(dates.map(dayIndex));
+  const today = dayIndex(nowMs);
+  let day = days.has(today) ? today : today - 1;
+  let count = 0;
+  while (days.has(day)) {
+    count += 1;
+    day -= 1;
+  }
+  return count;
+}
+
 /** Whole days since the most recent training day, or null if none. */
 export function daysSinceLastTraining(dates: number[], nowMs: number): number | null {
   if (dates.length === 0) return null;

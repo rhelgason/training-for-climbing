@@ -72,6 +72,7 @@ export default function TrainHome() {
   const daily = useDailyContext(repo, dataVersion);
   const [feedback, setFeedback] = useState<'up' | 'down' | null>(null);
   const [marking, setMarking] = useState(false);
+  const [showLight, setShowLight] = useState(false);
 
   const today = daily.value;
   // Fingerprints today's context for the coach cache — changing any of these
@@ -336,6 +337,39 @@ export default function TrainHome() {
           </div>
         )}
       </Card>
+
+      {/* A budget rest day is a promise the climber made to themselves, not
+          physiology — so if they're standing in the gym anyway, give them
+          somewhere to go rather than sending them home. */}
+      {rec.kind === 'rest' && rec.lightAlternative && (
+        <Card className="border-muted/40">
+          <p className="text-sm font-bold uppercase tracking-wide text-muted">
+            If you&apos;re training anyway
+          </p>
+          <p className="mt-1 text-sm leading-5">
+            Keep it genuinely easy — {rec.lightAlternative.label.toLowerCase()}, nothing near your
+            limit.
+          </p>
+          {showLight ? (
+            <div className="mt-3">
+              {rec.lightAlternative.plan.map((step, i) => (
+                <div key={i} className="mt-1 flex">
+                  <span className="w-5 text-sm font-bold text-muted">{i + 1}</span>
+                  <span className="flex-1 text-sm leading-5">{step}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowLight(true)}
+              className="mt-2 text-sm font-semibold text-primary"
+            >
+              Show the light session
+            </button>
+          )}
+        </Card>
+      )}
 
       <WhyThisPlan microcycle={rec.microcycle} because={rec.because} />
 

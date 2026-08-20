@@ -30,9 +30,10 @@ import {
   orderByHierarchy,
 } from '../../content/trainingContext';
 import {
-  consecutiveHardDays,
   countFocusInWeek,
+  daysSinceAnyLoad,
   daysSinceFocus,
+  priorHardDayRun,
   recentLoad,
   type LoadEvent,
 } from '../train/load';
@@ -77,11 +78,31 @@ export interface FocusVerdict {
   priority: number;
 }
 
+/**
+ * Why a rest day was called.
+ *
+ * The distinction matters at the point of use: `recovery` is physiology and the
+ * app should hold the line, while `budget` is a promise the climber made to
+ * themselves. Someone standing in the gym on their fourth day deserves "this is
+ * over the 3 days you planned for" plus a light option — not to be sent home.
+ */
+export type RestKind = 'recovery' | 'budget';
+
 export interface Microcycle {
   /** True when today should be a rest day, whatever the climber can reach. */
   restDay: boolean;
   /** Why it's a rest day (only set when `restDay`). */
   restReason?: string;
+  /** Whether rest is physiological or a self-imposed weekly budget. */
+  restKind?: RestKind;
+  /**
+   * A low-intensity focus that would still be safe today. Offered on a `budget`
+   * rest day so showing up anyway isn't a dead end; null on a recovery day,
+   * where the whole point is not to train.
+   */
+  lightAlternative: SessionFocusId | null;
+  /** Whole days since the last non-rest day, or null if nothing is logged. */
+  daysSinceTraining: number | null;
   /** The headline focus for today, or null on a rest day. */
   primary: SessionFocusId | null;
   /** Additional focuses that fit after the primary, in within-session order. */
@@ -198,13 +219,19 @@ function capitalise(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
-/** A human sentence about what the last few days did, for the UI and the coach. */
-function summariseRecentLoad(input: MicrocycleInput): string {
-  const recent = recentLoad(input.history, input.nowMs, 4).filter(
-    (e) => e.day < dayIndex(input.nowMs),
-  );
-  if (recent.length === 0) return 'No training logged in the last few days.';
+/**
+ * A human sentence about what the last few days did, for the UI and the coach.
+ * A long gap is stated outright: coming back after a week off should read as
+ * "you're fresh", not as silence.
+ */
+function summariseRecentLoad(input: MicrocycleInput, daysSince: number | null): string {
   const today = dayIndex(input.nowMs);
+  const recent = recentLoad(input.history, input.nowMs, 5).filter((e) => e.day < today);
+  if (recent.length === 0) {
+    return daysSince === null
+      ? 'No training logged yet.'
+      : `Nothing logged in the last few days — you should be well recovered.`;
+  }
   const parts = recent.slice(0, 3).map((event) => {
     const when = today - event.day === 1 ? 'Yesterday' : `${today - event.day} days ago`;
     const what = event.focuses
@@ -214,7 +241,19 @@ function summariseRecentLoad(input: MicrocycleInput): string {
       ? `${when}: rest`
       : `${when}: ${what.join(' + ')} (${event.intensity})`;
   });
-  return parts.join('; ') + '.';
+  const gap =
+    daysSince !== null && daysSince >= 3
+      ? ` You haven't trained in ${daysSince} days, so you're starting fresh.`
+      : '';
+  return parts.join('; ') + '.' + gap;
+}
+
+/** The gentlest thing still on the table, for a "you're here anyway" offer. */
+function pickLightAlternative(verdicts: FocusVerdict[]): SessionFocusId | null {
+  const light = verdicts
+    .filter((v) => v.status !== 'blocked' && sessionFocus(v.focus).intensity !== 'high')
+    .sort((a, b) => b.priority - a.priority);
+  return light.length > 0 ? light[0].focus : null;
 }
 
 /**
@@ -228,39 +267,54 @@ export function buildMicrocycle(input: MicrocycleInput): Microcycle {
   );
   const week = recentLoad(input.history, input.nowMs, 7);
   const trainingDaysThisWeek = week.filter((e) => !e.focuses.every((f) => f === 'rest')).length;
-  const hardDaysInARow = consecutiveHardDays(input.history, input.nowMs);
-  const recentLoadSummary = summariseRecentLoad(input);
+  // The run the climber *arrives with*, not one that includes today — today is
+  // the thing being decided and is usually not logged yet.
+  const hardDaysInARow = priorHardDayRun(input.history, input.nowMs);
+  const daysSinceTraining = daysSinceAnyLoad(input.history, input.nowMs);
+  const recentLoadSummary = summariseRecentLoad(input, daysSinceTraining);
 
-  const rest = (restReason: string): Microcycle => ({
+  const rest = (restReason: string, restKind: RestKind): Microcycle => ({
     restDay: true,
     restReason,
+    restKind,
+    lightAlternative: restKind === 'budget' ? pickLightAlternative(verdicts) : null,
     primary: null,
     supporting: [],
     verdicts,
     trainingDaysThisWeek,
     hardDaysInARow,
+    daysSinceTraining,
     recentLoadSummary,
   });
 
   if (input.readiness === 'tweaky') {
     return rest(
       'You flagged that something hurts. Train around it or take the day — a small tweak ignored becomes a long layoff.',
+      'recovery',
     );
   }
   if (hardDaysInARow >= MAX_CONSECUTIVE_HARD_DAYS) {
     return rest(
       `You've trained hard ${hardDaysInARow} days running. Rest is when the adaptation actually happens.`,
+      'recovery',
     );
   }
-  if (trainingDaysThisWeek >= input.daysPerWeek) {
+  // Only a budget call, so it never fires on someone who has clearly recovered:
+  // two rest days in means an extra session isn't overtraining, whatever the
+  // rolling count says.
+  if (trainingDaysThisWeek >= input.daysPerWeek && (daysSinceTraining ?? 0) < 2) {
     return rest(
-      `You've already trained ${trainingDaysThisWeek} days this week, which is the ${input.daysPerWeek} you planned for. Take the recovery.`,
+      `That's ${trainingDaysThisWeek} training days in the last 7, the ${input.daysPerWeek} you planned for. Resting is the plan working — but you know your week best.`,
+      'budget',
     );
   }
 
   const usable = verdicts.filter((v) => v.status !== 'blocked');
   if (usable.length === 0) {
-    return rest('Nothing you can train today is both available and recovered. Rest up.');
+    return rest(
+      'Nothing you can train today is both available and recovered. Rest up.',
+      'recovery',
+    );
   }
 
   const primary = usable[0].focus;
@@ -276,11 +330,13 @@ export function buildMicrocycle(input: MicrocycleInput): Microcycle {
 
   return {
     restDay: false,
+    lightAlternative: null,
     primary,
     supporting,
     verdicts,
     trainingDaysThisWeek,
     hardDaysInARow,
+    daysSinceTraining,
     recentLoadSummary,
   };
 }

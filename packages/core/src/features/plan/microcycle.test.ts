@@ -151,6 +151,32 @@ describe('readiness', () => {
 });
 
 describe('whole-day rest rules', () => {
+  // The decision is about a day that hasn't happened yet, so the run of hard
+  // days has to be counted *up to* today, not including it. Counting from today
+  // silently returns 0 before today is logged, which meant rest was only ever
+  // advised after the climber had already trained.
+  it('rests when the three hard days were yesterday and before, with today unlogged', () => {
+    const history = loadHistory(
+      [day(-1, ['maxStrength']), day(-2, ['power']), day(-3, ['powerEndurance'])],
+      [],
+    );
+    const cycle = buildMicrocycle(input({ history, daysPerWeek: 7 }));
+    expect(cycle.restDay).toBe(true);
+    expect(cycle.restKind).toBe('recovery');
+    expect(cycle.hardDaysInARow).toBe(3);
+  });
+
+  it('does not rest when the hard run was broken by a day off', () => {
+    // Hard on -1 and -2, but -3 was a rest day: the run is 2, not 3.
+    const history = loadHistory(
+      [day(-1, ['maxStrength']), day(-2, ['power']), journal(-3, { activities: ['rest'] })],
+      [],
+    );
+    const cycle = buildMicrocycle(input({ history, daysPerWeek: 7 }));
+    expect(cycle.hardDaysInARow).toBe(2);
+    expect(cycle.restDay).toBe(false);
+  });
+
   it('rests after three hard days in a row', () => {
     const history = loadHistory(
       [day(0, ['skill']), day(-1, ['maxStrength']), day(-2, ['power'])],
@@ -170,6 +196,27 @@ describe('whole-day rest rules', () => {
     const cycle = buildMicrocycle(input({ history, daysPerWeek: 3 }));
     expect(cycle.restDay).toBe(true);
     expect(cycle.trainingDaysThisWeek).toBe(3);
+    // A budget call, not a physiological one — so it offers a way to still train.
+    expect(cycle.restKind).toBe('budget');
+    expect(cycle.lightAlternative).not.toBeNull();
+  });
+
+  it('offers no light alternative on a recovery rest day', () => {
+    const cycle = buildMicrocycle(input({ readiness: 'tweaky' }));
+    expect(cycle.restKind).toBe('recovery');
+    expect(cycle.lightAlternative).toBeNull();
+  });
+
+  it("doesn't hold someone to a weekly budget they've already recovered from", () => {
+    // Three days in the rolling week, but the last was 3 days ago. A rolling
+    // count alone would send a rested climber home from the gym.
+    const history = loadHistory(
+      [-3, -4, -5].map((o) => day(o, ['skill'], 'moderate')),
+      [],
+    );
+    const cycle = buildMicrocycle(input({ history, daysPerWeek: 3 }));
+    expect(cycle.trainingDaysThisWeek).toBe(3);
+    expect(cycle.restDay).toBe(false);
   });
 
   it('does not rest when the climber has days left in their week', () => {
@@ -231,6 +278,44 @@ describe('choosing the day', () => {
     const cycle = buildMicrocycle(input({ abilityTier: 'beginner' }));
     expect(verdictFor(cycle, 'maxStrength').status).toBe('blocked');
     expect(verdictFor(cycle, 'skill').status).not.toBe('blocked');
+  });
+});
+
+describe('coming back after a gap', () => {
+  // Everything is anchored to calendar days rather than "the last N entries",
+  // so days the climber never opened the app still count as rest.
+  it('treats unopened days as rest, not as missing data', () => {
+    const history = loadHistory(
+      [day(-4, ['maxStrength']), day(-5, ['power']), day(-6, ['powerEndurance'])],
+      [],
+    );
+    const cycle = buildMicrocycle(input({ history, daysPerWeek: 4 }));
+    expect(cycle.restDay).toBe(false);
+    expect(cycle.hardDaysInARow).toBe(0);
+    expect(cycle.daysSinceTraining).toBe(4);
+  });
+
+  it('clears a recovery gap so a blocked focus becomes available again', () => {
+    const yesterday = buildMicrocycle(
+      input({ history: loadHistory([day(-1, ['maxStrength'])], []) }),
+    );
+    const laterInTheWeek = buildMicrocycle(
+      input({ history: loadHistory([day(-4, ['maxStrength'])], []) }),
+    );
+    expect(verdictFor(yesterday, 'maxStrength').status).toBe('blocked');
+    expect(verdictFor(laterInTheWeek, 'maxStrength').status).not.toBe('blocked');
+  });
+
+  it('says outright that a long gap means they are fresh', () => {
+    const history = loadHistory([day(-6, ['maxStrength'])], []);
+    const cycle = buildMicrocycle(input({ history }));
+    expect(cycle.recentLoadSummary).toMatch(/starting fresh|well recovered/);
+  });
+
+  it('ages a session out of the weekly count once it is 7 days old', () => {
+    const stale = buildMicrocycle(input({ history: loadHistory([day(-8, ['maxStrength'])], []) }));
+    expect(verdictFor(stale, 'maxStrength').usedThisWeek).toBe(0);
+    expect(stale.trainingDaysThisWeek).toBe(0);
   });
 });
 

@@ -35,10 +35,10 @@ import { TRIAD_LABELS, type Exercise, type TriadArea } from '../../content/types
 import type { AbilityTier } from '../../content/planning';
 import type { GoalRecord } from '../../db/types';
 import { activeGoals } from '../plan/goals';
-import { buildMicrocycle, type Microcycle } from '../plan/microcycle';
+import { buildMicrocycle, type Microcycle, type RestKind } from '../plan/microcycle';
 import { isDoableWith } from '../train/exercises';
 import { loadHistory, type LoadEvent } from '../train/load';
-import { currentStreak, dayIndex } from '../train/log';
+import { currentStreak, dayIndex, priorTrainingRun, restRecommended } from '../train/log';
 
 export interface DailyInput {
   /** Weakest triad area from the latest assessment, or null if none taken. */
@@ -89,6 +89,17 @@ export interface DailyRecommendation {
   because: string;
   /** The scheduler's full working, for the UI's "why" panel and the coach. */
   microcycle: Microcycle | null;
+  /**
+   * On a rest day, whether it's physiological or a self-imposed weekly budget.
+   * Null when it isn't a rest day.
+   */
+  restKind: RestKind | null;
+  /**
+   * A gentler session offered when rest is only a budget call, so a climber
+   * already standing in the gym has somewhere to go. Null on recovery days,
+   * where not training is the entire point.
+   */
+  lightAlternative: { focus: SessionFocusId; label: string; plan: string[] } | null;
 }
 
 const FOCUS_DETAIL: Record<TriadArea, string> = {
@@ -216,10 +227,20 @@ export function buildDailyRecommendation(input: DailyInput): DailyRecommendation
     supportingFocuses: [] as SessionFocusId[],
     because,
     microcycle: cycle,
+    restKind: null as RestKind | null,
+    lightAlternative: null as DailyRecommendation['lightAlternative'],
   };
 
-  const needsRest = cycle ? cycle.restDay : streak >= 3;
+  // Note `priorTrainingRun`, not `streak`: the question is what they arrive
+  // with, and today is usually unlogged when the plan is read.
+  const needsRest = cycle
+    ? cycle.restDay
+    : restRecommended(priorTrainingRun(input.trainingDates, input.nowMs));
   if (needsRest) {
+    const alternativeFocus = cycle?.lightAlternative ?? null;
+    const alternativeStep = alternativeFocus
+      ? focusStep(alternativeFocus, dayIdx, equipment)
+      : null;
     return {
       ...common,
       kind: 'rest',
@@ -233,6 +254,15 @@ export function buildDailyRecommendation(input: DailyInput): DailyRecommendation
         'Stay loose: light mobility, gentle stretching, and a short walk are fine.',
         'Prioritise sleep, food, and hydration — recovery is when the gains happen.',
       ],
+      restKind: cycle?.restKind ?? 'recovery',
+      lightAlternative:
+        alternativeFocus && alternativeStep
+          ? {
+              focus: alternativeFocus,
+              label: sessionFocus(alternativeFocus).label,
+              plan: [WARM_UP, alternativeStep, COOL_DOWN],
+            }
+          : null,
     };
   }
 
