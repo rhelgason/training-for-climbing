@@ -2,16 +2,46 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CoachContext } from '@tfc/core';
 import { generateCoachSuggestion, isLlmConfigured } from './llm';
 
-const context = {
-  generatedAt: 0,
-  profile: { abilityTier: 'intermediate' },
-  assessment: null,
-  fitness: [],
-  climbing: { sessionsLast30Days: 0, sendRate: 0, hardestSends: [] },
-  goals: [],
-  journals: [],
-  training: { currentStreak: 0, daysLast14: 0 },
-} satisfies CoachContext;
+function makeContext(restDay = false) {
+  return {
+    generatedAt: 0,
+    profile: {
+      abilityTier: 'intermediate',
+      styleFocus: 'all-round',
+      daysPerWeek: 3,
+      sessionLength: 'standard',
+      equipment: ['boulder-wall'],
+    },
+    today: {
+      environment: 'Indoor',
+      equipment: ['boulder-wall'],
+      sessionLength: 'standard',
+      readiness: 'ok',
+    },
+    schedule: {
+      restDay,
+      suggestedFocus: restDay ? null : 'skill',
+      allowed: restDay
+        ? []
+        : [{ focus: 'skill', label: 'Skill & movement', reason: 'Due', usedThisWeek: 0 }],
+      blocked: [],
+      trainingDaysThisWeek: 0,
+      plannedDaysPerWeek: 3,
+      hardDaysInARow: restDay ? 3 : 0,
+      recentLoadSummary: 'No training logged in the last few days.',
+    },
+    recentDays: [],
+    assessment: null,
+    fitness: [],
+    climbing: { sessionsLast30Days: 0, sendRate: 0, hardestSends: [] },
+    goals: [],
+    journals: [],
+    training: { currentStreak: 0, daysLast14: 0 },
+    baselinePlan: ['Warm up'],
+  } satisfies CoachContext;
+}
+
+const context = makeContext();
 
 /** A well-formed model reply, in the provider's envelope. */
 function geminiReply(payload: unknown) {
@@ -144,5 +174,42 @@ describe('generateCoachSuggestion', () => {
 
     expect(suggestion.headline).toBe('Endurance day');
     expect(fetchMock.mock.calls[0][0]).toContain('api.groq.com');
+  });
+
+  it('rejects a plan that trains through a scheduled rest day', async () => {
+    process.env.GEMINI_API_KEY = 'test-key';
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        geminiReply({
+          headline: 'Light power endurance',
+          plan: ['Warm up', 'A few easy laps'],
+          restDay: false,
+        }),
+      ),
+    );
+
+    // The route turns this into a 502 and the client shows the deterministic
+    // rest-day plan, which is the correct advice.
+    await expect(generateCoachSuggestion(makeContext(true))).rejects.toThrow(/rest day/);
+  });
+
+  it('accepts a rest-day plan that agrees with the scheduler', async () => {
+    process.env.GEMINI_API_KEY = 'test-key';
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        geminiReply({
+          headline: 'Rest today',
+          plan: ['Sleep, eat, hydrate'],
+          restDay: true,
+        }),
+      ),
+    );
+
+    const suggestion = await generateCoachSuggestion(makeContext(true));
+    expect(suggestion.headline).toBe('Rest today');
+    // The validation channel is stripped before the client sees it.
+    expect(suggestion).not.toHaveProperty('restDay');
   });
 });
