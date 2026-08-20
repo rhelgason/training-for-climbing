@@ -75,6 +75,7 @@ function summarise(value: TodayContextValue): string {
 
 export function TodayContext({ value, onChange, confirmed }: Props) {
   const [open, setOpen] = useState(false);
+  const [note, setNote] = useState(value.note ?? '');
   const set = <K extends keyof TodayContextValue>(key: K, next: TodayContextValue[K]) =>
     onChange({ ...value, [key]: next });
 
@@ -149,11 +150,16 @@ export function TodayContext({ value, onChange, confirmed }: Props) {
 
       <div>
         <p className="mb-2 text-sm font-semibold">Anything else about today?</p>
+        {/* Held locally and committed on blur — each commit is a repo write and
+            a queued sync, which a per-keystroke handler would fire dozens of. */}
         <input
           className={inputClass}
           placeholder="e.g. at a friend's gym, slept badly"
-          value={value.note ?? ''}
-          onChange={(e) => set('note', e.target.value)}
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          onBlur={() => {
+            if (note.trim() !== (value.note ?? '').trim()) set('note', note.trim() || undefined);
+          }}
         />
       </div>
     </Card>
