@@ -58,4 +58,5 @@ export * from './features/auth/authClient';
 // ── Libraries ──────────────────────────────────────────────────────────────
 export * from './lib/ids';
 export * from './lib/clock';
+export * from './lib/day';
 export * from './lib/logger';

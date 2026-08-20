@@ -1,10 +1,9 @@
+import { dayIndex } from '../../lib/day';
 /**
  * Pure helpers for the fitness self-tests (Chapters 8 & 9). No I/O — unit-testable.
  * The book says to take the 10-part test annually and compare results over time.
  */
 import type { BenchmarkRecord } from '../../db/types';
-
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 /** The book recommends retaking the evaluation once a year. */
 export const ANNUAL_DAYS = 365;
@@ -62,7 +61,7 @@ export function daysSinceLastEvaluation(
 ): number | null {
   if (benchmarks.length === 0) return null;
   const latest = Math.max(...benchmarks.map((b) => b.date));
-  return Math.floor(nowMs / MS_PER_DAY) - Math.floor(latest / MS_PER_DAY);
+  return dayIndex(nowMs) - dayIndex(latest);
 }
 
 /** True when it's been at least a year since the last evaluation. */

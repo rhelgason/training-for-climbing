@@ -1,7 +1,6 @@
+import { dayIndex } from '../../lib/day';
 /** Pure helpers for the macrocycle planner. No I/O — unit-testable. */
 import type { MacrocyclePeriodRecord } from '../../db/types';
-
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 export interface PeriodValidation {
   valid: boolean;
@@ -40,7 +39,7 @@ export function currentPeriod(
 export function trainingDaysInRange(dates: number[], startMs: number, endMs: number): number {
   const days = new Set<number>();
   for (const d of dates) {
-    if (d >= startMs && d <= endMs) days.add(Math.floor(d / MS_PER_DAY));
+    if (d >= startMs && d <= endMs) days.add(dayIndex(d));
   }
   return days.size;
 }

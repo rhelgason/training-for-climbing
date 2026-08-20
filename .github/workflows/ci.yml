@@ -58,6 +58,13 @@ jobs:
         run: npm run typecheck --workspace @tfc/core
       - name: Test (@tfc/core)
         run: npm run test --workspace @tfc/core
+      # Runners are UTC, where UTC-vs-local day bugs pass silently. Day
+      # arithmetic drives streaks, rest rules, and "today", so re-run the suite
+      # west of and east of Greenwich.
+      - name: Test (@tfc/core, UTC-7)
+        run: TZ=America/Los_Angeles npm run test --workspace @tfc/core
+      - name: Test (@tfc/core, UTC+12)
+        run: TZ=Pacific/Auckland npm run test --workspace @tfc/core
 
   web:
     name: web · typecheck · lint · test · build

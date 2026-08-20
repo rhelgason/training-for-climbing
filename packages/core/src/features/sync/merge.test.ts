@@ -1,4 +1,10 @@
-import type { GoalRecord, JournalEntry, Snapshot, TombstoneRecord } from '../../db/types';
+import type {
+  DailyContextRecord,
+  GoalRecord,
+  JournalEntry,
+  Snapshot,
+  TombstoneRecord,
+} from '../../db/types';
 import { emptySnapshot, mergeLists, mergeSnapshots, mergeTombstones } from './merge';
 
 function goal(id: string, createdAt: number, updatedAt: number, title: string): GoalRecord {
@@ -7,6 +13,23 @@ function goal(id: string, createdAt: number, updatedAt: number, title: string): 
 
 function journal(id: string, createdAt: number): JournalEntry {
   return { id, createdAt, updatedAt: createdAt, date: createdAt, activities: [] };
+}
+
+function dailyContext(
+  id: string,
+  updatedAt: number,
+  readiness: 'ok' | 'tired',
+): DailyContextRecord {
+  return {
+    id,
+    createdAt: 1,
+    updatedAt,
+    date: 1,
+    environment: 'indoor',
+    equipment: ['boulder-wall'],
+    sessionLength: 'standard',
+    readiness,
+  };
 }
 
 describe('mergeLists', () => {
@@ -83,5 +106,70 @@ describe('mergeSnapshots', () => {
     expect(merged.journals).toHaveLength(1);
     expect(merged.tombstones).toEqual([]);
     expect('sessions' in merged).toBe(false);
+  });
+
+  describe('daily contexts', () => {
+    it('merges them last-write-wins like every other table', () => {
+      const a: Snapshot = { ...emptySnapshot(), dailyContexts: [dailyContext('d', 100, 'ok')] };
+      const b: Snapshot = { ...emptySnapshot(), dailyContexts: [dailyContext('d', 200, 'tired')] };
+      expect(mergeSnapshots(a, b).dailyContexts).toEqual([
+        expect.objectContaining({ id: 'd', readiness: 'tired' }),
+      ]);
+    });
+
+    it('unions contexts created independently on two devices', () => {
+      const a: Snapshot = { ...emptySnapshot(), dailyContexts: [dailyContext('a', 100, 'ok')] };
+      const b: Snapshot = { ...emptySnapshot(), dailyContexts: [dailyContext('b', 100, 'tired')] };
+      expect(mergeSnapshots(a, b).dailyContexts).toHaveLength(2);
+    });
+
+    it('honours a tombstone that is newer than the record', () => {
+      const a: Snapshot = { ...emptySnapshot(), dailyContexts: [dailyContext('d', 100, 'ok')] };
+      const b: Snapshot = {
+        ...emptySnapshot(),
+        tombstones: [{ table: 'dailyContexts', id: 'd', deletedAt: 200 }],
+      };
+      const merged = mergeSnapshots(a, b);
+      expect(merged.dailyContexts).toHaveLength(0);
+      expect(merged.tombstones).toHaveLength(1);
+    });
+
+    it('keeps a context edited after its deletion and drops the tombstone', () => {
+      const a: Snapshot = { ...emptySnapshot(), dailyContexts: [dailyContext('d', 300, 'tired')] };
+      const b: Snapshot = {
+        ...emptySnapshot(),
+        tombstones: [{ table: 'dailyContexts', id: 'd', deletedAt: 200 }],
+      };
+      const merged = mergeSnapshots(a, b);
+      expect(merged.dailyContexts).toHaveLength(1);
+      expect(merged.tombstones).toHaveLength(0);
+    });
+
+    it('survives a remote snapshot written before the table existed', () => {
+      const local: Snapshot = { ...emptySnapshot(), dailyContexts: [dailyContext('d', 1, 'ok')] };
+      const oldRemote = { goals: [goal('g', 1, 1, 'kept')] };
+      const merged = mergeSnapshots(local, oldRemote as unknown as Snapshot);
+      expect(merged.dailyContexts).toHaveLength(1);
+      expect(merged.goals).toHaveLength(1);
+    });
+  });
+
+  it('preserves every table through an empty-to-full merge', () => {
+    // Guards the commonest way a new syncable table gets lost: added to the
+    // model but forgotten in one of merge's three lists.
+    const full: Snapshot = {
+      ...emptySnapshot(),
+      goals: [goal('g', 1, 1, 'g')],
+      journals: [journal('j', 1)],
+      dailyContexts: [dailyContext('d', 1, 'ok')],
+    };
+    const merged = mergeSnapshots(emptySnapshot(), full);
+    for (const key of Object.keys(full) as (keyof Snapshot)[]) {
+      if (key === 'profile' || key === 'tombstones') continue;
+      expect({ key, length: (merged[key] as unknown[]).length }).toEqual({
+        key,
+        length: (full[key] as unknown[]).length,
+      });
+    }
   });
 });

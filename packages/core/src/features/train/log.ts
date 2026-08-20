@@ -8,16 +8,13 @@
  */
 import { isTrainingActivity } from '../../content/journal';
 import type { ClimbRecord, JournalEntry } from '../../db/types';
-
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
+import { dayIndex } from '../../lib/day';
 
 /** The book's threshold: training this many days in a row risks overtraining. */
 export const REST_AFTER_CONSECUTIVE_DAYS = 3;
 
-/** Calendar-day index for an epoch-ms timestamp. */
-export function dayIndex(ms: number): number {
-  return Math.floor(ms / MS_PER_DAY);
-}
+// Re-exported so existing callers keep importing day arithmetic from here.
+export { dayIndex };
 
 /** Epoch-ms dates that count as training (journal with real activity, or a climb). */
 export function trainingDates(journals: JournalEntry[], climbs: ClimbRecord[]): number[] {

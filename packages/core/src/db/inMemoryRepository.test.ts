@@ -1,4 +1,5 @@
 import { InMemoryRepository } from './inMemoryRepository';
+import { emptySnapshot } from '../features/sync/merge';
 import type { NewAssessment, NewGoal, NewJournal } from './types';
 
 function sampleAssessment(overrides: Partial<NewAssessment> = {}): NewAssessment {
@@ -213,7 +214,12 @@ describe('InMemoryRepository', () => {
   });
 
   describe('daily training context', () => {
-    const DAY = 24 * 60 * 60 * 1000;
+    // Built from local date components on purpose: the app's "day" is the
+    // climber's calendar day, so a 9am and an 11pm session are the same day
+    // even though they can straddle a UTC boundary.
+    const at = (dayOffset: number, hour: number) =>
+      new Date(2026, 7, 20 + dayOffset, hour, 0, 0).getTime();
+
     const context = (date: number, overrides = {}) => ({
       date,
       environment: 'indoor' as const,
@@ -225,25 +231,49 @@ describe('InMemoryRepository', () => {
 
     it('keeps one row per calendar day, editing rather than duplicating', async () => {
       const repo = new InMemoryRepository();
-      const morning = 1000 * DAY + 8 * 60 * 60 * 1000;
-      const evening = 1000 * DAY + 20 * 60 * 60 * 1000;
-      const first = await repo.saveDailyContext(context(morning));
-      const second = await repo.saveDailyContext(context(evening, { readiness: 'tired' }));
+      const first = await repo.saveDailyContext(context(at(0, 8)));
+      const second = await repo.saveDailyContext(context(at(0, 20), { readiness: 'tired' }));
       expect(second.id).toBe(first.id);
       expect(second.readiness).toBe('tired');
       expect(await repo.listDailyContexts()).toHaveLength(1);
     });
 
-    it('looks up a context by any time on that day', async () => {
+    it('matches any time on the same local day, including late evening', async () => {
       const repo = new InMemoryRepository();
-      await repo.saveDailyContext(context(1000 * DAY + 60_000));
-      expect(await repo.getDailyContext(1000 * DAY + 23 * 60 * 60 * 1000)).not.toBeNull();
-      expect(await repo.getDailyContext(1001 * DAY)).toBeNull();
+      await repo.saveDailyContext(context(at(0, 9)));
+      expect(await repo.getDailyContext(at(0, 23))).not.toBeNull();
+      expect(await repo.getDailyContext(at(0, 0))).not.toBeNull();
+      expect(await repo.getDailyContext(at(1, 9))).toBeNull();
+      expect(await repo.getDailyContext(at(-1, 9))).toBeNull();
+    });
+
+    it('prefers the most recently edited row when sync leaves two for a day', async () => {
+      const repo = new InMemoryRepository();
+      // Two devices each created a row for today before syncing; the merge
+      // unions by id, so "one row per day" only ever held locally.
+      await repo.applySnapshot({
+        ...emptySnapshot(),
+        dailyContexts: [
+          {
+            id: 'a',
+            createdAt: 1,
+            updatedAt: 1,
+            ...context(at(0, 9), { readiness: 'fresh' as const }),
+          },
+          {
+            id: 'b',
+            createdAt: 2,
+            updatedAt: 2,
+            ...context(at(0, 18), { readiness: 'tired' as const }),
+          },
+        ],
+      });
+      expect((await repo.getDailyContext(at(0, 12)))?.readiness).toBe('tired');
     });
 
     it('round-trips through the snapshot and propagates deletes', async () => {
       const repo = new InMemoryRepository();
-      const saved = await repo.saveDailyContext(context(1000 * DAY));
+      const saved = await repo.saveDailyContext(context(at(0, 9)));
       const snap = await repo.exportSnapshot();
       expect(snap.dailyContexts).toHaveLength(1);
 

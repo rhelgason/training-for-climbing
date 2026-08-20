@@ -1,3 +1,4 @@
+import { dayIndex } from '../../lib/day';
 /**
  * Energy-Emotion logic (Appendix B chart). Pure — unit-testable.
  *
@@ -55,9 +56,6 @@ export function quadrantOf(energy: number, emotion: number): QuadrantInfo {
 
 /** Readings whose `time` falls on the same calendar day as `dayMs`, oldest-first. */
 export function readingsForDay(checkins: CheckinRecord[], dayMs: number): CheckinRecord[] {
-  const MS_PER_DAY = 24 * 60 * 60 * 1000;
-  const day = Math.floor(dayMs / MS_PER_DAY);
-  return checkins
-    .filter((c) => Math.floor(c.time / MS_PER_DAY) === day)
-    .sort((a, b) => a.time - b.time);
+  const day = dayIndex(dayMs);
+  return checkins.filter((c) => dayIndex(c.time) === day).sort((a, b) => a.time - b.time);
 }
