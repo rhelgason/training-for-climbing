@@ -1,6 +1,8 @@
 import {
   ACTIVITY_LABELS,
   buildDailyRecommendation,
+  effectiveProfile,
+  loadHistory,
   type DailyRecommendation,
   dayIndex,
   flaggedPromptsForArea,
@@ -67,11 +69,16 @@ export function TrainHomeScreen({ navigation }: Props) {
         repo.listClimbs(),
         repo.listAssessments(),
         repo.listGoals(),
-      ]).then(([journals, climbs, assessments, goals]) => {
+        repo.getProfile(),
+      ]).then(([journals, climbs, assessments, goals, profile]) => {
         if (!on) return;
         const nowMs = now();
         const latest = assessments[0] ?? null;
         const weakestArea = latest?.weakestArea ?? null;
+        const settings = effectiveProfile(profile);
+        // Run the same scheduler the coach is bound by. Without this the card
+        // here and the AI card could disagree about whether today is a rest
+        // day, since `buildCoachContext` always schedules.
         const recommendation = buildDailyRecommendation({
           weakestArea,
           weakSpots:
@@ -79,6 +86,12 @@ export function TrainHomeScreen({ navigation }: Props) {
           goals,
           trainingDates: trainingDates(journals, climbs),
           nowMs,
+          history: loadHistory(journals, climbs),
+          abilityTier: settings.abilityTier,
+          styleFocus: settings.styleFocus,
+          daysPerWeek: settings.daysPerWeek,
+          equipment: settings.equipment,
+          sessionLength: settings.sessionLength,
         });
         const todayJournal = journals.find((j) => dayIndex(j.date) === dayIndex(nowMs));
         setState({
