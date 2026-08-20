@@ -34,6 +34,10 @@ import { useCoach } from '../../lib/coach/useCoach';
 import { useBackupNudge } from '../../lib/auth/useBackupNudge';
 import { useOnboarding } from '../../lib/onboarding/useOnboarding';
 import { useDailyContext } from '../../lib/today/useDailyContext';
+import { useDebouncedValue } from '../../lib/useDebouncedValue';
+
+/** How long the daily check-in must sit still before the coach is re-asked. */
+const COACH_SETTLE_MS = 2500;
 
 function formatDate(ms: number): string {
   return new Date(ms).toLocaleDateString(undefined, {
@@ -71,7 +75,8 @@ export default function TrainHome() {
 
   const today = daily.value;
   // Fingerprints today's context for the coach cache — changing any of these
-  // makes yesterday's AI advice wrong, so it forces a regeneration.
+  // makes yesterday's AI advice wrong, so it forces a regeneration. Debounced,
+  // because toggling four equipment chips is one decision, not four.
   const contextKey = today
     ? [
         dayIndex(now()),
@@ -81,7 +86,7 @@ export default function TrainHome() {
         [...today.equipment].sort().join(','),
       ].join('|')
     : undefined;
-  const coach = useCoach(repo, contextKey);
+  const coach = useCoach(repo, useDebouncedValue(contextKey, COACH_SETTLE_MS));
 
   const sendFeedback = (rating: 'up' | 'down') => {
     setFeedback(rating);
