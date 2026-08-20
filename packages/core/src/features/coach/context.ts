@@ -25,6 +25,7 @@ import type {
   ProfileRecord,
 } from '../../db/types';
 import { effectiveProfile } from '../../content/profile';
+import { protocolById } from '../../content/protocols';
 import { sessionFocus, type SessionFocusId } from '../../content/trainingContext';
 import { flaggedPromptsForArea } from '../assess/scoring';
 import { activeGoals } from '../plan/goals';
@@ -74,7 +75,10 @@ function fitnessHighlights(benchmarks: BenchmarkRecord[]): CoachContext['fitness
     if (prev) {
       trend = latest.value > prev.value ? 'up' : latest.value < prev.value ? 'down' : 'flat';
     }
-    const name = FITNESS_TESTS.find((t) => t.id === testId)?.name ?? testId;
+    // Benchmarks come from two catalogs: the self-tests and the trackable
+    // protocols logged inline from the daily plan.
+    const name =
+      FITNESS_TESTS.find((t) => t.id === testId)?.name ?? protocolById(testId)?.name ?? testId;
     out.push({ test: name, latest: latest.value, trend });
   }
   return out;

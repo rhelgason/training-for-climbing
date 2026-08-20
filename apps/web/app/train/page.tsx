@@ -11,12 +11,15 @@ import {
   effectiveProfile,
   flaggedPromptsForArea,
   isOnboarded,
+  latestForTest,
   loadHistory,
   now,
+  protocolById,
   relativeTime,
   sessionFocus,
   trackEvent,
   trainingDates,
+  type BenchmarkRecord,
   type DailyRecommendation,
   type JournalEntry,
   type JournalIntensity,
@@ -28,6 +31,7 @@ import { Screen } from '../../components/Screen';
 import { GettingStarted, type OnboardingStep } from '../../components/GettingStarted';
 import { BackupBanner } from '../../components/BackupBanner';
 import { TodayContext } from '../../components/TodayContext';
+import { ProtocolMetric } from '../../components/ProtocolMetric';
 import { WhyThisPlan } from '../../components/WhyThisPlan';
 import { useRepository, useSync } from '../../lib/db/RepositoryProvider';
 import { useCoach } from '../../lib/coach/useCoach';
@@ -60,6 +64,7 @@ interface LoadState {
   todayJournalId: string | null;
   hasAssessment: boolean;
   hasGoal: boolean;
+  benchmarks: BenchmarkRecord[];
 }
 
 export default function TrainHome() {
@@ -75,6 +80,8 @@ export default function TrainHome() {
   const [showLight, setShowLight] = useState(false);
   /** Prescribed steps the climber has unticked as not done. */
   const [skippedSteps, setSkippedSteps] = useState<string[]>([]);
+  /** Protocol values for today, keyed by protocol id; seeded from last session. */
+  const [metrics, setMetrics] = useState<Record<string, number>>({});
 
   const toggleStep = (step: string) =>
     setSkippedSteps((prev) =>
@@ -134,6 +141,14 @@ export default function TrainHome() {
         });
         journalId = saved.id;
       }
+      // Record each protocol number the climber actually did. Skipped steps
+      // are excluded — an untouched block is not a result.
+      for (const step of plan.steps) {
+        if (!step.protocolId || skippedSteps.includes(step.text)) continue;
+        const value = metrics[step.protocolId];
+        if (typeof value !== 'number') continue;
+        await repo.saveBenchmark({ testId: step.protocolId, value, date: now() });
+      }
       trackEvent('plan_completed', {
         focus: plan.focus ?? 'rest',
         kind: plan.kind,
@@ -157,7 +172,8 @@ export default function TrainHome() {
       repo.listAssessments(),
       repo.listGoals(),
       repo.getProfile(),
-    ]).then(([journals, climbs, assessments, goals, profile]) => {
+      repo.listBenchmarks(),
+    ]).then(([journals, climbs, assessments, goals, profile, benchmarks]) => {
       if (!on) return;
       const nowMs = now();
 
@@ -193,12 +209,26 @@ export default function TrainHome() {
         sessionLength: today.sessionLength,
       });
       const todayJournal = journals.find((j) => dayIndex(j.date) === dayIndex(nowMs));
+
+      // Pre-fill each protocol with what was done last time, so confirming is
+      // the default and typing is the exception.
+      const seeded: Record<string, number> = {};
+      for (const step of recommendation.steps) {
+        if (!step.protocolId) continue;
+        const protocol = protocolById(step.protocolId);
+        if (!protocol) continue;
+        seeded[step.protocolId] =
+          latestForTest(benchmarks, step.protocolId)?.value ?? protocol.defaultValue;
+      }
+      setMetrics(seeded);
+
       setState({
         journals,
         recommendation,
         todayJournalId: todayJournal?.id ?? null,
         hasAssessment: assessments.length > 0,
         hasGoal: goals.length > 0,
+        benchmarks,
       });
     });
     return () => {
@@ -295,29 +325,45 @@ export default function TrainHome() {
                 recorded — which the coach reads when planning tomorrow. */}
             {planSteps.map((step, i) => {
               const done = !skippedSteps.includes(step);
+              // Protocols only attach to the deterministic plan's steps; when
+              // the AI has rewritten the session the texts no longer line up,
+              // so we match on text and simply show nothing if it doesn't.
+              const protocol = protocolById(
+                rec.steps.find((s) => s.text === step)?.protocolId ?? '',
+              );
               return (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => toggleStep(step)}
-                  aria-pressed={done}
-                  className="mt-1 flex w-full gap-2 text-left"
-                >
-                  <span
-                    className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border text-xs font-bold ${
-                      done
-                        ? 'border-primary bg-primary text-primary-text'
-                        : 'border-border text-transparent'
-                    }`}
+                <div key={i}>
+                  <button
+                    type="button"
+                    onClick={() => toggleStep(step)}
+                    aria-pressed={done}
+                    className="mt-1 flex w-full gap-2 text-left"
                   >
-                    ✓
-                  </span>
-                  <span
-                    className={`flex-1 text-sm leading-5 ${done ? '' : 'text-muted line-through'}`}
-                  >
-                    {step}
-                  </span>
-                </button>
+                    <span
+                      className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border text-xs font-bold ${
+                        done
+                          ? 'border-primary bg-primary text-primary-text'
+                          : 'border-border text-transparent'
+                      }`}
+                    >
+                      ✓
+                    </span>
+                    <span
+                      className={`flex-1 text-sm leading-5 ${done ? '' : 'text-muted line-through'}`}
+                    >
+                      {step}
+                    </span>
+                  </button>
+                  {protocol && done && (
+                    <ProtocolMetric
+                      protocol={protocol}
+                      value={metrics[protocol.id] ?? protocol.defaultValue}
+                      previous={latestForTest(state.benchmarks, protocol.id)?.value ?? null}
+                      onChange={(value) => setMetrics((m) => ({ ...m, [protocol.id]: value }))}
+                      disabled={marking}
+                    />
+                  )}
+                </div>
               );
             })}
           </div>

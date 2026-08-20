@@ -22,6 +22,7 @@
  */
 import { EXERCISES } from '../../content/exercises';
 import { PRESCRIPTIONS_BY_AREA } from '../../content/prescriptions';
+import { protocolForExercise } from '../../content/protocols';
 import {
   DEFAULT_EQUIPMENT,
   sessionFocus,
@@ -66,6 +67,21 @@ export interface DailyInput {
 
 export type DailyKind = 'rest' | 'assess' | 'train';
 
+/**
+ * One line of the plan, with the provenance the UI needs.
+ *
+ * `plan` (plain strings) stays the display/AI surface; this parallel array
+ * carries the exercise and protocol ids so a step like "max-weight hangs" can
+ * show last session's weight inline instead of being an opaque sentence.
+ */
+export interface PlanStep {
+  text: string;
+  focus?: SessionFocusId;
+  exerciseId?: string;
+  /** Set when this step has a number worth recording (see content/protocols). */
+  protocolId?: string;
+}
+
 export interface DailyRecommendation {
   kind: DailyKind;
   streak: number;
@@ -74,6 +90,8 @@ export interface DailyRecommendation {
   focusArea: TriadArea | null;
   /** Concrete, ordered steps for today (warm-up → work → cool-down). */
   plan: string[];
+  /** The same steps with exercise/protocol provenance, for inline logging. */
+  steps: PlanStep[];
   /** Specific weak-spot statements to target today (from the assessment). */
   focusItems: string[];
   /** Titles of active short/medium-term goals to keep in mind. */
@@ -115,6 +133,17 @@ const WARM_UP =
   'Warm up thoroughly: pulse-raiser, joint mobility, then easy climbing until your forearms feel ready.';
 const COOL_DOWN = 'Cool down: gently stretch the forearms, shoulders, and hips.';
 
+const REST_STEPS: PlanStep[] = [
+  { text: 'Rest from hard climbing and training today.' },
+  { text: 'Stay loose: light mobility, gentle stretching, and a short walk are fine.' },
+  { text: 'Prioritise sleep, food, and hydration — recovery is when the gains happen.' },
+];
+
+const ASSESS_STEPS: PlanStep[] = [
+  { text: 'Open Assess and complete the 30-question self-assessment.' },
+  { text: 'Note your weakest triad area — it becomes the focus of your daily plan.' },
+];
+
 /** Deterministically pick `count` items from a list, rotating by the day. */
 function rotate<T>(items: T[], dayIdx: number, count: number): T[] {
   if (items.length === 0) return [];
@@ -140,26 +169,36 @@ function pickExercise(
 }
 
 /** Turn one session focus into a concrete instruction, or null if impossible. */
-function focusStep(focus: SessionFocusId, dayIdx: number, equipment: EquipmentId[]): string | null {
+function focusStep(
+  focus: SessionFocusId,
+  dayIdx: number,
+  equipment: EquipmentId[],
+): PlanStep | null {
   const spec = sessionFocus(focus);
   if (focus === 'mental' || focus === 'skill') {
     const area = focus === 'mental' ? 'mental' : 'technical';
     const drill = rotate(PRESCRIPTIONS_BY_AREA[area], dayIdx, 1)[0];
-    return drill ? `${spec.label} — ${drill.title}: ${drill.detail}` : null;
+    return drill ? { text: `${spec.label} — ${drill.title}: ${drill.detail}`, focus } : null;
   }
   const exercise = pickExercise(focus, dayIdx, equipment);
-  return exercise ? `${spec.label} — ${exercise.name}: ${exercise.description}` : null;
+  if (!exercise) return null;
+  return {
+    text: `${spec.label} — ${exercise.name}: ${exercise.description}`,
+    focus,
+    exerciseId: exercise.id,
+    protocolId: protocolForExercise(exercise.id)?.id,
+  };
 }
 
 /** Build the ordered steps for a training day from the scheduler's choices. */
-function schedulerPlan(cycle: Microcycle, dayIdx: number, equipment: EquipmentId[]): string[] {
-  const steps = [WARM_UP];
+function schedulerPlan(cycle: Microcycle, dayIdx: number, equipment: EquipmentId[]): PlanStep[] {
+  const steps: PlanStep[] = [{ text: WARM_UP }];
   for (const focus of [cycle.primary, ...cycle.supporting]) {
     if (!focus) continue;
     const step = focusStep(focus, dayIdx, equipment);
     if (step) steps.push(step);
   }
-  steps.push(COOL_DOWN);
+  steps.push({ text: COOL_DOWN });
   return steps;
 }
 
@@ -167,17 +206,20 @@ function schedulerPlan(cycle: Microcycle, dayIdx: number, equipment: EquipmentId
  * The pre-scheduler plan, kept for callers that don't pass load history: an
  * ordered session weighted to the weakest triad area.
  */
-function legacyPlan(area: TriadArea, dayIdx: number, equipment: EquipmentId[]): string[] {
+function legacyPlan(area: TriadArea, dayIdx: number, equipment: EquipmentId[]): PlanStep[] {
   if (area === 'physical') {
-    const steps = [
-      WARM_UP,
-      'Skill (while fresh): climb a few problems or routes a grade or two below your limit, focusing on smooth, precise movement.',
+    const steps: PlanStep[] = [
+      { text: WARM_UP },
+      {
+        text: 'Skill (while fresh): climb a few problems or routes a grade or two below your limit, focusing on smooth, precise movement.',
+        focus: 'skill',
+      },
     ];
     for (const focus of ['maxStrength', 'powerEndurance', 'conditioning'] as SessionFocusId[]) {
       const step = focusStep(focus, dayIdx, equipment);
       if (step) steps.push(step);
     }
-    steps.push(COOL_DOWN);
+    steps.push({ text: COOL_DOWN });
     return steps;
   }
   const drills = rotate(PRESCRIPTIONS_BY_AREA[area], dayIdx, 3);
@@ -185,7 +227,16 @@ function legacyPlan(area: TriadArea, dayIdx: number, equipment: EquipmentId[]): 
     area === 'mental'
       ? 'Then climb at your limit, applying the mental skills under real pressure.'
       : 'Then take the drills onto harder climbs, keeping the same movement quality.';
-  return [WARM_UP, ...drills.map((d) => `${d.title}: ${d.detail}`), closing];
+  return [
+    { text: WARM_UP },
+    ...drills.map((d) => ({ text: `${d.title}: ${d.detail}` })),
+    { text: closing },
+  ];
+}
+
+/** The display/AI surface derived from the structured steps — one source of truth. */
+function texts(steps: PlanStep[]): string[] {
+  return steps.map((s) => s.text);
 }
 
 function goalReminders(goals: GoalRecord[]): string[] {
@@ -249,18 +300,15 @@ export function buildDailyRecommendation(input: DailyInput): DailyRecommendation
         cycle?.restReason ??
         `You've trained ${streak} days in a row. Training 3–4 days straight risks overtraining — rest is when your body actually gets stronger.`,
       focusArea: null,
-      plan: [
-        'Rest from hard climbing and training today.',
-        'Stay loose: light mobility, gentle stretching, and a short walk are fine.',
-        'Prioritise sleep, food, and hydration — recovery is when the gains happen.',
-      ],
+      plan: texts(REST_STEPS),
+      steps: REST_STEPS,
       restKind: cycle?.restKind ?? 'recovery',
       lightAlternative:
         alternativeFocus && alternativeStep
           ? {
               focus: alternativeFocus,
               label: sessionFocus(alternativeFocus).label,
-              plan: [WARM_UP, alternativeStep, COOL_DOWN],
+              plan: [WARM_UP, alternativeStep.text, COOL_DOWN],
             }
           : null,
     };
@@ -274,35 +322,37 @@ export function buildDailyRecommendation(input: DailyInput): DailyRecommendation
       detail:
         'Take the 30-question self-assessment so the app can target your weakest area of the performance triad.',
       focusArea: null,
-      plan: [
-        'Open Assess and complete the 30-question self-assessment.',
-        'Note your weakest triad area — it becomes the focus of your daily plan.',
-      ],
+      plan: texts(ASSESS_STEPS),
+      steps: ASSESS_STEPS,
     };
   }
 
   if (cycle && cycle.primary) {
     const spec = sessionFocus(cycle.primary);
+    const scheduled = schedulerPlan(cycle, dayIdx, equipment);
     return {
       ...common,
       kind: 'train',
       headline: `Today: ${spec.label}`,
       detail: spec.description,
       focusArea: spec.triadArea,
-      plan: schedulerPlan(cycle, dayIdx, equipment),
+      plan: texts(scheduled),
+      steps: scheduled,
       focusItems: input.weakSpots ?? [],
       focus: cycle.primary,
       supportingFocuses: cycle.supporting,
     };
   }
 
+  const legacy = legacyPlan(input.weakestArea, dayIdx, equipment);
   return {
     ...common,
     kind: 'train',
     headline: `Focus on ${TRIAD_LABELS[input.weakestArea]}`,
     detail: FOCUS_DETAIL[input.weakestArea],
     focusArea: input.weakestArea,
-    plan: legacyPlan(input.weakestArea, dayIdx, equipment),
+    plan: texts(legacy),
+    steps: legacy,
     focusItems: input.weakSpots ?? [],
   };
 }
