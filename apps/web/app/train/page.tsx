@@ -8,7 +8,10 @@ import {
   INTENSITY_LABELS,
   buildDailyRecommendation,
   dayIndex,
+  effectiveProfile,
   flaggedPromptsForArea,
+  isOnboarded,
+  loadHistory,
   now,
   relativeTime,
   trackEvent,
@@ -21,10 +24,13 @@ import { Card } from '../../components/Card';
 import { Screen } from '../../components/Screen';
 import { GettingStarted, type OnboardingStep } from '../../components/GettingStarted';
 import { BackupBanner } from '../../components/BackupBanner';
+import { TodayContext } from '../../components/TodayContext';
+import { WhyThisPlan } from '../../components/WhyThisPlan';
 import { useRepository, useSync } from '../../lib/db/RepositoryProvider';
 import { useCoach } from '../../lib/coach/useCoach';
 import { useBackupNudge } from '../../lib/auth/useBackupNudge';
 import { useOnboarding } from '../../lib/onboarding/useOnboarding';
+import { useDailyContext } from '../../lib/today/useDailyContext';
 
 function formatDate(ms: number): string {
   return new Date(ms).toLocaleDateString(undefined, {
@@ -57,6 +63,7 @@ export default function TrainHome() {
   const coach = useCoach(repo);
   const backup = useBackupNudge();
   const onboarding = useOnboarding();
+  const daily = useDailyContext(repo, dataVersion);
   const [feedback, setFeedback] = useState<'up' | 'down' | null>(null);
 
   const sendFeedback = (rating: 'up' | 'down') => {
@@ -64,16 +71,37 @@ export default function TrainHome() {
     trackEvent('coach_feedback', { rating });
   };
 
+  const today = daily.value;
+
   useEffect(() => {
+    // Wait for today's context — the plan is built from it, and rendering a
+    // plan that then changes under the reader is worse than a beat of delay.
+    if (!today) return;
     let on = true;
     Promise.all([
       repo.listJournals(),
       repo.listClimbs(),
       repo.listAssessments(),
       repo.listGoals(),
-    ]).then(([journals, climbs, assessments, goals]) => {
+      repo.getProfile(),
+    ]).then(([journals, climbs, assessments, goals, profile]) => {
       if (!on) return;
       const nowMs = now();
+
+      // A brand-new install with nothing in it goes through guided sign-up.
+      // Existing users predate `onboardedAt`, so their data is what protects
+      // them from being dropped into the wizard.
+      const empty =
+        journals.length === 0 &&
+        climbs.length === 0 &&
+        assessments.length === 0 &&
+        goals.length === 0;
+      if (!isOnboarded(profile) && empty) {
+        router.replace('/welcome');
+        return;
+      }
+
+      const settings = effectiveProfile(profile);
       const latest = assessments[0] ?? null;
       const weakestArea = latest?.weakestArea ?? null;
       const recommendation = buildDailyRecommendation({
@@ -83,6 +111,13 @@ export default function TrainHome() {
         goals,
         trainingDates: trainingDates(journals, climbs),
         nowMs,
+        history: loadHistory(journals, climbs),
+        abilityTier: settings.abilityTier,
+        styleFocus: settings.styleFocus,
+        daysPerWeek: settings.daysPerWeek,
+        equipment: today.equipment,
+        readiness: today.readiness,
+        sessionLength: today.sessionLength,
       });
       const todayJournal = journals.find((j) => dayIndex(j.date) === dayIndex(nowMs));
       setState({
@@ -96,9 +131,9 @@ export default function TrainHome() {
     return () => {
       on = false;
     };
-  }, [repo, dataVersion]);
+  }, [repo, dataVersion, router, today]);
 
-  if (state === null) return <Screen />;
+  if (state === null || today === null) return <Screen />;
   const { journals, recommendation: rec, todayJournalId, hasAssessment, hasGoal } = state;
   const ai = coach.suggestion;
 
@@ -151,6 +186,8 @@ export default function TrainHome() {
       {showOnboarding && <GettingStarted steps={onboardingSteps} onDismiss={onboarding.dismiss} />}
 
       {backup.visible && <BackupBanner onDismiss={backup.dismiss} />}
+
+      <TodayContext value={today} onChange={daily.update} confirmed={daily.confirmed} />
 
       <Card className={cardBorder}>
         <div className="flex items-center justify-between">
@@ -239,6 +276,8 @@ export default function TrainHome() {
           </div>
         )}
       </Card>
+
+      <WhyThisPlan microcycle={rec.microcycle} because={rec.because} />
 
       {coach.enabled && (
         <Button variant="secondary" onClick={coach.refresh} disabled={coach.status === 'loading'}>

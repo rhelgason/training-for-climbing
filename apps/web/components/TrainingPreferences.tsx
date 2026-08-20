@@ -6,13 +6,20 @@ import {
   ABILITY_TIER_LABELS,
   DISCIPLINES,
   DISCIPLINE_LABELS,
+  SESSION_LENGTHS,
+  SESSION_LENGTH_LABELS,
+  STYLE_FOCUSES,
+  STYLE_FOCUS_LABELS,
   effectiveProfile,
   type AbilityTier,
   type ClimbDiscipline,
   type ProfilePatch,
   type ProfileSettings,
+  type SessionLength,
+  type StyleFocus,
 } from '@tfc/core';
 import { Card } from './Card';
+import { EquipmentPicker } from './EquipmentPicker';
 import { OptionChips, type ChipOption } from './OptionChips';
 import { useRepository, useSync } from '../lib/db/RepositoryProvider';
 
@@ -32,6 +39,21 @@ const AI_OPTIONS: ChipOption<'on' | 'off'>[] = [
   { label: 'On', value: 'on' },
   { label: 'Off', value: 'off' },
 ];
+const STYLE_OPTIONS: ChipOption<StyleFocus>[] = STYLE_FOCUSES.map((s) => ({
+  label: STYLE_FOCUS_LABELS[s],
+  value: s,
+}));
+const LENGTH_OPTIONS: ChipOption<SessionLength>[] = SESSION_LENGTHS.map((s) => ({
+  label: SESSION_LENGTH_LABELS[s],
+  value: s,
+}));
+const DAYS_OPTIONS: ChipOption<string>[] = ['1', '2', '3', '4', '5', '6'].map((d) => ({
+  label: d,
+  value: d,
+}));
+
+const textareaClass =
+  'w-full min-h-32 rounded-xl border border-border bg-surface-alt/60 px-4 py-2.5 text-base text-text placeholder:text-muted focus:border-primary focus:outline-none';
 
 /** Training preferences (formerly the separate Profile screen). */
 export function TrainingPreferences() {
@@ -63,6 +85,68 @@ export function TrainingPreferences() {
           options={TIER_OPTIONS}
           selected={settings.abilityTier}
           onSelect={(v) => update({ abilityTier: v })}
+        />
+      </Card>
+
+      <Card>
+        <p className="mb-2 font-semibold">Optimising for</p>
+        <OptionChips
+          options={STYLE_OPTIONS}
+          selected={settings.styleFocus}
+          onSelect={(v) => update({ styleFocus: v })}
+        />
+      </Card>
+
+      <Card>
+        <p className="mb-1 font-semibold">About you</p>
+        <p className="mb-2 text-sm leading-5 text-muted">
+          What you climb, injuries you work around, what your gym is like. Your coach reads this
+          every day.
+        </p>
+        {/* Committed on blur, not per keystroke: every save bumps `updatedAt`
+            and queues a sync, and a paragraph of typing shouldn't do that. */}
+        <textarea
+          className={textareaClass}
+          defaultValue={settings.climberContext ?? ''}
+          onBlur={(e) => {
+            const next = e.target.value.trim();
+            if (next !== (settings.climberContext ?? '')) {
+              void update({ climberContext: next || undefined });
+            }
+          }}
+        />
+      </Card>
+
+      <Card>
+        <p className="mb-1 font-semibold">Training days per week</p>
+        <p className="mb-2 text-sm leading-5 text-muted">
+          The budget your plan is built against — it decides when you&apos;re told to rest.
+        </p>
+        <OptionChips
+          options={DAYS_OPTIONS}
+          selected={String(settings.daysPerWeek)}
+          onSelect={(v) => update({ daysPerWeek: Number(v) })}
+        />
+      </Card>
+
+      <Card>
+        <p className="mb-2 font-semibold">Typical session length</p>
+        <OptionChips
+          options={LENGTH_OPTIONS}
+          selected={settings.sessionLength}
+          onSelect={(v) => update({ sessionLength: v })}
+        />
+      </Card>
+
+      <Card>
+        <p className="mb-1 font-semibold">Your equipment</p>
+        <p className="mb-3 text-sm leading-5 text-muted">
+          What you normally have access to. You&apos;ll never be prescribed something you can&apos;t
+          do; change it for a single day from the Train screen.
+        </p>
+        <EquipmentPicker
+          selected={settings.equipment}
+          onChange={(equipment) => update({ equipment })}
         />
       </Card>
 
