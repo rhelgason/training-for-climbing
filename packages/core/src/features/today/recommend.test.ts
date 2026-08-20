@@ -1,4 +1,5 @@
-import type { GoalRecord } from '../../db/types';
+import type { GoalRecord, JournalEntry } from '../../db/types';
+import { loadHistory } from '../train/load';
 import { buildDailyRecommendation, type DailyInput } from './recommend';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -54,7 +55,7 @@ describe('buildDailyRecommendation', () => {
   it('emits a concrete physical plan that warms up and names a library exercise', () => {
     const rec = buildDailyRecommendation(input({ weakestArea: 'physical' }));
     expect(rec.plan[0]).toMatch(/Warm up/i);
-    expect(rec.plan.some((s) => /Max strength & power:/.test(s))).toBe(true);
+    expect(rec.plan.some((s) => /^Max strength — /.test(s))).toBe(true);
     expect(rec.plan[rec.plan.length - 1]).toMatch(/Cool down/i);
   });
 
@@ -101,5 +102,68 @@ describe('buildDailyRecommendation', () => {
       }),
     );
     expect(rec.goalReminders).toEqual(['A', 'B', 'E']);
+  });
+});
+
+describe('buildDailyRecommendation with recent load', () => {
+  const journal = (dayOffset: number, entry: Partial<JournalEntry> = {}): JournalEntry => ({
+    id: `j${dayOffset}`,
+    createdAt: 0,
+    updatedAt: 0,
+    date: NOW + dayOffset * DAY,
+    activities: ['climbing'],
+    intensity: 'hard',
+    ...entry,
+  });
+
+  const withHistory = (journals: JournalEntry[], overrides: Partial<DailyInput> = {}) =>
+    buildDailyRecommendation(
+      input({
+        weakestArea: 'physical',
+        history: loadHistory(journals, []),
+        daysPerWeek: 5,
+        equipment: ['boulder-wall', 'rope-wall', 'hangboard', 'pull-up-bar', 'campus-board'],
+        ...overrides,
+      }),
+    );
+
+  it('does not prescribe max strength the day after a max-strength session', () => {
+    const rec = withHistory([journal(-1, { focus: ['maxStrength'] })]);
+    expect(rec.focus).not.toBe('maxStrength');
+    expect(rec.plan.some((s) => /^Max strength — /.test(s))).toBe(false);
+  });
+
+  it('explains which recent sessions shaped today', () => {
+    const rec = withHistory([journal(-1, { focus: ['maxStrength'] })]);
+    expect(rec.because).toContain('Yesterday');
+    expect(rec.because).toContain('max strength');
+  });
+
+  it('rests when the scheduler says to, overriding the weakest area', () => {
+    const rec = withHistory(
+      [journal(0, { focus: ['power'] }), journal(-1, { focus: ['maxStrength'] }), journal(-2)],
+      { daysPerWeek: 7 },
+    );
+    expect(rec.kind).toBe('rest');
+    expect(rec.detail).toMatch(/3 days running/);
+  });
+
+  it('never names equipment the climber does not have', () => {
+    const rec = withHistory([], { equipment: ['bands'] });
+    expect(rec.plan.join(' ')).not.toMatch(/campus|fingerboard|hangboard/i);
+  });
+
+  it('exposes the scheduler working so the UI can show the why', () => {
+    const rec = withHistory([journal(-1, { focus: ['maxStrength'] })]);
+    const blocked = rec.microcycle?.verdicts.find((v) => v.focus === 'maxStrength');
+    expect(blocked?.status).toBe('blocked');
+    expect(blocked?.reason).toContain('48 hours');
+  });
+
+  it('falls back to the streak-based plan when no history is supplied', () => {
+    const rec = buildDailyRecommendation(input({ weakestArea: 'physical' }));
+    expect(rec.microcycle).toBeNull();
+    expect(rec.because).toBe('');
+    expect(rec.kind).toBe('train');
   });
 });
