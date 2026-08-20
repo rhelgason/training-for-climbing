@@ -8,6 +8,7 @@
  */
 
 import type { HierarchyAreaId } from './planning';
+import type { EquipmentId } from './trainingContext';
 
 /** The "performance triad" — the book's three pillars of climbing performance. */
 export type TriadArea = 'mental' | 'technical' | 'physical';
@@ -95,4 +96,11 @@ export interface Exercise {
   triadArea: TriadArea;
   /** Where this exercise sits in the within-session training hierarchy. */
   hierarchyAreaId: HierarchyAreaId;
+  /**
+   * Equipment that makes this possible — **any one** of these is enough. An
+   * empty list means bodyweight or a bare floor, so it can always be prescribed.
+   * This is what stops the daily plan suggesting campus laddering to someone
+   * whose gym has no campus board.
+   */
+  equipment: EquipmentId[];
 }

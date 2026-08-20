@@ -17,6 +17,7 @@ export const EXERCISES: Exercise[] = [
     category: 'mobility',
     triadArea: 'physical',
     hierarchyAreaId: 'conditioning',
+    equipment: [],
     description:
       'Roll the upper back, glutes, hip flexors, and IT band, pausing 15–30 s on trigger points to release tight fascia. A daily habit that aids recovery and mobility.',
   },
@@ -26,6 +27,7 @@ export const EXERCISES: Exercise[] = [
     category: 'mobility',
     triadArea: 'physical',
     hierarchyAreaId: 'conditioning',
+    equipment: [],
     description:
       'Pin-and-stretch the forearm flexors, extensors, and pronators (by hand or with an Armaid/Rubbit) to head off elbow tendinosis. Never press directly on a tendon or the epicondyle.',
   },
@@ -37,6 +39,7 @@ export const EXERCISES: Exercise[] = [
     category: 'stability',
     triadArea: 'physical',
     hierarchyAreaId: 'conditioning',
+    equipment: ['free-weights', 'bands'],
     description:
       'Light dumbbell internal and external rotations (20–25 reps, 2 sets each) to balance and protect the shoulder. External load is roughly half the internal load.',
   },
@@ -46,6 +49,7 @@ export const EXERCISES: Exercise[] = [
     category: 'stability',
     triadArea: 'physical',
     hierarchyAreaId: 'conditioning',
+    equipment: ['free-weights', 'bands', 'rings-trx'],
     description:
       'Prone or TRX raises that retract (T) and depress/upward-rotate (Y) the scapula, training the mid and lower trapezius and rhomboids for a stable pulling base.',
   },
@@ -55,6 +59,7 @@ export const EXERCISES: Exercise[] = [
     category: 'stability',
     triadArea: 'physical',
     hierarchyAreaId: 'conditioning',
+    equipment: ['pull-up-bar', 'rings-trx'],
     description:
       'Protraction (scapular push-up, serratus anterior) and depression/retraction (scapular pull-up) drills that build shoulder-girdle control for hard pulling.',
   },
@@ -66,6 +71,7 @@ export const EXERCISES: Exercise[] = [
     category: 'finger-forearm',
     triadArea: 'physical',
     hierarchyAreaId: 'maxStrengthPower',
+    equipment: ['boulder-wall', 'steep-wall', 'system-board', 'outdoor-rock'],
     description:
       'Hard, low-rep climbing on boulder problems — the most fundamental way to build finger strength and power.',
   },
@@ -75,6 +81,7 @@ export const EXERCISES: Exercise[] = [
     category: 'finger-forearm',
     triadArea: 'physical',
     hierarchyAreaId: 'maxStrengthPower',
+    equipment: ['boulder-wall', 'steep-wall', 'system-board'],
     description: 'Bouldering with added weight (weight vest/belt) to overload finger strength.',
   },
   {
@@ -83,6 +90,7 @@ export const EXERCISES: Exercise[] = [
     category: 'finger-forearm',
     triadArea: 'physical',
     hierarchyAreaId: 'maxStrengthPower',
+    equipment: ['hangboard'],
     description:
       'Repeated ~7s hangs with short rests on fixed edges to build finger strength and endurance.',
   },
@@ -92,6 +100,7 @@ export const EXERCISES: Exercise[] = [
     category: 'finger-forearm',
     triadArea: 'physical',
     hierarchyAreaId: 'maxStrengthPower',
+    equipment: ['hangboard'],
     description: 'Hangs that progress through grip types/edge sizes in a pyramid of intensity.',
   },
   {
@@ -100,6 +109,7 @@ export const EXERCISES: Exercise[] = [
     category: 'finger-forearm',
     triadArea: 'physical',
     hierarchyAreaId: 'maxStrengthPower',
+    equipment: ['steep-wall', 'system-board'],
     description:
       'Climb identical HIT-strip holds with added weight to isolate and overload each grip position.',
   },
@@ -109,6 +119,7 @@ export const EXERCISES: Exercise[] = [
     category: 'finger-forearm',
     triadArea: 'physical',
     hierarchyAreaId: 'maxStrengthPower',
+    equipment: ['boulder-wall', 'steep-wall', 'system-board'],
     description: 'Explosive one-arm moves on a wall to build contact strength and power.',
   },
 
@@ -119,6 +130,7 @@ export const EXERCISES: Exercise[] = [
     category: 'pull',
     triadArea: 'physical',
     hierarchyAreaId: 'maxStrengthPower',
+    equipment: ['pull-up-bar', 'rings-trx'],
     description: 'Foundational pulling strength for the back and arms.',
   },
   {
@@ -127,6 +139,7 @@ export const EXERCISES: Exercise[] = [
     category: 'pull',
     triadArea: 'physical',
     hierarchyAreaId: 'maxStrengthPower',
+    equipment: ['pull-up-bar', 'rings-trx'],
     description: 'Weighted pull-ups to overload maximum pulling strength.',
   },
   {
@@ -135,6 +148,7 @@ export const EXERCISES: Exercise[] = [
     category: 'pull',
     triadArea: 'physical',
     hierarchyAreaId: 'maxStrengthPower',
+    equipment: ['pull-up-bar', 'rings-trx'],
     description: 'One hand high on the bar, one low (or on a sling) to bias load toward one arm.',
   },
   {
@@ -143,6 +157,7 @@ export const EXERCISES: Exercise[] = [
     category: 'pull',
     triadArea: 'physical',
     hierarchyAreaId: 'maxStrengthPower',
+    equipment: ['pull-up-bar', 'rings-trx'],
     description: 'Hold a static bent-arm position on one arm to build lock-off strength.',
   },
   {
@@ -151,6 +166,7 @@ export const EXERCISES: Exercise[] = [
     category: 'pull',
     triadArea: 'physical',
     hierarchyAreaId: 'maxStrengthPower',
+    equipment: ['steep-wall', 'boulder-wall', 'system-board'],
     description:
       'Lock off on steep holds to train pulling strength in a climbing-specific position.',
   },
@@ -162,6 +178,7 @@ export const EXERCISES: Exercise[] = [
     category: 'power',
     triadArea: 'physical',
     hierarchyAreaId: 'maxStrengthPower',
+    equipment: ['campus-board'],
     description:
       'Explosive up-and-down moves on campus rungs with no feet to build reactive power.',
   },
@@ -171,6 +188,7 @@ export const EXERCISES: Exercise[] = [
     category: 'power',
     triadArea: 'physical',
     hierarchyAreaId: 'maxStrengthPower',
+    equipment: ['campus-board'],
     description: 'Campus-board lock-offs for static power and body tension.',
   },
   {
@@ -179,6 +197,7 @@ export const EXERCISES: Exercise[] = [
     category: 'power',
     triadArea: 'physical',
     hierarchyAreaId: 'maxStrengthPower',
+    equipment: ['campus-board'],
     description: 'Both hands leaving and catching rungs to develop maximal explosive power.',
   },
   {
@@ -187,6 +206,7 @@ export const EXERCISES: Exercise[] = [
     category: 'power',
     triadArea: 'physical',
     hierarchyAreaId: 'maxStrengthPower',
+    equipment: ['pull-up-bar', 'rings-trx'],
     description: 'Fast, explosive pull-ups (chest-to-bar) to train upper-body power.',
   },
   {
@@ -195,6 +215,7 @@ export const EXERCISES: Exercise[] = [
     category: 'power',
     triadArea: 'physical',
     hierarchyAreaId: 'maxStrengthPower',
+    equipment: ['boulder-wall', 'steep-wall', 'system-board', 'outdoor-rock'],
     description: 'Boulder problems featuring large dynamic moves to train power on the rock.',
   },
 
@@ -205,6 +226,7 @@ export const EXERCISES: Exercise[] = [
     category: 'endurance',
     triadArea: 'physical',
     hierarchyAreaId: 'anaerobicEndurance',
+    equipment: ['boulder-wall', 'steep-wall', 'system-board'],
     description: 'Continuous traversing to build forearm (anaerobic) endurance and footwork.',
   },
   {
@@ -213,6 +235,7 @@ export const EXERCISES: Exercise[] = [
     category: 'endurance',
     triadArea: 'physical',
     hierarchyAreaId: 'anaerobicEndurance',
+    equipment: ['hangboard'],
     description: 'Moving between holds while hanging to extend time-under-tension for endurance.',
   },
   {
@@ -221,6 +244,7 @@ export const EXERCISES: Exercise[] = [
     category: 'endurance',
     triadArea: 'physical',
     hierarchyAreaId: 'anaerobicEndurance',
+    equipment: ['rope-wall', 'boulder-wall', 'steep-wall', 'system-board'],
     description: 'Laps on routes/problems with timed rests to train power endurance.',
   },
   {
@@ -229,6 +253,7 @@ export const EXERCISES: Exercise[] = [
     category: 'endurance',
     triadArea: 'physical',
     hierarchyAreaId: 'anaerobicEndurance',
+    equipment: ['boulder-wall', 'steep-wall', 'system-board'],
     description:
       '20s max-effort / 10s rest intervals (up to 8 rounds) — a grueling endurance stimulus.',
   },
@@ -238,6 +263,7 @@ export const EXERCISES: Exercise[] = [
     category: 'endurance',
     triadArea: 'physical',
     hierarchyAreaId: 'anaerobicEndurance',
+    equipment: ['pull-up-bar', 'rings-trx'],
     description:
       'Pull-ups interspersed with timed lock-offs at three positions to build strength-endurance.',
   },
@@ -247,6 +273,7 @@ export const EXERCISES: Exercise[] = [
     category: 'endurance',
     triadArea: 'physical',
     hierarchyAreaId: 'anaerobicEndurance',
+    equipment: ['pull-up-bar', 'rings-trx'],
     description: 'Sets of pull-ups with short rests to build pulling endurance.',
   },
 
@@ -257,6 +284,7 @@ export const EXERCISES: Exercise[] = [
     category: 'core',
     triadArea: 'physical',
     hierarchyAreaId: 'conditioning',
+    equipment: [],
     description: 'Controlled crunches for the abdominals.',
   },
   {
@@ -265,6 +293,7 @@ export const EXERCISES: Exercise[] = [
     category: 'core',
     triadArea: 'physical',
     hierarchyAreaId: 'conditioning',
+    equipment: ['pull-up-bar', 'rings-trx'],
     description: 'Hang from a bar and raise the knees to train the lower abs and hip flexors.',
   },
   {
@@ -273,6 +302,7 @@ export const EXERCISES: Exercise[] = [
     category: 'core',
     triadArea: 'physical',
     hierarchyAreaId: 'conditioning',
+    equipment: [],
     description: 'Side-plank hip raises for the obliques and lateral core.',
   },
   {
@@ -281,6 +311,7 @@ export const EXERCISES: Exercise[] = [
     category: 'core',
     triadArea: 'physical',
     hierarchyAreaId: 'conditioning',
+    equipment: [],
     description: 'Prone opposite arm/leg raises for the lower back and posterior chain.',
   },
   {
@@ -289,6 +320,7 @@ export const EXERCISES: Exercise[] = [
     category: 'core',
     triadArea: 'physical',
     hierarchyAreaId: 'conditioning',
+    equipment: ['pull-up-bar', 'rings-trx'],
     description: 'Advanced straight-body hang for powerful full-body tension.',
   },
   {
@@ -297,6 +329,7 @@ export const EXERCISES: Exercise[] = [
     category: 'core',
     triadArea: 'physical',
     hierarchyAreaId: 'conditioning',
+    equipment: [],
     description: 'Anti-rotation bridge for deep core stability.',
   },
 
@@ -307,6 +340,7 @@ export const EXERCISES: Exercise[] = [
     category: 'antagonist',
     triadArea: 'physical',
     hierarchyAreaId: 'conditioning',
+    equipment: ['free-weights', 'bands'],
     description:
       'Strengthen the forearm extensors to balance the flexors and help prevent elbow pain.',
   },
@@ -316,6 +350,7 @@ export const EXERCISES: Exercise[] = [
     category: 'antagonist',
     triadArea: 'physical',
     hierarchyAreaId: 'conditioning',
+    equipment: ['free-weights', 'bands'],
     description: 'Forearm rotation work to balance the forearm and protect the elbow.',
   },
   {
@@ -324,6 +359,7 @@ export const EXERCISES: Exercise[] = [
     category: 'antagonist',
     triadArea: 'physical',
     hierarchyAreaId: 'conditioning',
+    equipment: ['free-weights'],
     description: 'Overhead pressing for shoulder balance and health.',
   },
   {
@@ -332,6 +368,7 @@ export const EXERCISES: Exercise[] = [
     category: 'antagonist',
     triadArea: 'physical',
     hierarchyAreaId: 'conditioning',
+    equipment: [],
     description: 'Pushing strength to balance the dominant pulling muscles.',
   },
   {
@@ -340,6 +377,7 @@ export const EXERCISES: Exercise[] = [
     category: 'antagonist',
     triadArea: 'physical',
     hierarchyAreaId: 'conditioning',
+    equipment: [],
     description: 'Triceps and chest pressing to round out antagonist conditioning.',
   },
 
@@ -350,6 +388,7 @@ export const EXERCISES: Exercise[] = [
     category: 'legs',
     triadArea: 'physical',
     hierarchyAreaId: 'conditioning',
+    equipment: ['free-weights'],
     description:
       'Low-rep, heavy posterior-chain strength (warm-up set of 6, then 5/4/3) trained for neural strength without bulk. Twice a week at most; wear a belt near your max.',
   },
@@ -359,6 +398,7 @@ export const EXERCISES: Exercise[] = [
     category: 'legs',
     triadArea: 'physical',
     hierarchyAreaId: 'conditioning',
+    equipment: ['free-weights'],
     description:
       'Wide-stance dumbbell/kettlebell deadlift (2 × 15) for hips, glutes, and hamstrings — a climbing-friendly way to load the posterior chain.',
   },
@@ -368,6 +408,7 @@ export const EXERCISES: Exercise[] = [
     category: 'legs',
     triadArea: 'physical',
     hierarchyAreaId: 'conditioning',
+    equipment: ['free-weights'],
     description:
       'Low-rep squats (2 × 5–8, never more) for leg drive on high steps and slabs. Start light and build toward body weight over a year or two; avoid hypertrophy.',
   },
@@ -377,6 +418,7 @@ export const EXERCISES: Exercise[] = [
     category: 'legs',
     triadArea: 'physical',
     hierarchyAreaId: 'conditioning',
+    equipment: ['free-weights'],
     description:
       'Explosive full-body pull from floor to overhead (5–10 reps) that trains power through the posterior chain and total-body coordination.',
   },
@@ -388,6 +430,7 @@ export const EXERCISES: Exercise[] = [
     category: 'aerobic',
     triadArea: 'physical',
     hierarchyAreaId: 'stamina',
+    equipment: [],
     description:
       'At least 30 minutes of sustained moderate-intensity work (running preferred; also rowing, biking, swimming), several days a week, to build recovery and general stamina.',
   },
@@ -397,6 +440,7 @@ export const EXERCISES: Exercise[] = [
     category: 'aerobic',
     triadArea: 'physical',
     hierarchyAreaId: 'stamina',
+    equipment: [],
     description:
       'Tempo/threshold intervals — e.g. 1 min hard / 2 min easy for ~20 min, or fast/slow track laps — to raise aerobic power that speeds pump recovery between hard efforts.',
   },
@@ -406,6 +450,7 @@ export const EXERCISES: Exercise[] = [
     category: 'aerobic',
     triadArea: 'physical',
     hierarchyAreaId: 'stamina',
+    equipment: ['boulder-wall', 'rope-wall', 'steep-wall', 'system-board'],
     description:
       'Long, continuous easy climbing at a low, no-pump intensity (RPE 4–6) for ~30 min to build local aerobic capacity and capillarity in the forearms.',
   },
@@ -417,6 +462,7 @@ export const EXERCISES: Exercise[] = [
     category: 'flexibility',
     triadArea: 'physical',
     hierarchyAreaId: 'conditioning',
+    equipment: [],
     description: 'Stretch and massage the finger flexors to aid recovery and prevent tweaks.',
   },
   {
@@ -425,6 +471,7 @@ export const EXERCISES: Exercise[] = [
     category: 'flexibility',
     triadArea: 'physical',
     hierarchyAreaId: 'conditioning',
+    equipment: [],
     description: 'Open the hips and hip flexors for high steps and high feet.',
   },
   {
@@ -433,6 +480,7 @@ export const EXERCISES: Exercise[] = [
     category: 'flexibility',
     triadArea: 'physical',
     hierarchyAreaId: 'conditioning',
+    equipment: [],
     description: 'Improve hip range for stemming, drop-knees, and wide stances.',
   },
   {
@@ -441,6 +489,7 @@ export const EXERCISES: Exercise[] = [
     category: 'flexibility',
     triadArea: 'physical',
     hierarchyAreaId: 'conditioning',
+    equipment: [],
     description: 'Open the shoulders and chest to balance pulling-dominant posture.',
   },
 ];
