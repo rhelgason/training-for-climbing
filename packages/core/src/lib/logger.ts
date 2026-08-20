@@ -77,7 +77,8 @@ export type UsageEvent =
   | { name: 'account_deleted'; props?: Record<string, never> }
   | { name: 'coach_feedback'; props: { rating: 'up' | 'down' } }
   | { name: 'onboarding_completed'; props: { goals: number; signedIn: boolean } }
-  | { name: 'daily_context_set'; props: { readiness: string; environment: string } };
+  | { name: 'daily_context_set'; props: { readiness: string; environment: string } }
+  | { name: 'plan_completed'; props: { focus: string; kind: string } };
 
 export type EventSink = (event: {
   name: UsageEvent['name'];

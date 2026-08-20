@@ -16,6 +16,7 @@ import { saveCachedSuggestion } from './cache';
 export async function refreshCoachSuggestion(
   repo: Repository,
   config: SyncConfig,
+  contextKey?: string,
 ): Promise<CoachSuggestion> {
   const nowMs = now();
   const [profile, assessments, benchmarks, climbs, goals, journals, dailyContext] =
@@ -41,6 +42,6 @@ export async function refreshCoachSuggestion(
   });
 
   const suggestion = await requestCoachSuggestion(config, context);
-  saveCachedSuggestion({ suggestion, generatedAt: nowMs });
+  saveCachedSuggestion({ suggestion, generatedAt: nowMs, contextKey });
   return suggestion;
 }
