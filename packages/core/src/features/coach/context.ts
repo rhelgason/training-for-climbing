@@ -195,6 +195,7 @@ export function buildCoachContext(input: CoachContextInput): CoachContext {
       summary: d.summary,
       wins: d.wins,
       struggles: d.struggles,
+      skipped: d.skipped,
       climbs: d.climbs,
     })),
     assessment: assessment

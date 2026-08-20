@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   ACTIVITY_TAGS,
@@ -130,35 +131,53 @@ export function JournalForm({ journalId }: { journalId?: string }) {
           <OptionChips options={INTENSITY_OPTIONS} selected={intensity} onSelect={setIntensity} />
         </div>
 
+        {/* Free text is the highest-signal thing here and the coach reads it
+            verbatim, so the prompts ask for specifics rather than a mood. The
+            fields are as long as the climber wants — a sentence is fine, a
+            paragraph is better. */}
         <div>
-          <p className="mb-2 font-semibold">What did you do today?</p>
+          <p className="mb-1 font-semibold">What did you do?</p>
+          <p className="mb-2 text-sm leading-5 text-muted">
+            Grades, sets, how much of the plan you got through. The more concrete, the better
+            tomorrow&apos;s session fits.
+          </p>
           <textarea
-            className={`${inputClass} min-h-16`}
-            placeholder="A quick blurb about your day"
+            className={`${inputClass} min-h-24`}
+            placeholder="e.g. Warmed up, then max hangs 20mm +25lb, 5 sets. Projected a V6 on the steep wall, got the crux move twice. Skipped the core work, ran out of time."
             value={summary}
             onChange={(e) => setSummary(e.target.value)}
           />
         </div>
 
         <div>
-          <p className="mb-2 font-semibold">What went well? (optional)</p>
+          <p className="mb-1 font-semibold">What went well? (optional)</p>
           <textarea
-            className={`${inputClass} min-h-16`}
-            placeholder="Wins, breakthroughs, good feelings"
+            className={`${inputClass} min-h-20`}
+            placeholder="e.g. Heel hooks felt solid, first time holding the 20mm at +25lb"
             value={wins}
             onChange={(e) => setWins(e.target.value)}
           />
         </div>
 
         <div>
-          <p className="mb-2 font-semibold">What didn&apos;t? (optional)</p>
+          <p className="mb-1 font-semibold">Where did you struggle? (optional)</p>
+          <p className="mb-2 text-sm leading-5 text-muted">
+            Sticking points, tweaks, anything that felt off — this is what changes what you get
+            prescribed next.
+          </p>
           <textarea
-            className={`${inputClass} min-h-16`}
-            placeholder="Struggles, tweaks, frustrations"
+            className={`${inputClass} min-h-20`}
+            placeholder="e.g. Pumped out fast on anything over 15 moves. Right elbow grumbled on the last set."
             value={struggles}
             onChange={(e) => setStruggles(e.target.value)}
           />
         </div>
+
+        {/* Grades belong in the climb log, where they feed pyramids and personal
+            bests — but nobody navigates there mid-journal unless it's offered. */}
+        <Link href="/progress/climbs/new" className="block">
+          <Button variant="secondary">+ Log a climb from today</Button>
+        </Link>
 
         <Button onClick={onSave} disabled={saving}>
           {saving ? 'Saving…' : editing ? 'Save entry' : 'Save'}

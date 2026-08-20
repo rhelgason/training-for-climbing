@@ -73,6 +73,13 @@ export default function TrainHome() {
   const [feedback, setFeedback] = useState<'up' | 'down' | null>(null);
   const [marking, setMarking] = useState(false);
   const [showLight, setShowLight] = useState(false);
+  /** Prescribed steps the climber has unticked as not done. */
+  const [skippedSteps, setSkippedSteps] = useState<string[]>([]);
+
+  const toggleStep = (step: string) =>
+    setSkippedSteps((prev) =>
+      prev.includes(step) ? prev.filter((s) => s !== step) : [...prev, step],
+    );
 
   const today = daily.value;
   // Fingerprints today's context for the coach cache — changing any of these
@@ -116,17 +123,22 @@ export default function TrainHome() {
     try {
       let journalId = todayJournalId;
       if (journalId) {
-        await repo.updateJournal(journalId, { focus, intensity });
+        await repo.updateJournal(journalId, { focus, intensity, skipped: skippedSteps });
       } else {
         const saved = await repo.saveJournal({
           date: now(),
           activities: plan.kind === 'rest' ? ['rest'] : ['climbing'],
           focus: plan.kind === 'rest' ? ['rest'] : focus,
           intensity: plan.kind === 'rest' ? 'easy' : intensity,
+          skipped: skippedSteps.length > 0 ? skippedSteps : undefined,
         });
         journalId = saved.id;
       }
-      trackEvent('plan_completed', { focus: plan.focus ?? 'rest', kind: plan.kind });
+      trackEvent('plan_completed', {
+        focus: plan.focus ?? 'rest',
+        kind: plan.kind,
+        skipped: skippedSteps.length,
+      });
       // Open the log so they can add the free text the coach reads tomorrow.
       router.push(`/train/journal/${journalId}`);
     } finally {
@@ -272,15 +284,42 @@ export default function TrainHome() {
 
         {planSteps.length > 0 && (
           <div className="mt-4">
-            <p className="mb-1 text-sm font-bold uppercase tracking-wide text-muted">
-              Today&apos;s plan
-            </p>
-            {planSteps.map((step, i) => (
-              <div key={i} className="mt-1 flex">
-                <span className="w-5 text-sm font-bold text-primary">{i + 1}</span>
-                <span className="flex-1 text-sm leading-5">{step}</span>
-              </div>
-            ))}
+            <div className="mb-1 flex items-baseline justify-between gap-2">
+              <p className="text-sm font-bold uppercase tracking-wide text-muted">
+                Today&apos;s plan
+              </p>
+              {rec.kind !== 'rest' && <p className="text-sm text-muted">untick what you skip</p>}
+            </div>
+            {/* Steps start ticked, so a normal day is still one tap to log.
+                Unticking is how "ran out of time before the core work" gets
+                recorded — which the coach reads when planning tomorrow. */}
+            {planSteps.map((step, i) => {
+              const done = !skippedSteps.includes(step);
+              return (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => toggleStep(step)}
+                  aria-pressed={done}
+                  className="mt-1 flex w-full gap-2 text-left"
+                >
+                  <span
+                    className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border text-xs font-bold ${
+                      done
+                        ? 'border-primary bg-primary text-primary-text'
+                        : 'border-border text-transparent'
+                    }`}
+                  >
+                    ✓
+                  </span>
+                  <span
+                    className={`flex-1 text-sm leading-5 ${done ? '' : 'text-muted line-through'}`}
+                  >
+                    {step}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         )}
 
@@ -393,7 +432,9 @@ export default function TrainHome() {
           ? 'Saving…'
           : rec.kind === 'rest'
             ? 'Log today as a rest day'
-            : 'I did this — log it'}
+            : skippedSteps.length > 0
+              ? `Log it — ${planSteps.length - skippedSteps.length} of ${planSteps.length} done`
+              : 'I did this — log it'}
       </Button>
 
       <Link href={todayJournalId ? `/train/journal/${todayJournalId}` : '/train/journal/new'}>

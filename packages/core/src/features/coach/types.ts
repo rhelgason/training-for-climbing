@@ -29,6 +29,8 @@ export interface CoachRecentDay {
   summary?: string;
   wins?: string;
   struggles?: string;
+  /** Steps that were prescribed but not done — a direct signal about time and energy. */
+  skipped: string[];
   climbs: string[];
 }
 

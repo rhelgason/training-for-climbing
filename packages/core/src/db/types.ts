@@ -182,6 +182,12 @@ export interface JournalEntry {
    * strength sessions" instead of guessing from a free-text blurb.
    */
   focus?: SessionFocusId[];
+  /**
+   * Prescribed steps the climber didn't get to. Recorded by unticking them when
+   * logging the day, so "ran out of time before the conditioning block" is a
+   * fact the coach can act on rather than something lost between sessions.
+   */
+  skipped?: string[];
 }
 
 export type NewJournal = Omit<JournalEntry, 'id' | 'createdAt' | 'updatedAt'> & {
@@ -192,7 +198,7 @@ export type NewJournal = Omit<JournalEntry, 'id' | 'createdAt' | 'updatedAt'> & 
 export type JournalPatch = Partial<
   Pick<
     JournalEntry,
-    'date' | 'summary' | 'wins' | 'struggles' | 'activities' | 'intensity' | 'focus'
+    'date' | 'summary' | 'wins' | 'struggles' | 'activities' | 'intensity' | 'focus' | 'skipped'
   >
 >;
 

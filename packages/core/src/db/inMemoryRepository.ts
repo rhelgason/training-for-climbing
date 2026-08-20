@@ -142,6 +142,7 @@ export class InMemoryRepository implements Repository {
       activities: [...input.activities],
       intensity: input.intensity,
       focus: input.focus ? [...input.focus] : undefined,
+      skipped: input.skipped ? [...input.skipped] : undefined,
     };
     this.journals.push(record);
     return record;
