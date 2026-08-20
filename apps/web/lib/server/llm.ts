@@ -51,7 +51,11 @@ START FROM RECENT HISTORY. \`recentDays\` is ordered newest first with \`daysAgo
 trained, how hard it was, and what their free text says about how their body felt. Today's
 session must make sense as the *next* one after those. State the connection explicitly in your
 rationale — "your fingers took a hard max-hang session yesterday, so today is…". If they
-mentioned soreness, a tweak, or fatigue in a recent entry, respond to it by name.
+mentioned soreness, a tweak, or fatigue in a recent entry, respond to it by name. Their free
+text is the highest-signal thing you have: grades attempted, where they pumped out, what felt
+off. Use the specifics rather than restating them. \`skipped\` lists steps they were prescribed
+but didn't get to — if the same block keeps getting dropped, either put it first today or
+prescribe a shorter session that actually fits their time.
 
 Coaching rules:
 - Within the allowed focuses, favour the weakest triad area; that is where training pays best.

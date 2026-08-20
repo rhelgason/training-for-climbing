@@ -45,6 +45,8 @@ export interface RecentDay {
   summary?: string;
   wins?: string;
   struggles?: string;
+  /** Prescribed steps the climber didn't get to that day. */
+  skipped: string[];
   /** Climbs logged that day, summarised (e.g. "V6 send, V7 attempt"). */
   climbs: string[];
 }
@@ -270,6 +272,7 @@ export function recentDays(
         summary: journal?.summary,
         wins: journal?.wins,
         struggles: journal?.struggles,
+        skipped: journal?.skipped ?? [],
         climbs: (climbsByDay.get(event.day) ?? []).map((c) => `${c.grade} ${c.outcome}`),
       };
     });

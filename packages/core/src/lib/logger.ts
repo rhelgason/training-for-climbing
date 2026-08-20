@@ -78,7 +78,7 @@ export type UsageEvent =
   | { name: 'coach_feedback'; props: { rating: 'up' | 'down' } }
   | { name: 'onboarding_completed'; props: { goals: number; signedIn: boolean } }
   | { name: 'daily_context_set'; props: { readiness: string; environment: string } }
-  | { name: 'plan_completed'; props: { focus: string; kind: string } };
+  | { name: 'plan_completed'; props: { focus: string; kind: string; skipped: number } };
 
 export type EventSink = (event: {
   name: UsageEvent['name'];

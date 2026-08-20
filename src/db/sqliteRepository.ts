@@ -130,6 +130,7 @@ interface JournalRow {
   activities: string;
   intensity: string | null;
   focus: string | null;
+  skipped: string | null;
 }
 
 interface CheckinRow {
@@ -249,7 +250,8 @@ export class SqliteRepository implements Repository {
         struggles TEXT,
         activities TEXT NOT NULL,
         intensity TEXT,
-        focus TEXT
+        focus TEXT,
+        skipped TEXT
       );
       CREATE TABLE IF NOT EXISTS climbs (
         id TEXT PRIMARY KEY NOT NULL,
@@ -353,6 +355,7 @@ export class SqliteRepository implements Repository {
     const db = this.getDb();
     const additions: [string, string][] = [
       ['journals', 'focus TEXT'],
+      ['journals', 'skipped TEXT'],
       ['profile', 'climber_context TEXT'],
       ['profile', 'style_focus TEXT'],
       ['profile', 'equipment TEXT'],
@@ -496,10 +499,11 @@ export class SqliteRepository implements Repository {
       activities: [...input.activities],
       intensity: input.intensity,
       focus: input.focus ? [...input.focus] : undefined,
+      skipped: input.skipped ? [...input.skipped] : undefined,
     };
     await this.getDb().runAsync(
-      `INSERT INTO journals (id, created_at, updated_at, date, summary, wins, struggles, activities, intensity, focus)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO journals (id, created_at, updated_at, date, summary, wins, struggles, activities, intensity, focus, skipped)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       record.id,
       record.createdAt,
       record.updatedAt,
@@ -510,6 +514,7 @@ export class SqliteRepository implements Repository {
       JSON.stringify(record.activities),
       record.intensity ?? null,
       record.focus ? JSON.stringify(record.focus) : null,
+      record.skipped ? JSON.stringify(record.skipped) : null,
     );
     return record;
   }
@@ -538,6 +543,7 @@ export class SqliteRepository implements Repository {
       activities: 'activities',
       intensity: 'intensity',
       focus: 'focus',
+      skipped: 'skipped',
     };
     const existing = await this.getJournal(id);
     if (!existing) return null;
@@ -547,9 +553,10 @@ export class SqliteRepository implements Repository {
       sets.push(`${COLUMNS[key]} = ?`);
       if (key === 'activities') {
         values.push(JSON.stringify(patch.activities ?? []));
-      } else if (key === 'focus') {
+      } else if (key === 'focus' || key === 'skipped') {
         // Array-valued columns are stored as JSON; SQLite can't bind an array.
-        values.push(patch.focus ? JSON.stringify(patch.focus) : null);
+        const value = patch[key];
+        values.push(value ? JSON.stringify(value) : null);
       } else {
         values.push(patch[key] ?? null);
       }
@@ -1021,8 +1028,8 @@ export class SqliteRepository implements Repository {
       }
       for (const j of snapshot.journals) {
         await db.runAsync(
-          `INSERT OR REPLACE INTO journals (id, created_at, updated_at, date, summary, wins, struggles, activities, intensity, focus)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT OR REPLACE INTO journals (id, created_at, updated_at, date, summary, wins, struggles, activities, intensity, focus, skipped)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           j.id,
           j.createdAt,
           j.updatedAt,
@@ -1033,6 +1040,7 @@ export class SqliteRepository implements Repository {
           JSON.stringify(j.activities),
           j.intensity ?? null,
           j.focus ? JSON.stringify(j.focus) : null,
+          j.skipped ? JSON.stringify(j.skipped) : null,
         );
       }
       for (const c of snapshot.climbs) {
@@ -1258,6 +1266,7 @@ function rowToJournal(row: JournalRow): JournalEntry {
     activities: safeParse<ActivityTag[]>(row.activities, []),
     intensity: (row.intensity as JournalIntensity | null) ?? undefined,
     focus: row.focus ? safeParse<SessionFocusId[]>(row.focus, []) : undefined,
+    skipped: row.skipped ? safeParse<string[]>(row.skipped, []) : undefined,
   };
 }
 
