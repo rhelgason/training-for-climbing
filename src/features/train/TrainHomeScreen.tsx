@@ -93,7 +93,13 @@ export function TrainHomeScreen({ navigation }: Props) {
           equipment: settings.equipment,
           sessionLength: settings.sessionLength,
         });
-        const todayJournal = journals.find((j) => dayIndex(j.date) === dayIndex(nowMs));
+        // Newest-edit-wins; sync can leave two entries for one day.
+        const todayJournal = journals
+          .filter((j) => dayIndex(j.date) === dayIndex(nowMs))
+          .reduce<JournalEntry | null>(
+            (newest, j) => (!newest || j.updatedAt > newest.updatedAt ? j : newest),
+            null,
+          );
         setState({
           journals,
           recommendation,

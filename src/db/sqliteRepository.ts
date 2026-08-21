@@ -534,6 +534,16 @@ export class SqliteRepository implements Repository {
     return row ? rowToJournal(row) : null;
   }
 
+  async getJournalForDay(dateMs: number): Promise<JournalEntry | null> {
+    // Local-day bounds; newest edit wins when sync left two rows for a day.
+    const row = await this.getDb().getFirstAsync<JournalRow>(
+      `SELECT * FROM journals WHERE date >= ? AND date < ? ORDER BY updated_at DESC LIMIT 1`,
+      dayStartMs(dateMs),
+      nextDayStartMs(dateMs),
+    );
+    return row ? rowToJournal(row) : null;
+  }
+
   async updateJournal(id: string, patch: JournalPatch): Promise<JournalEntry | null> {
     const COLUMNS: Record<keyof JournalPatch, string> = {
       date: 'date',

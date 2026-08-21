@@ -91,8 +91,17 @@ export function JournalForm({ journalId }: { journalId?: string }) {
       if (journalId) {
         await repo.updateJournal(journalId, fields);
       } else {
-        await repo.saveJournal({ ...fields, date: now() - WHEN_OFFSET_DAYS[when] * MS_PER_DAY });
-        trackEvent('journal_logged', { activityCount: activities.length });
+        const date = now() - WHEN_OFFSET_DAYS[when] * MS_PER_DAY;
+        // The journal is one entry per day. Logging a day that already has one
+        // used to create a second that the app then couldn't reliably show, so
+        // fold into the existing entry instead.
+        const existing = await repo.getJournalForDay(date);
+        if (existing) {
+          await repo.updateJournal(existing.id, fields);
+        } else {
+          await repo.saveJournal({ ...fields, date });
+          trackEvent('journal_logged', { activityCount: activities.length });
+        }
       }
       router.push('/train');
     } finally {

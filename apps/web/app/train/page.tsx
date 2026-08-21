@@ -213,7 +213,14 @@ export default function TrainHome() {
         readiness: today.readiness,
         sessionLength: today.sessionLength,
       });
-      const todayJournal = journals.find((j) => dayIndex(j.date) === dayIndex(nowMs));
+      // Newest-edit-wins rather than first match: sync can leave two entries
+      // for one day, and editing an arbitrary one loses the other's text.
+      const todayJournal = journals
+        .filter((j) => dayIndex(j.date) === dayIndex(nowMs))
+        .reduce<JournalEntry | null>(
+          (newest, j) => (!newest || j.updatedAt > newest.updatedAt ? j : newest),
+          null,
+        );
 
       // Pre-fill each protocol with what was done last time, so confirming is
       // the default and typing is the exception.
