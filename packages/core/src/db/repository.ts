@@ -55,6 +55,14 @@ export interface Repository {
   /** Newest first (by entry date). */
   listJournals(): Promise<JournalEntry[]>;
   getJournal(id: string): Promise<JournalEntry | null>;
+  /**
+   * The entry for the local calendar day containing `dateMs`, or null.
+   *
+   * The journal is one-per-day by design, but sync can leave two rows for a day
+   * (each device created one before merging), so this resolves to the most
+   * recently edited rather than an arbitrary match.
+   */
+  getJournalForDay(dateMs: number): Promise<JournalEntry | null>;
   updateJournal(id: string, patch: JournalPatch): Promise<JournalEntry | null>;
   deleteJournal(id: string): Promise<void>;
 

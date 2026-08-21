@@ -97,7 +97,7 @@ describe('mergeSnapshots', () => {
     expect(merged.tombstones).toHaveLength(0);
   });
 
-  it('tolerates an older/partial remote snapshot (missing fields, dropped sessions)', () => {
+  it('tolerates an older/partial remote snapshot (missing fields)', () => {
     const local: Snapshot = { ...emptySnapshot(), journals: [journal('j', 1)] };
     // Pre-refactor shape: has `sessions`, lacks journals/profile/tombstones.
     const oldRemote = { goals: [goal('g', 1, 1, 'kept')], sessions: [{ id: 's' }] };
@@ -105,7 +105,79 @@ describe('mergeSnapshots', () => {
     expect(merged.goals).toHaveLength(1);
     expect(merged.journals).toHaveLength(1);
     expect(merged.tombstones).toEqual([]);
-    expect('sessions' in merged).toBe(false);
+  });
+
+  describe('forward compatibility with newer clients', () => {
+    // Sync is whole-snapshot last-write-wins: an older build downloads, merges,
+    // and re-uploads the entire document. Anything it drops here is erased for
+    // every other device, which is how a pre-`dailyContexts` client would have
+    // silently deleted a newer client's check-ins.
+    const futureRow = (id: string, updatedAt: number, note: string) => ({
+      id,
+      createdAt: 1,
+      updatedAt,
+      note,
+    });
+
+    it('preserves a table this build has never heard of', () => {
+      const local: Snapshot = { ...emptySnapshot(), goals: [goal('g', 1, 1, 'mine')] };
+      const fromNewerClient = {
+        ...emptySnapshot(),
+        futureTable: [futureRow('f1', 10, 'kept')],
+      };
+      const merged = mergeSnapshots(local, fromNewerClient as unknown as Snapshot);
+      expect((merged as unknown as Record<string, unknown>).futureTable).toEqual([
+        futureRow('f1', 10, 'kept'),
+      ]);
+      expect(merged.goals).toHaveLength(1);
+    });
+
+    it('merges an unknown table by id instead of taking one side', () => {
+      const a = { ...emptySnapshot(), futureTable: [futureRow('f1', 10, 'a')] };
+      const b = { ...emptySnapshot(), futureTable: [futureRow('f2', 10, 'b')] };
+      const merged = mergeSnapshots(a as unknown as Snapshot, b as unknown as Snapshot);
+      const rows = (merged as unknown as Record<string, unknown>).futureTable as { id: string }[];
+      expect(rows.map((r) => r.id).sort()).toEqual(['f1', 'f2']);
+    });
+
+    it('applies last-write-wins within an unknown table', () => {
+      const a = { ...emptySnapshot(), futureTable: [futureRow('f1', 10, 'old')] };
+      const b = { ...emptySnapshot(), futureTable: [futureRow('f1', 20, 'new')] };
+      const merged = mergeSnapshots(a as unknown as Snapshot, b as unknown as Snapshot);
+      const rows = (merged as unknown as Record<string, unknown>).futureTable as { note: string }[];
+      expect(rows).toEqual([expect.objectContaining({ note: 'new' })]);
+    });
+
+    it('honours a tombstone for an unknown table', () => {
+      const a = { ...emptySnapshot(), futureTable: [futureRow('f1', 10, 'doomed')] };
+      const b: Snapshot = {
+        ...emptySnapshot(),
+        tombstones: [{ table: 'futureTable' as never, id: 'f1', deletedAt: 20 }],
+      };
+      const merged = mergeSnapshots(a as unknown as Snapshot, b);
+      expect((merged as unknown as Record<string, unknown>).futureTable).toEqual([]);
+    });
+
+    it('survives an unknown field that is not a record list', () => {
+      const a = { ...emptySnapshot(), schemaVersion: 7 };
+      const merged = mergeSnapshots(a as unknown as Snapshot, emptySnapshot());
+      expect((merged as unknown as Record<string, unknown>).schemaVersion).toBe(7);
+    });
+
+    it('round-trips a newer table through an old client without losing it', () => {
+      // The real sequence: old client pulls remote, merges, pushes the result.
+      const remote = {
+        ...emptySnapshot(),
+        futureTable: [futureRow('f1', 10, 'from the new phone')],
+      } as unknown as Snapshot;
+      const oldLocal: Snapshot = { ...emptySnapshot(), goals: [goal('g', 1, 1, 'mine')] };
+      const pushed = mergeSnapshots(oldLocal, remote);
+      // …and next time round, the old client's local export still lacks it.
+      const pushedAgain = mergeSnapshots(oldLocal, pushed);
+      expect((pushedAgain as unknown as Record<string, unknown>).futureTable).toEqual([
+        futureRow('f1', 10, 'from the new phone'),
+      ]);
+    });
   });
 
   describe('daily contexts', () => {

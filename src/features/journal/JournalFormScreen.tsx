@@ -83,11 +83,16 @@ export function JournalFormScreen({ navigation, route }: Props) {
       if (journalId) {
         await repo.updateJournal(journalId, fields);
       } else {
-        await repo.saveJournal({
-          ...fields,
-          date: now() - WHEN_OFFSET_DAYS[when] * MS_PER_DAY,
-        });
-        trackEvent('journal_logged', { activityCount: activities.length });
+        const date = now() - WHEN_OFFSET_DAYS[when] * MS_PER_DAY;
+        // One entry per day: fold into the day's existing entry rather than
+        // creating a second the app can't reliably show.
+        const existing = await repo.getJournalForDay(date);
+        if (existing) {
+          await repo.updateJournal(existing.id, fields);
+        } else {
+          await repo.saveJournal({ ...fields, date });
+          trackEvent('journal_logged', { activityCount: activities.length });
+        }
       }
       navigation.goBack();
     } finally {

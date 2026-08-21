@@ -303,4 +303,47 @@ describe('InMemoryRepository', () => {
     const updated = await repo.updateJournal(saved.id, { focus: ['powerEndurance'] });
     expect(updated?.focus).toEqual(['powerEndurance']);
   });
+
+  describe('one journal entry per day', () => {
+    const at = (dayOffset: number, hour: number) =>
+      new Date(2026, 7, 20 + dayOffset, hour).getTime();
+
+    it('finds the day’s entry from any time on that day', async () => {
+      const repo = new InMemoryRepository();
+      const saved = await repo.saveJournal({ date: at(0, 9), activities: ['climbing'] });
+      expect((await repo.getJournalForDay(at(0, 22)))?.id).toBe(saved.id);
+      expect(await repo.getJournalForDay(at(1, 9))).toBeNull();
+    });
+
+    it('prefers the most recently edited when sync left two for a day', async () => {
+      const repo = new InMemoryRepository();
+      await repo.applySnapshot({
+        ...emptySnapshot(),
+        journals: [
+          {
+            id: 'a',
+            createdAt: 1,
+            updatedAt: 1,
+            date: at(0, 9),
+            activities: ['climbing'],
+            summary: 'from the phone',
+          },
+          {
+            id: 'b',
+            createdAt: 2,
+            updatedAt: 2,
+            date: at(0, 18),
+            activities: ['climbing'],
+            summary: 'from the laptop',
+          },
+        ],
+      });
+      expect((await repo.getJournalForDay(at(0, 12)))?.summary).toBe('from the laptop');
+    });
+
+    it('returns null when the day has no entry', async () => {
+      const repo = new InMemoryRepository();
+      expect(await repo.getJournalForDay(at(0, 9))).toBeNull();
+    });
+  });
 });

@@ -150,6 +150,12 @@ export class InMemoryRepository implements Repository {
     return this.journals.find((j) => j.id === id) ?? null;
   }
 
+  async getJournalForDay(dateMs: number): Promise<JournalEntry | null> {
+    const onDay = this.journals.filter((j) => sameDay(j.date, dateMs));
+    if (onDay.length === 0) return null;
+    return onDay.reduce((newest, j) => (j.updatedAt > newest.updatedAt ? j : newest));
+  }
+
   async updateJournal(id: string, patch: JournalPatch): Promise<JournalEntry | null> {
     const journal = this.journals.find((j) => j.id === id);
     if (!journal) return null;
