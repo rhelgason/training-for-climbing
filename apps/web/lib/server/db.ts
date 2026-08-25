@@ -44,10 +44,14 @@ export function getPool(): Pool {
 
 async function migrate(): Promise<void> {
   const pool = getPool();
+  // Fresh-install shape only. This is CREATE-only, so it will not reshape a
+  // database that predates username accounts — that one needs
+  // scripts/migrate-add-username.sql applied by hand.
   await pool.query(`
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
-      email TEXT UNIQUE NOT NULL,
+      username TEXT UNIQUE NOT NULL,
+      email TEXT UNIQUE,
       password_hash TEXT NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )
