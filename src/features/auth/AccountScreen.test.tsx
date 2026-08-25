@@ -24,7 +24,10 @@ async function renderScreen(repo: InMemoryRepository) {
   );
 }
 
-const authResult = { token: 'jwt-xyz', user: { id: 'u9', email: 'climber@example.com' } };
+const authResult = {
+  token: 'jwt-xyz',
+  user: { id: 'u9', username: 'climber', email: null },
+};
 
 describe('AccountScreen', () => {
   beforeEach(async () => {
@@ -52,7 +55,7 @@ describe('AccountScreen', () => {
     }) as unknown as typeof fetch;
 
     const view = await renderScreen(repo);
-    await waitFor(() => expect(view.getByTestId('account-email')).toBeTruthy());
+    await waitFor(() => expect(view.getByTestId('account-username')).toBeTruthy());
 
     // Switch to register mode.
     await act(async () => {
@@ -61,7 +64,7 @@ describe('AccountScreen', () => {
 
     await act(async () => {
       fireEvent.changeText(view.getByTestId('account-url'), 'https://srv.example.com');
-      fireEvent.changeText(view.getByTestId('account-email'), 'climber@example.com');
+      fireEvent.changeText(view.getByTestId('account-username'), 'climber');
       fireEvent.changeText(view.getByTestId('account-password'), 'password123');
     });
 
@@ -70,10 +73,10 @@ describe('AccountScreen', () => {
     });
 
     // Lands on the signed-in view.
-    await waitFor(() => expect(view.getByText('climber@example.com')).toBeTruthy());
+    await waitFor(() => expect(view.getByText('climber')).toBeTruthy());
 
     const session = await getSession();
-    expect(session).toMatchObject({ token: 'jwt-xyz', userId: 'u9', email: 'climber@example.com' });
+    expect(session).toMatchObject({ token: 'jwt-xyz', userId: 'u9', username: 'climber' });
     expect(calls.some((c) => c.includes('/auth/register'))).toBe(true);
     expect(calls.some((c) => c.includes('/snapshot'))).toBe(true);
   });
@@ -85,19 +88,19 @@ describe('AccountScreen', () => {
       url: 'https://srv.example.com',
       token: 'jwt-xyz',
       userId: 'u9',
-      email: 'climber@example.com',
+      username: 'climber',
     });
 
     const view = await renderScreen(repo);
     await waitFor(() => expect(view.getByText('Account')).toBeTruthy());
-    expect(view.getByText('climber@example.com')).toBeTruthy();
+    expect(view.getByText('climber')).toBeTruthy();
 
     await act(async () => {
       fireEvent.press(view.getByRole('button', { name: 'Sign out' }));
     });
 
     // Back to the signed-out form.
-    await waitFor(() => expect(view.getByTestId('account-email')).toBeTruthy());
+    await waitFor(() => expect(view.getByTestId('account-username')).toBeTruthy());
     expect(await getSession()).toBeNull();
   });
 
@@ -108,7 +111,7 @@ describe('AccountScreen', () => {
       url: 'https://srv.example.com',
       token: 'jwt-xyz',
       userId: 'u9',
-      email: 'climber@example.com',
+      username: 'climber',
     });
 
     const calls: string[] = [];
@@ -133,7 +136,7 @@ describe('AccountScreen', () => {
       fireEvent.press(view.getByText('Delete account'));
     });
 
-    await waitFor(() => expect(view.getByTestId('account-email')).toBeTruthy());
+    await waitFor(() => expect(view.getByTestId('account-username')).toBeTruthy());
     expect(calls).toContain('DELETE https://srv.example.com/account');
     expect(await getSession()).toBeNull();
 

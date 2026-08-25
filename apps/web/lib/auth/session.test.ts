@@ -11,6 +11,7 @@ import {
 const sample: AuthSession = {
   token: 'jwt-token-123',
   userId: 'user-1',
+  username: 'climber',
   email: 'climber@example.com',
   lastSyncedAt: 1700000000000,
 };
@@ -24,6 +25,22 @@ describe('auth session', () => {
     expect(getSession()).toBeNull();
     saveSession(sample);
     expect(getSession()).toEqual(sample);
+  });
+
+  it('round-trips a session that has no recovery email', () => {
+    const { email: _email, ...noEmail } = sample;
+    saveSession(noEmail);
+    expect(getSession()).toEqual(noEmail);
+  });
+
+  it('falls back to the stored email for a session saved before usernames', () => {
+    // The token is still valid, so signing this user out would be gratuitous —
+    // show the address they signed in with until they next sign in.
+    window.localStorage.setItem(
+      'tfc.auth',
+      JSON.stringify({ token: 't', userId: 'user-1', email: 'climber@example.com' }),
+    );
+    expect(getSession()?.username).toBe('climber@example.com');
   });
 
   it('clearSession removes the persisted session', () => {

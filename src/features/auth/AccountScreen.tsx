@@ -30,6 +30,7 @@ export function AccountScreen() {
 
   const [mode, setMode] = useState<Mode>('login');
   const [url, setUrl] = useState(defaultSyncUrl());
+  const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
@@ -59,8 +60,13 @@ export function AccountScreen() {
       Alert.alert('Missing server', 'Enter your sync server URL.');
       return;
     }
-    if (!email.trim() || !password) {
-      Alert.alert('Missing details', 'Enter your email and password.');
+    if (!username.trim() || !password) {
+      Alert.alert(
+        'Missing details',
+        mode === 'register'
+          ? 'Choose a username and password.'
+          : 'Enter your username and password.',
+      );
       return;
     }
     setBusy(true);
@@ -68,12 +74,13 @@ export function AccountScreen() {
     try {
       const auth =
         mode === 'register'
-          ? await register(baseUrl, email.trim(), password)
-          : await login(baseUrl, email.trim(), password);
+          ? await register(baseUrl, username.trim(), password, email)
+          : await login(baseUrl, username.trim(), password);
       const next: AuthSession = {
         url: baseUrl,
         token: auth.token,
         userId: auth.user.id,
+        username: auth.user.username,
         email: auth.user.email,
       };
       await saveSession(next);
@@ -125,6 +132,7 @@ export function AccountScreen() {
     trackEvent('signed_out');
     setSession(null);
     setStatus(null);
+    setUsername('');
     setEmail('');
     setPassword('');
   };
@@ -140,6 +148,7 @@ export function AccountScreen() {
       trackEvent('account_deleted');
       setSession(null);
       setStatus(null);
+      setUsername('');
       setEmail('');
       setPassword('');
     } catch (err) {
@@ -175,7 +184,7 @@ export function AccountScreen() {
 
         <Card style={styles.card}>
           <Text style={styles.label}>Signed in as</Text>
-          <Text style={styles.email}>{session.email}</Text>
+          <Text style={styles.username}>{session.username}</Text>
           {session.lastSyncedAt ? (
             <Text style={styles.meta}>
               Last synced {new Date(session.lastSyncedAt).toLocaleString()}
@@ -225,17 +234,16 @@ export function AccountScreen() {
           </>
         )}
 
-        <Text style={styles.label}>Email</Text>
+        <Text style={styles.label}>Username</Text>
         <TextInput
           style={styles.input}
-          placeholder="you@example.com"
+          placeholder={mode === 'register' ? 'climber123' : 'username or email'}
           placeholderTextColor={colors.textMuted}
-          value={email}
-          onChangeText={setEmail}
+          value={username}
+          onChangeText={setUsername}
           autoCapitalize="none"
           autoCorrect={false}
-          keyboardType="email-address"
-          testID="account-email"
+          testID="account-username"
         />
 
         <Text style={styles.label}>Password</Text>
@@ -250,6 +258,27 @@ export function AccountScreen() {
           secureTextEntry
           testID="account-password"
         />
+
+        {mode === 'register' && (
+          <>
+            <Text style={styles.label}>Email (optional)</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Leave blank to skip"
+              placeholderTextColor={colors.textMuted}
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="email-address"
+              testID="account-email"
+            />
+            <Text style={styles.hint}>
+              Only used to recover your account. Without one, a forgotten password means losing the
+              cloud backup — your data on this device is unaffected.
+            </Text>
+          </>
+        )}
 
         {status ? <Text style={styles.meta}>{status}</Text> : null}
       </Card>
@@ -287,7 +316,14 @@ const styles = StyleSheet.create({
   },
   card: { marginTop: spacing.lg },
   label: { color: colors.text, fontSize: fontSize.md, fontWeight: '600', marginBottom: spacing.sm },
-  email: { color: colors.text, fontSize: fontSize.lg, fontWeight: '600' },
+  username: { color: colors.text, fontSize: fontSize.lg, fontWeight: '600' },
+  hint: {
+    color: colors.textMuted,
+    fontSize: fontSize.sm,
+    marginTop: -spacing.sm,
+    marginBottom: spacing.md,
+    lineHeight: 18,
+  },
   input: {
     backgroundColor: colors.surfaceAlt,
     borderWidth: 1,
