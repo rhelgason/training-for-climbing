@@ -1,3 +1,4 @@
+import jwt from 'jsonwebtoken';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   MIN_PASSWORD_LENGTH,
@@ -5,8 +6,10 @@ import {
   isAuthConfigured,
   isValidEmail,
   isValidPassword,
+  isValidUsername,
   newUserId,
-  normalizeEmail,
+  normalizeOptionalEmail,
+  normalizeUsername,
   signToken,
   userIdFromRequest,
   verifyPassword,
@@ -41,14 +44,51 @@ describe('isAuthConfigured', () => {
   });
 });
 
-describe('normalizeEmail', () => {
+describe('normalizeUsername', () => {
   it('trims and lowercases', () => {
-    expect(normalizeEmail('  Climber@Example.COM ')).toBe('climber@example.com');
+    expect(normalizeUsername('  Climber_One ')).toBe('climber_one');
   });
 
   it('turns nullish input into an empty string rather than throwing', () => {
-    expect(normalizeEmail(null)).toBe('');
-    expect(normalizeEmail(undefined)).toBe('');
+    expect(normalizeUsername(null)).toBe('');
+    expect(normalizeUsername(undefined)).toBe('');
+  });
+});
+
+describe('isValidUsername', () => {
+  it.each(['ryan', 'climber_one', 'a-b-c', 'x'.repeat(30), 'abc', 'user123'])(
+    'accepts %s',
+    (username) => {
+      expect(isValidUsername(username)).toBe(true);
+    },
+  );
+
+  it.each(['', 'ab', 'x'.repeat(31), 'has space', 'Uppercase', 'emoji🧗'])(
+    'rejects %s',
+    (username) => {
+      expect(isValidUsername(username)).toBe(false);
+    },
+  );
+
+  it('rejects anything email-shaped, keeping the two namespaces disjoint', () => {
+    // login() matches `username = $1 OR email = $1`, so an email-shaped username
+    // could otherwise let one account's username shadow another's address.
+    expect(isValidUsername('a@b.co')).toBe(false);
+    expect(isValidUsername('climber.one')).toBe(false);
+  });
+});
+
+describe('normalizeOptionalEmail', () => {
+  it('trims and lowercases a supplied address', () => {
+    expect(normalizeOptionalEmail('  Climber@Example.COM ')).toBe('climber@example.com');
+  });
+
+  it('maps absent and blank to null, not the empty string', () => {
+    // '' would collide on the UNIQUE index for the second address-less account.
+    expect(normalizeOptionalEmail(undefined)).toBeNull();
+    expect(normalizeOptionalEmail(null)).toBeNull();
+    expect(normalizeOptionalEmail('')).toBeNull();
+    expect(normalizeOptionalEmail('   ')).toBeNull();
   });
 });
 
@@ -87,18 +127,18 @@ describe('password hashing', () => {
 });
 
 describe('session tokens', () => {
-  it('round-trips the user id and email', () => {
-    const token = signToken({ id: 'user-1', email: 'climber@example.com' });
+  it('round-trips the user id and username', () => {
+    const token = signToken({ id: 'user-1', username: 'climber' });
     const payload = verifyToken(token);
     expect(payload?.sub).toBe('user-1');
-    expect(payload?.email).toBe('climber@example.com');
+    expect(payload?.username).toBe('climber');
   });
 
   it('rejects a missing, malformed, or wrongly-signed token', () => {
     expect(verifyToken('')).toBeNull();
     expect(verifyToken('not-a-jwt')).toBeNull();
 
-    const token = signToken({ id: 'user-1', email: 'climber@example.com' });
+    const token = signToken({ id: 'user-1', username: 'climber' });
     process.env.JWT_SECRET = 'a-different-secret';
     expect(verifyToken(token)).toBeNull();
   });
@@ -106,8 +146,16 @@ describe('session tokens', () => {
 
 describe('userIdFromRequest', () => {
   it('resolves a valid Bearer token to the user id', () => {
-    const token = signToken({ id: 'user-1', email: 'climber@example.com' });
+    const token = signToken({ id: 'user-1', username: 'climber' });
     expect(userIdFromRequest(bearer(token))).toBe('user-1');
+  });
+
+  it('still accepts a token issued before the email→username claim change', () => {
+    // Tokens live for a year, so ones minted by the old code are in the wild.
+    // Authorization reads `sub` alone; the identity claim is decorative. If this
+    // ever fails, the migration silently signed everyone out.
+    const legacy = jwt.sign({ sub: 'user-1', email: 'climber@example.com' }, SECRET);
+    expect(userIdFromRequest(bearer(legacy))).toBe('user-1');
   });
 
   it('returns null without a usable Bearer token', () => {
@@ -116,7 +164,7 @@ describe('userIdFromRequest', () => {
     expect(userIdFromRequest(bearer('garbage'))).toBeNull();
 
     // Right token, wrong scheme.
-    const token = signToken({ id: 'user-1', email: 'climber@example.com' });
+    const token = signToken({ id: 'user-1', username: 'climber' });
     const basic = new Request('https://example.test/api/snapshot', {
       headers: { authorization: `Basic ${token}` },
     });

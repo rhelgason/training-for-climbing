@@ -3,8 +3,13 @@
  * signed session tokens (JWT). One account = one private snapshot.
  *
  * Ported from the standalone Express server (`server/auth.js`) when the backend
- * moved into Next route handlers. Token shape and signing secret are unchanged,
- * so sessions and password hashes issued by the old deployment stay valid.
+ * moved into Next route handlers. The signing secret and password hashes are
+ * unchanged, so credentials issued by the old deployment stay valid.
+ *
+ * The token's identity claim moved from `email` to `username` when accounts
+ * stopped being keyed by email. That's safe for tokens already in the wild:
+ * `userIdFromRequest` authorizes on `sub` alone and nothing reads the identity
+ * claim, so a year-old token keeps working and nobody is signed out.
  *
  * Env:
  *   JWT_SECRET  – secret used to sign session tokens. Falls back to SYNC_TOKEN
@@ -21,7 +26,7 @@ export const MIN_PASSWORD_LENGTH = 8;
 
 export interface SessionUser {
   id: string;
-  email: string;
+  username: string;
 }
 
 /**
@@ -38,10 +43,31 @@ export function isAuthConfigured(): boolean {
   return Boolean(secret());
 }
 
-export function normalizeEmail(email: unknown): string {
-  return String(email || '')
+export function normalizeUsername(username: unknown): string {
+  return String(username || '')
     .trim()
     .toLowerCase();
+}
+
+/**
+ * Deliberately narrow: lowercase letters, digits, underscore and hyphen. No '@'
+ * or '.', which keeps usernames disjoint from email addresses — `login` accepts
+ * either, so the two namespaces must never overlap.
+ */
+export function isValidUsername(username: string): boolean {
+  return /^[a-z0-9_-]{3,30}$/.test(username);
+}
+
+/**
+ * Email is optional, so absent and empty both mean "no address" — and must
+ * become SQL NULL rather than '', or the second account without an email would
+ * collide on the UNIQUE index.
+ */
+export function normalizeOptionalEmail(email: unknown): string | null {
+  const normalized = String(email ?? '')
+    .trim()
+    .toLowerCase();
+  return normalized || null;
 }
 
 export function isValidEmail(email: string): boolean {
@@ -61,7 +87,7 @@ export function verifyPassword(password: string, hash: string): Promise<boolean>
 }
 
 export function signToken(user: SessionUser): string {
-  return jwt.sign({ sub: user.id, email: user.email }, secret(), { expiresIn: TOKEN_TTL });
+  return jwt.sign({ sub: user.id, username: user.username }, secret(), { expiresIn: TOKEN_TTL });
 }
 
 /** Returns the decoded payload, or null if the token is missing/invalid/expired. */
