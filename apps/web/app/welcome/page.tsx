@@ -87,6 +87,7 @@ export default function Welcome() {
   // Step 1 — account
   const [signedIn, setSignedIn] = useState(false);
   const [mode, setMode] = useState<'register' | 'login'>('register');
+  const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [authStatus, setAuthStatus] = useState<string | null>(null);
@@ -111,8 +112,12 @@ export default function Welcome() {
   }, []);
 
   const submitAuth = async () => {
-    if (!email.trim() || !password) {
-      window.alert('Enter your email and password.');
+    if (!username.trim() || !password) {
+      window.alert(
+        mode === 'register'
+          ? 'Choose a username and password.'
+          : 'Enter your username and password.',
+      );
       return;
     }
     setBusy(true);
@@ -120,11 +125,12 @@ export default function Welcome() {
     try {
       const result =
         mode === 'register'
-          ? await register(API_BASE, email.trim(), password)
-          : await login(API_BASE, email.trim(), password);
+          ? await register(API_BASE, username.trim(), password, email)
+          : await login(API_BASE, username.trim(), password);
       const session: AuthSession = {
         token: result.token,
         userId: result.user.id,
+        username: result.user.username,
         email: result.user.email,
       };
       saveSession(session);
@@ -212,13 +218,13 @@ export default function Welcome() {
           ) : (
             <Card className="flex flex-col gap-3">
               <div>
-                <label className="mb-1.5 block text-sm font-semibold">Email</label>
+                <label className="mb-1.5 block text-sm font-semibold">Username</label>
                 <input
                   className={inputClass}
-                  type="email"
-                  placeholder="you@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  type="text"
+                  placeholder={mode === 'register' ? 'climber123' : 'username or email'}
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
                   autoCapitalize="none"
                   autoCorrect="off"
                 />
@@ -235,6 +241,21 @@ export default function Welcome() {
                   autoCorrect="off"
                 />
               </div>
+              {mode === 'register' ? (
+                <div>
+                  <label className="mb-1.5 block text-sm font-semibold">Email (optional)</label>
+                  <input
+                    className={inputClass}
+                    type="email"
+                    placeholder="Leave blank to skip"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                  />
+                  <p className="mt-1.5 text-xs text-muted">Only used to recover your account.</p>
+                </div>
+              ) : null}
               {authStatus ? <p className="text-sm text-primary">{authStatus}</p> : null}
             </Card>
           )}

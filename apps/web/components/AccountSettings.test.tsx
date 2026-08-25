@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto';
 import '@testing-library/jest-dom/vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { RepositoryProvider } from '@/lib/db/RepositoryProvider';
 import { saveSession } from '@/lib/auth/session';
 import { AccountSettings } from './AccountSettings';
@@ -17,7 +17,7 @@ describe('AccountSettings (signed out)', () => {
     cleanup();
   });
 
-  it('shows the sign-in form with Email/Password fields and the create-account toggle', async () => {
+  it('shows the sign-in form with Username/Password fields and the create-account toggle', async () => {
     render(
       <RepositoryProvider>
         <AccountSettings />
@@ -25,16 +25,37 @@ describe('AccountSettings (signed out)', () => {
     );
 
     // Provider blocks on async IndexedDB init, so wait for content to appear.
-    expect(await screen.findByText('Email')).toBeInTheDocument();
+    expect(await screen.findByText('Username')).toBeInTheDocument();
     expect(await screen.findByText('Password')).toBeInTheDocument();
     expect(await screen.findByText('Create a new account')).toBeInTheDocument();
+
+    // Sign-in asks for no email at all; it only appears, optional, on sign-up.
+    expect(screen.queryByText(/email/i)).not.toBeInTheDocument();
+  });
+
+  it('offers an explicitly optional email once switched to sign-up', async () => {
+    render(
+      <RepositoryProvider>
+        <AccountSettings />
+      </RepositoryProvider>,
+    );
+
+    fireEvent.click(await screen.findByText('Create a new account'));
+
+    expect(await screen.findByText('Email (optional)')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Leave blank to skip')).toBeInTheDocument();
   });
 });
 
 describe('AccountSettings (expired session)', () => {
   beforeEach(() => {
     window.localStorage.clear();
-    saveSession({ token: 'stale-token', userId: 'user-1', email: 'climber@example.com' });
+    saveSession({
+      token: 'stale-token',
+      userId: 'user-1',
+      username: 'climber',
+      email: 'climber@example.com',
+    });
   });
 
   afterEach(() => {
@@ -78,7 +99,7 @@ describe('AccountSettings (expired session)', () => {
       </RepositoryProvider>,
     );
 
-    expect(await screen.findByText(/climber@example.com/i)).toBeInTheDocument();
+    expect(await screen.findByText('climber')).toBeInTheDocument();
     expect(window.localStorage.getItem('tfc.auth')).not.toBeNull();
   });
 });

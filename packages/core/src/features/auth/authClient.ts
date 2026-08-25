@@ -3,9 +3,16 @@
  * and the user's identity; the caller persists them via the session store.
  */
 
+export interface AuthUser {
+  id: string;
+  username: string;
+  /** Optional recovery address; null when the account has none. */
+  email: string | null;
+}
+
 export interface AuthResult {
   token: string;
-  user: { id: string; email: string };
+  user: AuthUser;
 }
 
 /** Thrown on any auth failure, carrying a user-facing message + HTTP status. */
@@ -45,7 +52,7 @@ async function post(url: string, body: unknown): Promise<AuthResult> {
     throw new AuthError(`Couldn't reach the server: ${(err as Error).message}`);
   }
 
-  let payload: { token?: string; user?: { id: string; email: string }; error?: string } = {};
+  let payload: { token?: string; user?: AuthUser; error?: string } = {};
   try {
     payload = (await res.json()) as typeof payload;
   } catch {
@@ -58,12 +65,27 @@ async function post(url: string, body: unknown): Promise<AuthResult> {
   return { token: payload.token, user: payload.user };
 }
 
-export function register(baseUrl: string, email: string, password: string): Promise<AuthResult> {
-  return post(endpoint(baseUrl, '/auth/register'), { email, password });
+/**
+ * Create an account. `email` is optional — it's only ever used to recover the
+ * account later, so blank is a legitimate choice rather than a missing field.
+ */
+export function register(
+  baseUrl: string,
+  username: string,
+  password: string,
+  email?: string,
+): Promise<AuthResult> {
+  const trimmed = email?.trim();
+  return post(endpoint(baseUrl, '/auth/register'), {
+    username,
+    password,
+    ...(trimmed ? { email: trimmed } : {}),
+  });
 }
 
-export function login(baseUrl: string, email: string, password: string): Promise<AuthResult> {
-  return post(endpoint(baseUrl, '/auth/login'), { email, password });
+/** `username` may also be the account's recovery email — the server takes either. */
+export function login(baseUrl: string, username: string, password: string): Promise<AuthResult> {
+  return post(endpoint(baseUrl, '/auth/login'), { username, password });
 }
 
 /** Permanently delete the signed-in account and its server-side data. */

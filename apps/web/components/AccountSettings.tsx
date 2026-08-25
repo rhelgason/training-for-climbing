@@ -31,6 +31,7 @@ export function AccountSettings() {
   const [ready, setReady] = useState(false);
 
   const [mode, setMode] = useState<Mode>('login');
+  const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
@@ -50,8 +51,12 @@ export function AccountSettings() {
   };
 
   const submit = async () => {
-    if (!email.trim() || !password) {
-      window.alert('Enter your email and password.');
+    if (!username.trim() || !password) {
+      window.alert(
+        mode === 'register'
+          ? 'Choose a username and password.'
+          : 'Enter your username and password.',
+      );
       return;
     }
     setBusy(true);
@@ -59,11 +64,12 @@ export function AccountSettings() {
     try {
       const result =
         mode === 'register'
-          ? await register(API_BASE, email.trim(), password)
-          : await login(API_BASE, email.trim(), password);
+          ? await register(API_BASE, username.trim(), password, email)
+          : await login(API_BASE, username.trim(), password);
       const next: AuthSession = {
         token: result.token,
         userId: result.user.id,
+        username: result.user.username,
         email: result.user.email,
       };
       saveSession(next);
@@ -115,6 +121,7 @@ export function AccountSettings() {
     trackEvent('signed_out');
     setSession(null);
     setStatus(null);
+    setUsername('');
     setEmail('');
     setPassword('');
   };
@@ -130,6 +137,7 @@ export function AccountSettings() {
       trackEvent('account_deleted');
       setSession(null);
       setStatus(null);
+      setUsername('');
       setEmail('');
       setPassword('');
     } catch (err) {
@@ -160,7 +168,7 @@ export function AccountSettings() {
         <h2 className="display text-xl font-bold">Account</h2>
         <Card>
           <p className="text-sm text-muted">Signed in as</p>
-          <p className="text-lg font-semibold">{session.email}</p>
+          <p className="text-lg font-semibold">{session.username}</p>
           {session.lastSyncedAt ? (
             <p className="mt-1 text-sm text-muted">
               Synced automatically · last {new Date(session.lastSyncedAt).toLocaleString()}
@@ -199,16 +207,19 @@ export function AccountSettings() {
 
       <Card className="flex flex-col gap-3">
         <div>
-          <label className="mb-1.5 block text-sm font-semibold">Email</label>
+          <label className="mb-1.5 block text-sm font-semibold">Username</label>
           <input
             className={inputClass}
-            type="email"
-            placeholder="you@example.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            type="text"
+            placeholder={mode === 'register' ? 'climber123' : 'username or email'}
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
             autoCapitalize="none"
             autoCorrect="off"
           />
+          {mode === 'register' ? (
+            <p className="mt-1.5 text-xs text-muted">3-30 characters: letters, numbers, - or _</p>
+          ) : null}
         </div>
         <div>
           <label className="mb-1.5 block text-sm font-semibold">Password</label>
@@ -222,6 +233,24 @@ export function AccountSettings() {
             autoCorrect="off"
           />
         </div>
+        {mode === 'register' ? (
+          <div>
+            <label className="mb-1.5 block text-sm font-semibold">Email (optional)</label>
+            <input
+              className={inputClass}
+              type="email"
+              placeholder="Leave blank to skip"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoCapitalize="none"
+              autoCorrect="off"
+            />
+            <p className="mt-1.5 text-xs text-muted">
+              Only used to recover your account. Without one, a forgotten password means losing the
+              cloud backup — your data on this device is unaffected.
+            </p>
+          </div>
+        ) : null}
         {status ? <p className="text-sm text-primary">{status}</p> : null}
       </Card>
 
