@@ -138,7 +138,7 @@ describe('TrainHomeScreen', () => {
       url: 'https://srv.example.com',
       token: 'secret',
       userId: 'u1',
-      email: 'a@b.com',
+      username: 'climber',
     });
 
     const view = await renderScreen(repo);
@@ -154,7 +154,7 @@ describe('TrainHomeScreen', () => {
       url: 'https://srv.example.com',
       token: 'secret',
       userId: 'u1',
-      email: 'a@b.com',
+      username: 'climber',
     });
     await saveCachedSuggestion({ suggestion: aiSuggestion, generatedAt: now() });
 
@@ -174,7 +174,7 @@ describe('TrainHomeScreen', () => {
       url: 'https://srv.example.com',
       token: 'secret',
       userId: 'u1',
-      email: 'a@b.com',
+      username: 'climber',
     });
     await saveCachedSuggestion({ suggestion: aiSuggestion, generatedAt: now() });
 
@@ -209,7 +209,7 @@ describe('TrainHomeScreen', () => {
       url: 'https://srv.example.com',
       token: 'secret',
       userId: 'u1',
-      email: 'a@b.com',
+      username: 'climber',
     });
     await saveCachedSuggestion({
       suggestion: { ...aiSuggestion, headline: 'Old plan' },

@@ -14,9 +14,22 @@ const KEY = 'tfc.auth';
 export interface AuthSession {
   token: string;
   userId: string;
-  email: string;
+  username: string;
+  /** Optional recovery address; null/absent when the account has none. */
+  email?: string | null;
   /** Epoch ms of the last successful sync, if any. */
   lastSyncedAt?: number;
+}
+
+/**
+ * Sessions stored before accounts moved to usernames hold `email` and no
+ * `username`. The token is still valid (authorization is by `sub`), so rather
+ * than signing the user out we show the address they signed in with until they
+ * next sign in and we learn the real username.
+ */
+function withUsername(session: AuthSession): AuthSession {
+  if (session.username) return session;
+  return { ...session, username: session.email ?? '' };
 }
 
 export function isSignedIn(session: AuthSession | null): session is AuthSession {
@@ -28,7 +41,7 @@ export function getSession(): AuthSession | null {
   const raw = window.localStorage.getItem(KEY);
   if (!raw) return null;
   try {
-    return JSON.parse(raw) as AuthSession;
+    return withUsername(JSON.parse(raw) as AuthSession);
   } catch {
     return null;
   }
