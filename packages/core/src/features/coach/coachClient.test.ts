@@ -6,6 +6,7 @@ const config: SyncConfig = { url: 'https://coach.example.com/', token: 'secret' 
 
 const context: CoachContext = {
   generatedAt: 1,
+  prescriptions: { climbing: null, protocols: [] },
   profile: {
     abilityTier: 'intermediate',
     styleFocus: 'all-round',

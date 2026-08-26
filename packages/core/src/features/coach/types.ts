@@ -109,6 +109,38 @@ export interface CoachContext {
   training: { currentStreak: number; daysLast14: number };
   /** The deterministic plan for today — the floor the model should beat. */
   baselinePlan: string[];
+  /**
+   * Numbers the app has already computed from the climber's logged history.
+   *
+   * These are here so the model stops inventing them. A load derived from a
+   * measured baseline, bounded by rules the model can't see, is not something
+   * it can improve on by guessing — and two different numbers reaching the
+   * climber from the same screen is worse than either alone.
+   */
+  prescriptions: CoachPrescriptions;
+}
+
+export interface CoachPrescriptions {
+  /** Grades and style for today, or null when there's nothing to pitch against. */
+  climbing: {
+    style: string;
+    /** e.g. "warm up V1 · volume V3 · work V5 · project V6". Empty when unknown. */
+    bands: string;
+    because: string;
+  } | null;
+  /**
+   * Protocol lines to reproduce verbatim if that work is prescribed. Copying
+   * them exactly is also what lets the app re-attach its inline number logger,
+   * which matches steps by text.
+   */
+  protocols: {
+    name: string;
+    /** The full line, ready to be used as a plan step unchanged. */
+    text: string;
+    /** The number itself, or null on a test/general day. */
+    targetLabel: string | null;
+    because: string;
+  }[];
 }
 
 /** Structured coaching reply. Mirrors the deterministic baseline's shape. */

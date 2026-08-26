@@ -45,6 +45,15 @@ suggestions. Violating one produces a plan that will injure or overtrain them:
 - Use ONLY equipment listed in \`today.equipment\`. If there is no hangboard today, do not
   prescribe hangboard work, however much you would like to.
 - Fit the session to \`today.sessionLength\`.
+- \`prescriptions.protocols\` holds loads already computed from this climber's measured
+  baselines, bounded by safety rules you cannot see — never above what they have actually
+  lifted or hung, rounded down, and reduced when the measurement is old or unconfirmed.
+  Do NOT invent, adjust, or "progress" these numbers. If you prescribe that exercise, copy
+  its \`text\` verbatim as one of your steps. Where \`targetLabel\` is null the app has no
+  baseline yet and the line prescribes a test — keep it as a test; do not guess a weight to
+  replace it. Two different numbers reaching the climber from one screen is worse than either.
+- \`prescriptions.climbing\` gives the grades to pitch today's climbing at, derived from their
+  own send pyramid. Use those grades; do not substitute your own estimate of their level.
 
 START FROM RECENT HISTORY. \`recentDays\` is ordered newest first with \`daysAgo\` on each entry;
 \`daysAgo: 1\` is yesterday. Before choosing anything, read the last three days: what they
@@ -66,8 +75,8 @@ Coaching rules:
 - Be specific and encouraging, never generic.
 - Keep the plan concrete and doable in one day (3–6 ordered steps).
 - When you prescribe finger, strength, power, or endurance work, use the concrete
-  protocols in the training reference below — real edge sizes, hang/rest seconds, sets,
-  and added weight scaled to the climber's ability — rather than vague instructions.
+  protocols in the training reference below — real edge sizes, hang/rest seconds, sets —
+  rather than vague instructions.
 - \`baselinePlan\` is what the app would prescribe without you. Treat it as the floor: your
   plan should be at least as specific and better tailored, not vaguer.
 
@@ -106,6 +115,34 @@ const RESPONSE_SCHEMA = {
  * checkable: on a mismatch we throw, the route returns 502, and the client
  * falls back to the deterministic plan — which says rest correctly.
  */
+/**
+ * Reject a suggestion that contradicts a computed load.
+ *
+ * Same reasoning as the rest-day check, and the same failure mode: a model
+ * handed "+35 lb" is tempted to round it up to a nicer number or add a little
+ * for progression. Those numbers are bounded by the climber's measured history,
+ * so a "better" one is just an unmeasured one. If the model names the exercise
+ * it must carry the number it was given; otherwise we fall back to the
+ * deterministic plan, which has it right.
+ */
+export function assertRespectsPrescriptions(
+  suggestion: CoachSuggestion,
+  context: CoachContext,
+): void {
+  const plan = (suggestion.plan ?? []).join('\n').toLowerCase();
+  for (const protocol of context.prescriptions?.protocols ?? []) {
+    if (!protocol.targetLabel || !protocol.name) continue;
+    // Only when the model actually brought that exercise up. Leaving it out
+    // entirely is a legitimate coaching choice; renaming its load is not.
+    if (!plan.includes(protocol.name.toLowerCase())) continue;
+    if (!plan.includes(protocol.targetLabel.toLowerCase())) {
+      throw new Error(
+        `coach changed the prescribed load for ${protocol.name}; falling back to baseline`,
+      );
+    }
+  }
+}
+
 export function assertRespectsSchedule(
   suggestion: CoachSuggestion & { restDay?: boolean },
   context: CoachContext,
@@ -206,6 +243,7 @@ async function callGroq(context: CoachContext): Promise<CoachSuggestion & { rest
 export async function generateCoachSuggestion(context: CoachContext): Promise<CoachSuggestion> {
   const raw = provider() === 'groq' ? await callGroq(context) : await callGemini(context);
   assertRespectsSchedule(raw, context);
+  assertRespectsPrescriptions(raw, context);
   // `restDay` is a validation channel, not part of the client's contract.
   const { restDay: _restDay, ...suggestion } = raw;
   return suggestion;
