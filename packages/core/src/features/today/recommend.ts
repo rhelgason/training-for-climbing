@@ -20,6 +20,7 @@
  *    anaerobic endurance → conditioning → stamina.
  *  - Keep active short/medium-term goals in view.
  */
+import type { ClimbDiscipline } from '../../content/climbing';
 import { EXERCISES } from '../../content/exercises';
 import { PRESCRIPTIONS_BY_AREA } from '../../content/prescriptions';
 import { protocolForExercise } from '../../content/protocols';
@@ -34,11 +35,13 @@ import {
 } from '../../content/trainingContext';
 import { TRIAD_LABELS, type Exercise, type TriadArea } from '../../content/types';
 import type { AbilityTier } from '../../content/planning';
-import type { GoalRecord } from '../../db/types';
+import type { BenchmarkRecord, ClimbRecord, GoalRecord } from '../../db/types';
 import { activeGoals } from '../plan/goals';
 import { buildMicrocycle, type Microcycle, type RestKind } from '../plan/microcycle';
 import { isDoableWith } from '../train/exercises';
 import { loadHistory, type LoadEvent } from '../train/load';
+import { prescribeProtocol, type ProtocolPrescription } from '../train/prescribe';
+import { prescribeClimbing, type ClimbingPrescription } from './climbingPrescription';
 import { currentStreak, dayIndex, priorTrainingRun, restRecommended } from '../train/log';
 
 export interface DailyInput {
@@ -63,6 +66,17 @@ export interface DailyInput {
   readiness?: Readiness;
   sessionLength?: SessionLength;
   blockFocuses?: SessionFocusId[];
+
+  /**
+   * Logged protocol numbers. With them, a fingerboard step carries the weight
+   * to use today instead of naming the exercise and leaving the load to guesswork;
+   * without them it prescribes a test session to establish one.
+   */
+  benchmarks?: BenchmarkRecord[];
+  /** Logged climbs, used to pitch today's grades against the climber's own pyramid. */
+  climbs?: ClimbRecord[];
+  /** Which scale to prescribe grades on. Defaults to bouldering. */
+  discipline?: ClimbDiscipline;
 }
 
 export type DailyKind = 'rest' | 'assess' | 'train';
@@ -80,6 +94,12 @@ export interface PlanStep {
   exerciseId?: string;
   /** Set when this step has a number worth recording (see content/protocols). */
   protocolId?: string;
+  /**
+   * Today's numbers for that protocol, when the app is willing to prescribe
+   * them. Absent for `track` protocols, where choosing the load is the
+   * climber's call.
+   */
+  prescription?: ProtocolPrescription;
 }
 
 export interface DailyRecommendation {
@@ -118,6 +138,12 @@ export interface DailyRecommendation {
    * where not training is the entire point.
    */
   lightAlternative: { focus: SessionFocusId; label: string; plan: string[] } | null;
+  /**
+   * Which grades to climb today and in what style, derived from the climber's
+   * own send pyramid. Null on rest and assessment days, where there's nothing
+   * to pitch.
+   */
+  climbing: ClimbingPrescription | null;
 }
 
 const FOCUS_DETAIL: Record<TriadArea, string> = {
@@ -144,6 +170,14 @@ const ASSESS_STEPS: PlanStep[] = [
   { text: 'Note your weakest triad area — it becomes the focus of your daily plan.' },
 ];
 
+/** Everything the step builders need beyond the focus itself. */
+interface PlanContext {
+  dayIdx: number;
+  equipment: EquipmentId[];
+  benchmarks: BenchmarkRecord[];
+  nowMs: number;
+}
+
 /** Deterministically pick `count` items from a list, rotating by the day. */
 function rotate<T>(items: T[], dayIdx: number, count: number): T[] {
   if (items.length === 0) return [];
@@ -169,33 +203,37 @@ function pickExercise(
 }
 
 /** Turn one session focus into a concrete instruction, or null if impossible. */
-function focusStep(
-  focus: SessionFocusId,
-  dayIdx: number,
-  equipment: EquipmentId[],
-): PlanStep | null {
+function focusStep(focus: SessionFocusId, ctx: PlanContext): PlanStep | null {
   const spec = sessionFocus(focus);
   if (focus === 'mental' || focus === 'skill') {
     const area = focus === 'mental' ? 'mental' : 'technical';
-    const drill = rotate(PRESCRIPTIONS_BY_AREA[area], dayIdx, 1)[0];
+    const drill = rotate(PRESCRIPTIONS_BY_AREA[area], ctx.dayIdx, 1)[0];
     return drill ? { text: `${spec.label} — ${drill.title}: ${drill.detail}`, focus } : null;
   }
-  const exercise = pickExercise(focus, dayIdx, equipment);
+  const exercise = pickExercise(focus, ctx.dayIdx, ctx.equipment);
   if (!exercise) return null;
+  const protocolId = protocolForExercise(exercise.id)?.id;
+  const prescription = protocolId ? prescribeProtocol(protocolId, ctx.benchmarks, ctx.nowMs) : null;
+  // Where there's a prescription, its numbers *are* the instruction — the
+  // library's generic description underneath them is noise once you know the
+  // load. Everything else keeps the description, which is all it has.
   return {
-    text: `${spec.label} — ${exercise.name}: ${exercise.description}`,
+    text: prescription
+      ? `${spec.label} — ${prescription.text}`
+      : `${spec.label} — ${exercise.name}: ${exercise.description}`,
     focus,
     exerciseId: exercise.id,
-    protocolId: protocolForExercise(exercise.id)?.id,
+    protocolId,
+    ...(prescription ? { prescription } : {}),
   };
 }
 
 /** Build the ordered steps for a training day from the scheduler's choices. */
-function schedulerPlan(cycle: Microcycle, dayIdx: number, equipment: EquipmentId[]): PlanStep[] {
+function schedulerPlan(cycle: Microcycle, ctx: PlanContext): PlanStep[] {
   const steps: PlanStep[] = [{ text: WARM_UP }];
   for (const focus of [cycle.primary, ...cycle.supporting]) {
     if (!focus) continue;
-    const step = focusStep(focus, dayIdx, equipment);
+    const step = focusStep(focus, ctx);
     if (step) steps.push(step);
   }
   steps.push({ text: COOL_DOWN });
@@ -206,7 +244,7 @@ function schedulerPlan(cycle: Microcycle, dayIdx: number, equipment: EquipmentId
  * The pre-scheduler plan, kept for callers that don't pass load history: an
  * ordered session weighted to the weakest triad area.
  */
-function legacyPlan(area: TriadArea, dayIdx: number, equipment: EquipmentId[]): PlanStep[] {
+function legacyPlan(area: TriadArea, ctx: PlanContext): PlanStep[] {
   if (area === 'physical') {
     const steps: PlanStep[] = [
       { text: WARM_UP },
@@ -216,13 +254,13 @@ function legacyPlan(area: TriadArea, dayIdx: number, equipment: EquipmentId[]): 
       },
     ];
     for (const focus of ['maxStrength', 'powerEndurance', 'conditioning'] as SessionFocusId[]) {
-      const step = focusStep(focus, dayIdx, equipment);
+      const step = focusStep(focus, ctx);
       if (step) steps.push(step);
     }
     steps.push({ text: COOL_DOWN });
     return steps;
   }
-  const drills = rotate(PRESCRIPTIONS_BY_AREA[area], dayIdx, 3);
+  const drills = rotate(PRESCRIPTIONS_BY_AREA[area], ctx.dayIdx, 3);
   const closing =
     area === 'mental'
       ? 'Then climb at your limit, applying the mental skills under real pressure.'
@@ -251,6 +289,12 @@ export function buildDailyRecommendation(input: DailyInput): DailyRecommendation
   const reminders = goalReminders(input.goals);
   const dayIdx = dayIndex(input.nowMs);
   const equipment = input.equipment ?? DEFAULT_EQUIPMENT;
+  const ctx: PlanContext = {
+    dayIdx,
+    equipment,
+    benchmarks: input.benchmarks ?? [],
+    nowMs: input.nowMs,
+  };
 
   // The scheduler needs classified history; without it we fall back to the
   // simpler streak-based logic so existing callers behave exactly as before.
@@ -280,6 +324,7 @@ export function buildDailyRecommendation(input: DailyInput): DailyRecommendation
     microcycle: cycle,
     restKind: null as RestKind | null,
     lightAlternative: null as DailyRecommendation['lightAlternative'],
+    climbing: null as ClimbingPrescription | null,
   };
 
   // Note `priorTrainingRun`, not `streak`: the question is what they arrive
@@ -289,9 +334,7 @@ export function buildDailyRecommendation(input: DailyInput): DailyRecommendation
     : restRecommended(priorTrainingRun(input.trainingDates, input.nowMs));
   if (needsRest) {
     const alternativeFocus = cycle?.lightAlternative ?? null;
-    const alternativeStep = alternativeFocus
-      ? focusStep(alternativeFocus, dayIdx, equipment)
-      : null;
+    const alternativeStep = alternativeFocus ? focusStep(alternativeFocus, ctx) : null;
     return {
       ...common,
       kind: 'rest',
@@ -329,7 +372,7 @@ export function buildDailyRecommendation(input: DailyInput): DailyRecommendation
 
   if (cycle && cycle.primary) {
     const spec = sessionFocus(cycle.primary);
-    const scheduled = schedulerPlan(cycle, dayIdx, equipment);
+    const scheduled = schedulerPlan(cycle, ctx);
     return {
       ...common,
       kind: 'train',
@@ -341,10 +384,16 @@ export function buildDailyRecommendation(input: DailyInput): DailyRecommendation
       focusItems: input.weakSpots ?? [],
       focus: cycle.primary,
       supportingFocuses: cycle.supporting,
+      climbing: prescribeClimbing(
+        input.climbs ?? [],
+        input.discipline ?? 'boulder',
+        cycle.primary,
+        input.nowMs,
+      ),
     };
   }
 
-  const legacy = legacyPlan(input.weakestArea, dayIdx, equipment);
+  const legacy = legacyPlan(input.weakestArea, ctx);
   return {
     ...common,
     kind: 'train',
@@ -354,6 +403,12 @@ export function buildDailyRecommendation(input: DailyInput): DailyRecommendation
     plan: texts(legacy),
     steps: legacy,
     focusItems: input.weakSpots ?? [],
+    climbing: prescribeClimbing(
+      input.climbs ?? [],
+      input.discipline ?? 'boulder',
+      null,
+      input.nowMs,
+    ),
   };
 }
 
@@ -366,5 +421,5 @@ export function dailyRecommendationFrom(
   },
 ): DailyRecommendation {
   const { journals, climbs, ...rest } = input;
-  return buildDailyRecommendation({ ...rest, history: loadHistory(journals, climbs) });
+  return buildDailyRecommendation({ ...rest, climbs, history: loadHistory(journals, climbs) });
 }
