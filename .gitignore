@@ -8,24 +8,10 @@ npm-debug.*
 yarn-error.log
 .pnp.*
 
-# === Expo / React Native ===
-.expo/
-.expo-shared/
+# === Build output ===
 dist/
-web-build/
+.next/
 *.orig.*
-*.jks
-*.p8
-*.p12
-*.key
-*.mobileprovision
-
-# === Native builds ===
-ios/
-android/
-*.ipa
-*.apk
-*.aab
 
 # === Env / secrets ===
 .env

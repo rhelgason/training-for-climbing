@@ -1,95 +1,37 @@
 {
   "name": "training-for-climbing",
   "version": "0.1.0",
-  "main": "index.ts",
   "workspaces": [
     "packages/*",
     "apps/*"
   ],
-  "dependencies": {
-    "@tfc/core": "*",
-    "@react-native-async-storage/async-storage": "2.2.0",
-    "@react-navigation/bottom-tabs": "^7.16.2",
-    "@react-navigation/native": "^7.2.5",
-    "@react-navigation/native-stack": "^7.16.0",
-    "babel-preset-expo": "~54.0.0",
-    "drizzle-orm": "^0.45.2",
-    "expo": "~54.0.35",
-    "expo-crypto": "~15.0.9",
-    "expo-sqlite": "~16.0.10",
-    "expo-status-bar": "~3.0.9",
-    "react": "19.1.0",
-    "react-native": "0.81.5",
-    "react-native-logs": "^5.6.0",
-    "react-native-safe-area-context": "~5.6.2",
-    "react-native-screens": "~4.16.0",
-    "react-native-svg": "15.12.1",
-    "zustand": "^5.0.14"
-  },
   "devDependencies": {
-    "@testing-library/react-native": "^14.0.0",
-    "@types/jest": "^29.5.12",
-    "@types/react": "~19.1.10",
-    "drizzle-kit": "^0.31.10",
     "eslint": "^9.39.4",
-    "eslint-config-expo": "~10.0.0",
     "eslint-config-prettier": "^10.1.8",
     "husky": "^9.1.7",
-    "jest": "^29.7.0",
-    "jest-expo": "~54.0.0",
     "lint-staged": "^17.0.7",
     "prettier": "^3.8.3",
-    "react-test-renderer": "^19.1.0",
-    "test-renderer": "^1.2.0",
     "typescript": "~5.9.2"
   },
   "scripts": {
-    "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
-    "web": "expo start --web",
-    "typecheck": "tsc --noEmit",
+    "dev": "npm run dev --workspace @tfc/web",
+    "build": "npm run build --workspace @tfc/web",
+    "start": "npm run start --workspace @tfc/web",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test": "jest",
-    "test:coverage": "jest --coverage",
-    "ci": "npm run typecheck && npm run lint && npm run test:coverage",
+    "typecheck": "npm run typecheck:core && npm run typecheck:web",
+    "test": "npm run test:core && npm run test:web",
+    "ci": "npm run format:check && npm run lint && npm run typecheck && npm run test",
     "dev:web": "npm run dev --workspace @tfc/web",
     "build:web": "npm run build --workspace @tfc/web",
     "typecheck:core": "npm run typecheck --workspace @tfc/core",
     "test:core": "npm run test --workspace @tfc/core",
+    "test:core:coverage": "npm run test:coverage --workspace @tfc/core",
     "typecheck:web": "npm run typecheck --workspace @tfc/web",
     "test:web": "npm run test --workspace @tfc/web",
     "prepare": "husky || true"
-  },
-  "jest": {
-    "preset": "jest-expo",
-    "watchman": false,
-    "roots": [
-      "<rootDir>/src"
-    ],
-    "setupFilesAfterEnv": [
-      "<rootDir>/jest.setup.ts"
-    ],
-    "transformIgnorePatterns": [
-      "node_modules/(?!((jest-)?react-native|@react-native(-community)?|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@unimodules/.*|unimodules|sentry-expo|native-base|react-native-svg|react-native-logs|@tfc/core))"
-    ],
-    "collectCoverageFrom": [
-      "src/**/*.{ts,tsx}",
-      "!src/**/*.d.ts",
-      "!src/**/__tests__/**",
-      "!src/**/*.test.{ts,tsx}"
-    ],
-    "coverageThreshold": {
-      "global": {
-        "statements": 20,
-        "branches": 20,
-        "functions": 20,
-        "lines": 20
-      }
-    }
   },
   "lint-staged": {
     "*.{ts,tsx,mjs}": [
