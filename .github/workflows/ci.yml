@@ -12,8 +12,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  mobile:
-    name: mobile · typecheck · lint · test
+  repo:
+    name: repo · format · lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -26,21 +26,12 @@ jobs:
       # first networked install after the monorepo/web app were added.
       - name: Install dependencies
         run: npm install --no-audit --no-fund
-      - name: Typecheck (mobile)
-        run: npm run typecheck
-      - name: Lint (mobile)
-        run: npm run lint
+      # Repo-wide formatting, which is the only thing left at the root now the
+      # Expo app is gone. Each workspace runs its own typecheck/lint/tests below.
       - name: Format check
         run: npm run format:check
-      - name: Test with coverage (mobile)
-        run: npm run test:coverage -- --ci --maxWorkers=2
-      - name: Upload coverage artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage
-          path: coverage/
-          if-no-files-found: ignore
+      - name: Lint (root)
+        run: npm run lint
 
   core:
     name: core · typecheck · test

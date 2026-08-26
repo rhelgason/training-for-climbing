@@ -1,63 +1,73 @@
 # training-for-climbing
 
-A local-first, cross-platform mobile companion app for **Eric J. Hörst's _Training for Climbing_ (3rd ed.)**. It's built around the **daily improvement loop**: tell it your goals, your gear and your week once, then open it each morning and be told exactly what to train — chosen from your weakest area, what you trained in the last few days, and the weekly frequency rules that govern each kind of training. A deterministic scheduler decides _what_ may be trained; a free AI coach writes _how_, inside constraints it can't break. Log the day in a sentence and tomorrow's plan accounts for it.
+A local-first web companion app for **Eric J. Hörst's _Training for Climbing_ (3rd ed.)**. It's built around the **daily improvement loop**: tell it your goals, your gear and your week once, then open it each morning and be told exactly what to train — chosen from your weakest area, what you trained in the last few days, and the weekly frequency rules that govern each kind of training. A deterministic scheduler decides _what_ may be trained; a free AI coach writes _how_, inside constraints it can't break. Log the day in a sentence and tomorrow's plan accounts for it.
 
 > Personal-use companion. It does not reproduce the book — it complements it. You should own/read the book to get full value. The source PDF is intentionally git-ignored.
 
+On a phone it's installed from the browser as a PWA rather than from an app store.
+
+> There was also an Expo/React Native app in `src/`, sharing `@tfc/core` with the web app. It was
+> retired once the web app became the only thing anyone actually ran: it had no native build
+> pipeline, so it could only be launched through Expo Go on a dev machine, and keeping a second
+> copy of every screen in step cost more than it returned. It's in the git history if a native
+> app is ever wanted.
+
 ## Stack
 
-- **Expo (React Native) + TypeScript** — one codebase for iOS & Android
-- **React Navigation** — bottom tabs (Assess · Plan · Train · Progress · More)
-- **expo-sqlite** behind a `Repository` interface — local-first persistence, sync-ready
-- **Jest + React Native Testing Library** — unit & component tests
+- **Next.js (App Router) + TypeScript** — the app and its API routes in one deployment
+- **`@tfc/core`** — platform-neutral domain logic (scheduler, prescriptions, sync), fully unit-tested
+- **IndexedDB** behind a `Repository` interface — local-first persistence, sync-ready
+- **Neon Postgres** — accounts and one snapshot per user, behind the app's own `/api` routes
+- **Vitest + Testing Library** (web) and **Jest** (core) — unit & component tests
 - **ESLint + Prettier + Husky** — quality gates; **GitHub Actions** CI on every push/PR
 
 ## Prerequisites
 
 - Node 20+ (this repo was bootstrapped with Node via `nvm`)
-- The Expo Go app on your phone, or an iOS/Android simulator
 
 ## Getting started
 
 ```bash
 npm install
-npm start          # launch the Expo dev server, then open in Expo Go / a simulator
+npm run dev        # Next dev server for apps/web
 ```
 
 ## Scripts
 
-| Script                               | What it does                                        |
-| ------------------------------------ | --------------------------------------------------- |
-| `npm start`                          | Expo dev server                                     |
-| `npm run typecheck`                  | `tsc --noEmit`                                      |
-| `npm run lint`                       | ESLint                                              |
-| `npm run format` / `format:check`    | Prettier write / check                              |
-| `npm test` / `npm run test:coverage` | Jest (with coverage)                                |
-| `npm run ci`                         | typecheck + lint + tests with coverage (mirrors CI) |
+| Script                            | What it does                                   |
+| --------------------------------- | ---------------------------------------------- |
+| `npm run dev`                     | Next dev server (`apps/web`)                   |
+| `npm run build`                   | Production build of the web app                |
+| `npm run typecheck`               | Typecheck both workspaces                      |
+| `npm test`                        | Tests for both workspaces                      |
+| `npm run lint`                    | ESLint                                         |
+| `npm run format` / `format:check` | Prettier write / check                         |
+| `npm run ci`                      | format + lint + typecheck + tests (mirrors CI) |
 
 ## Project structure
 
 ```
-src/
-  content/      # book-derived data: self-assessment, fitness tests, glossary
+packages/core/src/        # platform-neutral domain logic, no UI, fully unit-tested
+  content/                # book-derived data: assessments, exercises, protocols, grades
   features/
-    assess/     # Self-Assessment + Fitness Evaluation + reassess nudge, tested
-    plan/       # goals + program builder + macrocycle planner, with tested logic
-    journal/    # daily journal entry form (free text + activity tags + intensity)
-    train/      # rest/streak, energy-emotion, exercise library (triad/hierarchy tagged)
-    today/      # daily "what to work on" — deterministic ordered plan (tested)
-    coach/      # AI coach: context builder + client + cache + fallback (tested)
-    progress/   # climb logging + dashboard (trends, consistency, benchmarks) (tested)
-    auth/       # accounts: username/password sign-in, session, Account screen
-    sync/       # backend-agnostic snapshot sync engine + HTTP remote
-    review/     # "More": settings/profile entry, glossary, account
-    settings/   # Profile/Settings singleton (ability tier, AI toggle, cadence)
-  db/           # Repository interface + InMemory + SQLite implementations
-  lib/          # logger + structured usage events, ids
-  providers/    # Repository provider, error boundary
-  navigation/   # tabs + stacks
-  components/    # shared UI (Screen, Button, Card, TriadBars, RatingSelector)
-  theme/        # design tokens
+    assess/               # self-assessment + fitness evaluation + reassess nudge
+    plan/                 # goals, program builder, macrocycle, microcycle scheduler
+    today/                # the daily plan + which grades and style to climb
+    train/                # load history, baselines, prescribed numbers, exercise library
+    coach/                # AI coach: context builder + client + types
+    progress/             # send pyramid, trends, consistency
+    profile/              # ability-tier drift + journal-derived insights
+    sync/                 # backend-agnostic snapshot sync engine + HTTP remote
+  db/                     # Repository interface + record types + InMemory implementation
+  lib/                    # day arithmetic, clock, ids, logger
+
+apps/web/                 # the app itself (Next.js App Router)
+  app/                    # routes and pages, plus /api (auth, snapshot, coach, insights)
+  components/             # UI
+  lib/                    # web-side db (IndexedDB), auth session, coach + insight clients
+  lib/server/             # API-route internals: Postgres, JWT, LLM adapters
+
+scripts/                  # one-shot database schema and migrations
 ```
 
 ## Engineering practices
@@ -80,10 +90,12 @@ app's own API routes** on Vercel, backed by Neon Postgres.
 
 1. Deploy the web app to Vercel with `DATABASE_URL`, `JWT_SECRET`, and (optionally)
    `GEMINI_API_KEY` set — see [`apps/web/README.md`](apps/web/README.md). You get an HTTPS URL.
-2. Set `EXPO_PUBLIC_SYNC_URL` to that URL **plus `/api`** (copy `.env.example` to `.env`) so it's
-   baked into the build and nobody types it.
-3. In the app: **More → Account**, create an account (or sign in) with a username + password — the
+2. In the app: **More → Account**, create an account (or sign in) with a username + password — the
    first sync runs automatically, and the AI coach (if enabled) authenticates as the same user.
+
+The app talks to its own API on the same origin, so there is no server URL to configure. (When a
+React Native app shipped alongside it, that took an `EXPO_PUBLIC_SYNC_URL` baked into the build;
+nothing needs it now.)
 
 An email is optional at sign-up and used only to recover the account. It is never verified and
 never sent to, so requiring one would collect an unusable address while turning away anyone
