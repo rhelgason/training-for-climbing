@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { CoachContext } from '@tfc/core';
-import { generateCoachSuggestion, isLlmConfigured } from './llm';
+import type { CoachContext, CoachSuggestion } from '@tfc/core';
+import { assertRespectsPrescriptions, generateCoachSuggestion, isLlmConfigured } from './llm';
 
 function makeContext(restDay = false) {
   return {
@@ -38,6 +38,7 @@ function makeContext(restDay = false) {
     journals: [],
     training: { currentStreak: 0, daysLast14: 0 },
     baselinePlan: ['Warm up'],
+    prescriptions: { climbing: null, protocols: [] },
   } satisfies CoachContext;
 }
 
@@ -211,5 +212,80 @@ describe('generateCoachSuggestion', () => {
     expect(suggestion.headline).toBe('Rest today');
     // The validation channel is stripped before the client sees it.
     expect(suggestion).not.toHaveProperty('restDay');
+  });
+});
+
+describe('assertRespectsPrescriptions', () => {
+  const withProtocol = (targetLabel: string | null): CoachContext =>
+    ({
+      prescriptions: {
+        climbing: null,
+        protocols: [
+          {
+            name: 'Max-weight hangs',
+            text: 'Max-weight hangs — +35 lb · 5 sets · 10 s hang · 3 min rest',
+            targetLabel,
+            because: '90% of +40 lb',
+          },
+        ],
+      },
+    }) as unknown as CoachContext;
+
+  const plan = (steps: string[]): CoachSuggestion => ({
+    focusArea: null,
+    headline: 'h',
+    plan: steps,
+    rationale: 'r',
+    watchOuts: [],
+  });
+
+  it('accepts a plan that carries the prescribed number through', () => {
+    expect(() =>
+      assertRespectsPrescriptions(
+        plan(['Warm up', 'Max-weight hangs — +35 lb · 5 sets · 10 s hang · 3 min rest']),
+        withProtocol('+35 lb'),
+      ),
+    ).not.toThrow();
+  });
+
+  it('rejects a plan that changes the prescribed load', () => {
+    // The tempting failure: rounding up, or adding a little for "progression".
+    expect(() =>
+      assertRespectsPrescriptions(
+        plan(['Max-weight hangs — +40 lb, 5 sets']),
+        withProtocol('+35 lb'),
+      ),
+    ).toThrow(/changed the prescribed load/i);
+  });
+
+  it('accepts a plan that leaves the exercise out entirely', () => {
+    // Not prescribing it is a coaching call; renaming its load is not.
+    expect(() =>
+      assertRespectsPrescriptions(plan(['Long ARC session', 'Core']), withProtocol('+35 lb')),
+    ).not.toThrow();
+  });
+
+  it('ignores protocols that have no number yet', () => {
+    // A test day has nothing to contradict.
+    expect(() =>
+      assertRespectsPrescriptions(
+        plan(['Max-weight hangs — find your max today']),
+        withProtocol(null),
+      ),
+    ).not.toThrow();
+  });
+
+  it('is case-insensitive about how the model writes it', () => {
+    expect(() =>
+      assertRespectsPrescriptions(plan(['MAX-WEIGHT HANGS at +35 LB']), withProtocol('+35 lb')),
+    ).not.toThrow();
+  });
+
+  it('does nothing when there are no prescriptions at all', () => {
+    expect(() =>
+      assertRespectsPrescriptions(plan(['Anything']), {
+        prescriptions: undefined,
+      } as unknown as CoachContext),
+    ).not.toThrow();
   });
 });
