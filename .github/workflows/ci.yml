@@ -73,6 +73,11 @@ jobs:
         run: npm run typecheck --workspace @tfc/web
       - name: Lint (@tfc/web)
         run: npm run lint --workspace @tfc/web
+      # jsdom is a *root* devDependency, which looks misplaced: vitest hoists to
+      # the root, and Node resolves an environment package from the runner's own
+      # location, so a copy nested under apps/web is invisible to it. It used to
+      # work by accident — jest-expo pulled jsdom@20 up to the root and vitest
+      # silently used that instead of the version the web app declares.
       - name: Test (@tfc/web)
         run: npm run test --workspace @tfc/web
       - name: Build (@tfc/web)
