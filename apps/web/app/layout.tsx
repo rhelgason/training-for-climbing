@@ -35,7 +35,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <div className="flex min-h-dvh">
             <Sidebar />
             <div className="flex min-h-dvh min-w-0 flex-1 flex-col">
-              <main className="mx-auto w-full max-w-2xl flex-1">{children}</main>
+              {/*
+              Installed on iOS, `viewport-fit=cover` plus the black-translucent
+              status bar puts the web view *behind* the clock and battery, so
+              content starts under them. The inset goes here rather than on the
+              flex column so it doesn't fight `min-h-dvh`, and rather than on
+              each Screen so the background still bleeds to the top edge. The
+              TabBar already does the same for the home indicator.
+            */}
+              <main className="mx-auto w-full max-w-2xl flex-1 pt-[env(safe-area-inset-top)]">
+                {children}
+              </main>
               <TabBar />
             </div>
           </div>
