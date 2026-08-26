@@ -197,3 +197,70 @@ describe('TrainHome — recovery is visible', () => {
     expect(screen.getByText(/48 hours/)).toBeInTheDocument();
   });
 });
+
+describe('TrainHome — what to climb', () => {
+  it('names the grade bands once there are enough sends to pitch against', async () => {
+    for (const daysAgo of [4, 9, 15]) {
+      await repo.saveClimb({
+        date: now() - daysAgo * DAY,
+        environment: 'indoor',
+        discipline: 'boulder',
+        grade: 'V4',
+        outcome: 'send',
+      });
+    }
+    await renderScreen();
+
+    expect(await screen.findByText('What to climb')).toBeInTheDocument();
+    // Anchored on the consolidated V4: work is one above it.
+    expect(screen.getByText(/work V5/)).toBeInTheDocument();
+    expect(screen.getByText(/3 sends in the last 6 months/i)).toBeInTheDocument();
+  });
+
+  it('says it has nothing to go on rather than inventing a grade', async () => {
+    await renderScreen();
+    expect(await screen.findByText('What to climb')).toBeInTheDocument();
+    expect(screen.getByText(/no sends logged yet/i)).toBeInTheDocument();
+    expect(screen.queryByText(/work V/)).not.toBeInTheDocument();
+  });
+});
+
+describe('TrainHome — prescribed numbers', () => {
+  /**
+   * Which exercise the scheduler rotates to depends on the day, so these pin
+   * the clock. Without it the fingerboard step appears only on some real-world
+   * dates and the assertions would quietly match nothing.
+   */
+  beforeEach(() => {
+    // Only Date — faking the timer functions too would stall waitFor and the
+    // IndexedDB shim, which both need the real event loop.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-08-26T12:00:00Z'));
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('asks for a baseline test before it will name a weight', async () => {
+    await renderScreen();
+    expect(screen.getByText(/Max-weight hangs/)).toHaveTextContent(/establish your baseline/i);
+  });
+
+  it('prescribes off the logged baseline and explains where it came from', async () => {
+    await repo.saveBenchmark({
+      testId: 'protocol-max-weight-hang',
+      value: 40,
+      date: now() - 5 * DAY,
+    });
+    await repo.saveBenchmark({
+      testId: 'protocol-max-weight-hang',
+      value: 38,
+      date: now() - 12 * DAY,
+    });
+    await renderScreen();
+
+    // 90% of the best of two recent sessions, rounded down to the 5 lb step.
+    expect(screen.getByText(/Max-weight hangs/)).toHaveTextContent('+35 lb');
+    expect(screen.getByText(/your best of 2 recent sessions/i)).toBeInTheDocument();
+  });
+});

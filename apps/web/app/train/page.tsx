@@ -7,6 +7,7 @@ import {
   ACTIVITY_LABELS,
   INTENSITY_LABELS,
   buildDailyRecommendation,
+  formatBands,
   dayIndex,
   effectiveProfile,
   flaggedPromptsForArea,
@@ -212,6 +213,9 @@ export default function TrainHome() {
         equipment: today.equipment,
         readiness: today.readiness,
         sessionLength: today.sessionLength,
+        benchmarks,
+        climbs,
+        discipline: settings.defaultDiscipline,
       });
       // Newest-edit-wins rather than first match: sync can leave two entries
       // for one day, and editing an arbitrary one loses the other's text.
@@ -230,7 +234,9 @@ export default function TrainHome() {
         const protocol = protocolById(step.protocolId);
         if (!protocol) continue;
         seeded[step.protocolId] =
-          latestForTest(benchmarks, step.protocolId)?.value ?? protocol.defaultValue;
+          step.prescription?.target ??
+          latestForTest(benchmarks, step.protocolId)?.value ??
+          protocol.defaultValue;
       }
       setMetrics(seeded);
 
@@ -324,6 +330,17 @@ export default function TrainHome() {
           {ai ? ai.rationale || rec.detail : rec.detail}
         </p>
 
+        {rec.climbing && rec.kind === 'train' && (
+          <div className="mt-4 rounded-xl border border-border/70 bg-surface-alt/40 px-3 py-2.5">
+            <p className="text-sm font-bold uppercase tracking-wide text-muted">What to climb</p>
+            <p className="mt-1 text-sm leading-5">{rec.climbing.style}</p>
+            {rec.climbing.bands.work ? (
+              <p className="mt-1.5 text-sm font-semibold">{formatBands(rec.climbing.bands)}</p>
+            ) : null}
+            <p className="mt-1 text-xs leading-4 text-muted">{rec.climbing.because}</p>
+          </div>
+        )}
+
         {planSteps.length > 0 && (
           <div className="mt-4">
             <div className="mb-1 flex items-baseline justify-between gap-2">
@@ -340,9 +357,9 @@ export default function TrainHome() {
               // Protocols only attach to the deterministic plan's steps; when
               // the AI has rewritten the session the texts no longer line up,
               // so we match on text and simply show nothing if it doesn't.
-              const protocol = protocolById(
-                rec.steps.find((s) => s.text === step)?.protocolId ?? '',
-              );
+              const planStep = rec.steps.find((s) => s.text === step);
+              const protocol = protocolById(planStep?.protocolId ?? '');
+              const prescription = planStep?.prescription;
               return (
                 <div key={i}>
                   <button
@@ -366,11 +383,18 @@ export default function TrainHome() {
                       {step}
                     </span>
                   </button>
+                  {/* Where the number came from. Worth a line: a prescription
+                      you can't interrogate is one you stop trusting the first
+                      time it looks wrong. */}
+                  {prescription && done && prescription.because && (
+                    <p className="mt-1 ml-7 text-xs leading-4 text-muted">{prescription.because}</p>
+                  )}
                   {protocol && done && (
                     <ProtocolMetric
                       protocol={protocol}
                       value={metrics[protocol.id] ?? protocol.defaultValue}
                       previous={latestForTest(state.benchmarks, protocol.id)?.value ?? null}
+                      prescribed={prescription?.kind === 'work'}
                       onChange={(value) => setMetrics((m) => ({ ...m, [protocol.id]: value }))}
                       disabled={marking}
                     />
