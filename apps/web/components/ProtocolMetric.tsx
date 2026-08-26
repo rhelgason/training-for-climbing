@@ -17,11 +17,25 @@ interface Props {
   value: number;
   /** The previous recorded value, if any — shown so progress is visible. */
   previous: number | null;
+  /**
+   * True when the number was prescribed rather than carried over. A working set
+   * at a fraction of max is *meant* to sit below the last recorded value, so
+   * calling that "down on last session" reads as a regression when it's the
+   * plan working correctly. The comparison still shows; the judgement doesn't.
+   */
+  prescribed?: boolean;
   onChange: (value: number) => void;
   disabled?: boolean;
 }
 
-export function ProtocolMetric({ protocol, value, previous, onChange, disabled }: Props) {
+export function ProtocolMetric({
+  protocol,
+  value,
+  previous,
+  prescribed,
+  onChange,
+  disabled,
+}: Props) {
   const delta = previous === null ? null : value - previous;
   const improved =
     delta === null || delta === 0 ? null : protocol.lowerIsBetter ? delta < 0 : delta > 0;
@@ -62,6 +76,8 @@ export function ProtocolMetric({ protocol, value, previous, onChange, disabled }
       <p className="mt-1 text-xs text-muted">
         {previous === null ? (
           'First time — this becomes your baseline.'
+        ) : prescribed ? (
+          `Last time ${formatProtocolValue(protocol, previous)}.`
         ) : delta === 0 ? (
           `Same as last time (${formatProtocolValue(protocol, previous)}).`
         ) : (
