@@ -15,6 +15,7 @@ import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { OptionChips, type ChipOption } from '@/components/OptionChips';
 import { Screen } from '@/components/Screen';
+import { DayPicker } from '@/components/DayPicker';
 import { PageHeader } from '@/components/PageHeader';
 import { useRepository } from '@/lib/db/RepositoryProvider';
 
@@ -37,13 +38,14 @@ export default function CheckinFormScreen() {
   const [emotion, setEmotion] = useState(0);
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
+  const [day, setDay] = useState(() => now());
 
   const quadrant = quadrantOf(energy, emotion);
 
   const onSave = async () => {
     setSaving(true);
     try {
-      await repo.saveCheckin({ time: now(), energy, emotion, note: note.trim() || undefined });
+      await repo.saveCheckin({ time: day, energy, emotion, note: note.trim() || undefined });
       trackEvent('checkin_logged', { quadrant: quadrant.id });
       router.back();
     } finally {
@@ -55,7 +57,10 @@ export default function CheckinFormScreen() {
     <>
       <PageHeader title="Log check-in" />
       <Screen>
-        <p className="font-semibold">Physical energy</p>
+        <p className="font-semibold">When</p>
+        <DayPicker value={day} onChange={setDay} disabled={saving} />
+
+        <p className="mt-4 font-semibold">Physical energy</p>
         <p className="-mt-2 mb-2 text-sm text-muted">0 = depleted · 10 = peak</p>
         <OptionChips
           options={ENERGY_OPTIONS}
