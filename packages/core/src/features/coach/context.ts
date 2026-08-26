@@ -185,6 +185,10 @@ export function buildCoachContext(input: CoachContextInput): CoachContext {
       sessionLength: profile.sessionLength,
       equipment: profile.equipment,
       climberContext: profile.climberContext,
+      derivedContext: (input.profile?.derivedContext ?? []).map((n) => ({
+        text: n.text,
+        addedAt: n.addedAt,
+      })),
     },
     today: {
       environment: ENVIRONMENT_LABELS[daily?.environment ?? 'indoor'],

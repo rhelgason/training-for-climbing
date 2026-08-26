@@ -64,6 +64,12 @@ export interface CoachContext {
     equipment: EquipmentId[];
     /** The climber's own words about themselves. Free text, read verbatim. */
     climberContext?: string;
+    /**
+     * Facts the app inferred and the climber confirmed — kept as a separate
+     * list rather than folded into `climberContext` so the model can never
+     * mistake its own earlier inference for something the climber said.
+     */
+    derivedContext?: { text: string; addedAt: number }[];
   };
   /** What's true for *today* specifically, from the daily check-in. */
   today: {

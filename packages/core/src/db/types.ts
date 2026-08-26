@@ -46,6 +46,30 @@ export interface ProfileRecord {
   sessionLength: SessionLength;
   /** Set when the guided sign-up flow was completed; drives the welcome redirect. */
   onboardedAt?: number;
+
+  // --- Context the app inferred, as opposed to what the climber typed. ---
+
+  /**
+   * Ids of insights already accepted or declined, so a proposal is made once
+   * rather than every time the app opens.
+   */
+  dismissedInsights?: string[];
+  /**
+   * Facts the app inferred about the climber, kept deliberately apart from
+   * `climberContext`. That field is their own words, read by the coach
+   * verbatim; if the app wrote into it, the model's own inferences would come
+   * back as established fact on the next run and compound. These carry
+   * provenance and a timestamp so they can be shown and revoked.
+   */
+  derivedContext?: DerivedNote[];
+}
+
+/** A fact the app inferred, with enough provenance to be audited or revoked. */
+export interface DerivedNote {
+  id: string;
+  text: string;
+  source: 'history' | 'journal-scan';
+  addedAt: number;
 }
 
 export type ProfilePatch = Partial<
@@ -62,6 +86,8 @@ export type ProfilePatch = Partial<
     | 'daysPerWeek'
     | 'sessionLength'
     | 'onboardedAt'
+    | 'dismissedInsights'
+    | 'derivedContext'
   >
 >;
 

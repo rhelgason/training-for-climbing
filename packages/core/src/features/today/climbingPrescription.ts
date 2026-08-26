@@ -84,8 +84,12 @@ function shift(discipline: ClimbDiscipline, grade: string, by: number): string |
 /**
  * The consolidated grade: hardest with enough sends to be repeatable, else the
  * hardest sent at all (flagged `provisional`, since one send isn't a level).
+ *
+ * Exported because "what grade is this climber actually at" is the same
+ * question whether you're pitching today's session or noticing they've
+ * outgrown their profile — and two answers to it would drift apart.
  */
-function anchorGrade(
+export function consolidatedGrade(
   climbs: ClimbRecord[],
   discipline: ClimbDiscipline,
 ): { grade: string | null; confidence: GradeConfidence; counted: number } {
@@ -116,7 +120,7 @@ export function prescribeClimbing(
   const recent = climbs.filter(
     (c) => c.date <= nowMs && nowMs - c.date <= PYRAMID_WINDOW_DAYS * MS_PER_DAY,
   );
-  const { grade, confidence, counted } = anchorGrade(recent, discipline);
+  const { grade, confidence, counted } = consolidatedGrade(recent, discipline);
   const style = (focus && STYLE_BY_FOCUS[focus]) ?? 'Climb at a level you can move well on.';
 
   if (!grade) {
