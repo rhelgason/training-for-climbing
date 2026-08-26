@@ -39,6 +39,8 @@ import { GettingStarted, type OnboardingStep } from '../../components/GettingSta
 import { BackupBanner } from '../../components/BackupBanner';
 import { TodayContext } from '../../components/TodayContext';
 import { InsightCard } from '../../components/InsightCard';
+import { maybeScanJournals } from '../../lib/insights/journalInsights';
+import { getSyncConfig } from '../../lib/auth/session';
 import { ProtocolMetric } from '../../components/ProtocolMetric';
 import { WhyThisPlan } from '../../components/WhyThisPlan';
 import { useRepository, useSync } from '../../lib/db/RepositoryProvider';
@@ -268,6 +270,20 @@ export default function TrainHome() {
           profile,
         ),
       });
+
+      // The journal scan needs the network and a model, so it lands separately
+      // rather than holding up the plan. At most weekly, opt-in with the coach,
+      // and silent on failure — a missing insight is a non-event.
+      if (settings.aiCoachEnabled) {
+        void maybeScanJournals(getSyncConfig(), journals, nowMs).then((found) => {
+          if (!on || found.length === 0) return;
+          setState((prev) =>
+            prev
+              ? { ...prev, insights: [...prev.insights, ...pendingInsights(found, prev.profile)] }
+              : prev,
+          );
+        });
+      }
     });
     return () => {
       on = false;
