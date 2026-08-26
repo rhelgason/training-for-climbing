@@ -11,6 +11,7 @@ import { Alert, StyleSheet, Text, TextInput } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import { Button } from '../../components/Button';
+import { DayPicker } from '../../components/DayPicker';
 import { OptionChips, type ChipOption } from '../../components/OptionChips';
 import { Screen } from '../../components/Screen';
 import { now } from '../../lib/clock';
@@ -20,15 +21,6 @@ import type { TrainStackParamList } from '../../navigation/types';
 import { colors, fontSize, radius, spacing } from '../../theme';
 
 type Props = NativeStackScreenProps<TrainStackParamList, 'JournalForm'>;
-
-type WhenChoice = 'today' | 'yesterday' | '2ago';
-const WHEN_OPTIONS: ChipOption<WhenChoice>[] = [
-  { label: 'Today', value: 'today' },
-  { label: 'Yesterday', value: 'yesterday' },
-  { label: '2 days ago', value: '2ago' },
-];
-const WHEN_OFFSET_DAYS: Record<WhenChoice, number> = { today: 0, yesterday: 1, '2ago': 2 };
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 const ACTIVITY_OPTIONS: ChipOption<ActivityTag>[] = ACTIVITY_TAGS.map((a) => ({
   label: ACTIVITY_LABELS[a],
@@ -44,7 +36,7 @@ export function JournalFormScreen({ navigation, route }: Props) {
   const journalId = route.params?.journalId;
   const editing = Boolean(journalId);
 
-  const [when, setWhen] = useState<WhenChoice>('today');
+  const [day, setDay] = useState(() => now());
   const [existingDate, setExistingDate] = useState<number | null>(null);
   const [activities, setActivities] = useState<ActivityTag[]>([]);
   const [intensity, setIntensity] = useState<JournalIntensity | null>(null);
@@ -83,7 +75,7 @@ export function JournalFormScreen({ navigation, route }: Props) {
       if (journalId) {
         await repo.updateJournal(journalId, fields);
       } else {
-        const date = now() - WHEN_OFFSET_DAYS[when] * MS_PER_DAY;
+        const date = day;
         // One entry per day: fold into the day's existing entry rather than
         // creating a second the app can't reliably show.
         const existing = await repo.getJournalForDay(date);
@@ -129,12 +121,7 @@ export function JournalFormScreen({ navigation, route }: Props) {
       {editing ? (
         <Text style={styles.dateText}>{existingDate ? formatDate(existingDate) : '—'}</Text>
       ) : (
-        <OptionChips
-          options={WHEN_OPTIONS}
-          selected={when}
-          onSelect={setWhen}
-          testIDPrefix="when"
-        />
+        <DayPicker value={day} onChange={setDay} />
       )}
 
       <Text style={styles.label}>What did you do?</Text>

@@ -20,15 +20,9 @@ import { Button } from './Button';
 import { OptionChips, type ChipOption } from './OptionChips';
 import { Screen } from './Screen';
 import { PageHeader } from './PageHeader';
+import { DayPicker } from './DayPicker';
 import { useRepository } from '../lib/db/RepositoryProvider';
 
-type WhenChoice = 'today' | 'yesterday' | '2ago';
-const WHEN_OPTIONS: ChipOption<WhenChoice>[] = [
-  { label: 'Today', value: 'today' },
-  { label: 'Yesterday', value: 'yesterday' },
-  { label: '2 days ago', value: '2ago' },
-];
-const WHEN_OFFSET_DAYS: Record<WhenChoice, number> = { today: 0, yesterday: 1, '2ago': 2 };
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 const ENV_OPTIONS: ChipOption<ClimbEnvironment>[] = ENVIRONMENTS.map((e) => ({
@@ -60,7 +54,7 @@ export function ClimbForm({ climbId }: { climbId?: string }) {
   const router = useRouter();
   const editing = Boolean(climbId);
 
-  const [when, setWhen] = useState<WhenChoice>('today');
+  const [day, setDay] = useState(() => now());
   const [existingDate, setExistingDate] = useState<number | null>(null);
   const [environment, setEnvironment] = useState<ClimbEnvironment>('indoor');
   const [discipline, setDiscipline] = useState<ClimbDiscipline>('boulder');
@@ -115,7 +109,7 @@ export function ClimbForm({ climbId }: { climbId?: string }) {
       if (climbId) {
         await repo.updateClimb(climbId, fields);
       } else {
-        await repo.saveClimb({ ...fields, date: now() - WHEN_OFFSET_DAYS[when] * MS_PER_DAY });
+        await repo.saveClimb({ ...fields, date: day });
         trackEvent('climb_logged', { discipline, environment, grade, outcome });
       }
       router.back();
@@ -133,7 +127,7 @@ export function ClimbForm({ climbId }: { climbId?: string }) {
           {editing ? (
             <p>{existingDate ? formatDate(existingDate) : '—'}</p>
           ) : (
-            <OptionChips options={WHEN_OPTIONS} selected={when} onSelect={setWhen} />
+            <DayPicker value={day} onChange={setDay} />
           )}
         </div>
 

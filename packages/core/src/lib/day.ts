@@ -42,3 +42,55 @@ export function nextDayStartMs(ms: number): number {
 export function sameDay(a: number, b: number): boolean {
   return dayIndex(a) === dayIndex(b);
 }
+
+/**
+ * `n` local calendar days from `ms`, keeping the time of day. Via components
+ * rather than `n * MS_PER_DAY` for the same DST reason as `nextDayStartMs`:
+ * across a transition, adding 86,400,000 ms shifts the wall clock by an hour
+ * and can land on the wrong date entirely.
+ */
+export function addDays(ms: number, n: number): number {
+  const d = new Date(ms);
+  return new Date(
+    d.getFullYear(),
+    d.getMonth(),
+    d.getDate() + n,
+    d.getHours(),
+    d.getMinutes(),
+    d.getSeconds(),
+    d.getMilliseconds(),
+  ).getTime();
+}
+
+/** Whole local calendar days from `a` to `b`; negative when `b` is earlier. */
+export function daysBetween(a: number, b: number): number {
+  return dayIndex(b) - dayIndex(a);
+}
+
+/**
+ * `YYYY-MM-DD` for an `<input type="date">`, in local time.
+ *
+ * `toISOString()` would be UTC and land on the wrong date for anyone west of
+ * Greenwich for part of the day — the same bug this module exists to prevent.
+ */
+export function toDateInputValue(ms: number): string {
+  const d = new Date(ms);
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${month}-${day}`;
+}
+
+/**
+ * Parse `YYYY-MM-DD` from a date input as local midday, or null if malformed.
+ *
+ * Midday, not midnight: a record is stamped with a real instant, and midnight
+ * is the boundary where an hour of DST slop or a clock skew flips it to the
+ * adjacent day. Midday is the furthest point from that edge.
+ */
+export function fromDateInputValue(value: string): number | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return null;
+  const [, year, month, day] = match;
+  const date = new Date(Number(year), Number(month) - 1, Number(day), 12);
+  return Number.isNaN(date.getTime()) ? null : date.getTime();
+}

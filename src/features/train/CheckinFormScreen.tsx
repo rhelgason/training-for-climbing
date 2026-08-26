@@ -6,6 +6,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { OptionChips, type ChipOption } from '../../components/OptionChips';
+import { DayPicker } from '../../components/DayPicker';
 import { Screen } from '../../components/Screen';
 import { now } from '../../lib/clock';
 import { trackEvent } from '../../lib/logger';
@@ -30,13 +31,14 @@ export function CheckinFormScreen({ navigation }: Props) {
   const [emotion, setEmotion] = useState(0);
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
+  const [day, setDay] = useState(() => now());
 
   const quadrant = quadrantOf(energy, emotion);
 
   const onSave = async () => {
     setSaving(true);
     try {
-      await repo.saveCheckin({ time: now(), energy, emotion, note: note.trim() || undefined });
+      await repo.saveCheckin({ time: day, energy, emotion, note: note.trim() || undefined });
       trackEvent('checkin_logged', { quadrant: quadrant.id });
       navigation.goBack();
     } finally {
@@ -46,6 +48,9 @@ export function CheckinFormScreen({ navigation }: Props) {
 
   return (
     <Screen>
+      <Text style={styles.label}>When</Text>
+      <DayPicker value={day} onChange={setDay} disabled={saving} />
+
       <Text style={styles.label}>Physical energy</Text>
       <Text style={styles.hint}>0 = depleted · 10 = peak</Text>
       <OptionChips
