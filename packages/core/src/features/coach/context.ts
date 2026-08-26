@@ -32,6 +32,7 @@ import { activeGoals } from '../plan/goals';
 import { buildMicrocycle, type Microcycle } from '../plan/microcycle';
 import { countInLastDays, hardestSend, sendRate } from '../progress/dashboard';
 import { buildDailyRecommendation } from '../today/recommend';
+import { formatBands } from '../today/climbingPrescription';
 import { loadHistory, recentDays } from '../train/load';
 import { currentStreak, trainingDates } from '../train/log';
 import type { CoachContext, CoachSchedule } from './types';
@@ -155,6 +156,9 @@ export function buildCoachContext(input: CoachContextInput): CoachContext {
     equipment,
     readiness,
     sessionLength,
+    benchmarks: input.benchmarks,
+    climbs: input.climbs,
+    discipline: profile.defaultDiscipline,
   });
 
   // `history` is always supplied above, so the scheduler always ran.
@@ -241,6 +245,32 @@ export function buildCoachContext(input: CoachContextInput): CoachContext {
       daysLast14: countInLastDays(trainDates, input.nowMs, 14),
     },
     baselinePlan: recommendation.plan,
+    prescriptions: {
+      climbing: recommendation.climbing
+        ? {
+            style: recommendation.climbing.style,
+            bands: formatBands(recommendation.climbing.bands),
+            because: recommendation.climbing.because,
+          }
+        : null,
+      // Deduped by protocol: a focus can appear twice in a session, and the
+      // number is the same both times.
+      protocols: [
+        ...new Map(
+          recommendation.steps
+            .filter((step) => step.prescription)
+            .map((step) => [
+              step.protocolId,
+              {
+                name: protocolById(step.protocolId ?? '')?.name ?? '',
+                text: step.text,
+                targetLabel: step.prescription!.targetLabel,
+                because: step.prescription!.because,
+              },
+            ]),
+        ).values(),
+      ],
+    },
   };
 }
 
