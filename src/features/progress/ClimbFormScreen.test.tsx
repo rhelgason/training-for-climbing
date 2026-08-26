@@ -1,4 +1,4 @@
-import { InMemoryRepository } from '@tfc/core';
+import { InMemoryRepository, dayIndex, now } from '@tfc/core';
 import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -60,6 +60,44 @@ describe('ClimbFormScreen', () => {
       grade: '5.11a',
       outcome: 'onsight',
     });
+  });
+
+  it('backdates a climb to the day the stepper lands on', async () => {
+    // The point of the feature: a session you forgot to log a week ago lands on
+    // the day it happened, not the day you remembered it.
+    const repo = new InMemoryRepository();
+    const goBack = jest.fn();
+    const view = await renderForm(repo, { goBack, setOptions: jest.fn() });
+    await waitFor(() => expect(view.getByText('Grade')).toBeTruthy());
+
+    expect(view.getByTestId('day-label')).toHaveTextContent('Today');
+    await act(async () => {
+      for (let i = 0; i < 5; i++) fireEvent.press(view.getByTestId('day-earlier'));
+    });
+
+    await act(async () => {
+      fireEvent.press(view.getByTestId('grade-V3'));
+      fireEvent.press(view.getByTestId('outcome-send'));
+    });
+    await act(async () => {
+      fireEvent.press(view.getByText('Log climb'));
+    });
+
+    await waitFor(() => expect(goBack).toHaveBeenCalled());
+    const [climb] = await repo.listClimbs();
+    expect(dayIndex(climb.date)).toBe(dayIndex(now()) - 5);
+  });
+
+  it('refuses to log a climb in the future', async () => {
+    const repo = new InMemoryRepository();
+    const view = await renderForm(repo, { goBack: jest.fn(), setOptions: jest.fn() });
+    await waitFor(() => expect(view.getByText('Grade')).toBeTruthy());
+
+    // Already on today, so forward is the edge — pressing it must not advance.
+    await act(async () => {
+      fireEvent.press(view.getByTestId('day-later'));
+    });
+    expect(view.getByTestId('day-label')).toHaveTextContent('Today');
   });
 
   it('requires a grade before saving', async () => {

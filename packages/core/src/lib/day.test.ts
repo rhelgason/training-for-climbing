@@ -8,7 +8,16 @@
  * reintroduces UTC division. CI runs in UTC, where the old code passed, so a
  * few cases pin an explicit non-UTC offset to stay meaningful there.
  */
-import { dayIndex, dayStartMs, nextDayStartMs, sameDay } from './day';
+import {
+  addDays,
+  dayIndex,
+  dayStartMs,
+  daysBetween,
+  fromDateInputValue,
+  nextDayStartMs,
+  sameDay,
+  toDateInputValue,
+} from './day';
 
 /** A local wall-clock time, whatever zone the test happens to run in. */
 const local = (y: number, m: number, d: number, h = 12, min = 0) =>
@@ -92,5 +101,69 @@ describe('sameDay', () => {
   it('is true across a whole local day and false either side', () => {
     expect(sameDay(local(2026, 8, 20, 0, 1), local(2026, 8, 20, 23, 59))).toBe(true);
     expect(sameDay(local(2026, 8, 20, 23, 59), local(2026, 8, 21, 0, 1))).toBe(false);
+  });
+});
+
+describe('addDays', () => {
+  it('moves by calendar days and keeps the time of day', () => {
+    const start = new Date(2026, 7, 26, 14, 30).getTime();
+    const next = addDays(start, 1);
+    expect(new Date(next).getDate()).toBe(27);
+    expect(new Date(next).getHours()).toBe(14);
+    expect(new Date(next).getMinutes()).toBe(30);
+  });
+
+  it('goes backwards and across month boundaries', () => {
+    const start = new Date(2026, 8, 2, 9).getTime();
+    expect(new Date(addDays(start, -3)).getMonth()).toBe(7);
+    expect(new Date(addDays(start, -3)).getDate()).toBe(30);
+  });
+
+  it('lands on the right calendar day even when a DST shift intervenes', () => {
+    // Adding 86,400,000 ms across a transition moves the wall clock an hour and
+    // can land on the wrong date; going via components cannot.
+    for (const month of [2, 10]) {
+      for (let day = 1; day <= 28; day++) {
+        const start = new Date(2026, month, day, 12).getTime();
+        expect(dayIndex(addDays(start, 1))).toBe(dayIndex(start) + 1);
+        expect(dayIndex(addDays(start, -1))).toBe(dayIndex(start) - 1);
+      }
+    }
+  });
+});
+
+describe('daysBetween', () => {
+  it('counts whole calendar days in both directions', () => {
+    const a = new Date(2026, 7, 26, 23, 30).getTime();
+    const b = new Date(2026, 7, 28, 0, 15).getTime();
+    expect(daysBetween(a, b)).toBe(2);
+    expect(daysBetween(b, a)).toBe(-2);
+    expect(daysBetween(a, a)).toBe(0);
+  });
+});
+
+describe('date input round-tripping', () => {
+  it('round-trips a local date through the input format', () => {
+    const ms = new Date(2026, 0, 5, 8, 45).getTime();
+    const parsed = fromDateInputValue(toDateInputValue(ms));
+    expect(parsed).not.toBeNull();
+    expect(dayIndex(parsed!)).toBe(dayIndex(ms));
+  });
+
+  it('formats in local time rather than UTC', () => {
+    // Late evening local is already tomorrow in UTC for the Americas; the input
+    // must still show the local date the climber is looking at.
+    const late = new Date(2026, 5, 10, 23, 30).getTime();
+    expect(toDateInputValue(late)).toBe('2026-06-10');
+  });
+
+  it('parses to midday, the furthest point from a day boundary', () => {
+    expect(new Date(fromDateInputValue('2026-06-10')!).getHours()).toBe(12);
+  });
+
+  it('rejects malformed input rather than producing a wrong date', () => {
+    for (const bad of ['', 'today', '2026-6-10', '10-06-2026', '2026-06']) {
+      expect(fromDateInputValue(bad)).toBeNull();
+    }
   });
 });

@@ -17,15 +17,9 @@ import { Button } from './Button';
 import { OptionChips, type ChipOption } from './OptionChips';
 import { Screen } from './Screen';
 import { PageHeader } from './PageHeader';
+import { DayPicker } from './DayPicker';
 import { useRepository } from '../lib/db/RepositoryProvider';
 
-type WhenChoice = 'today' | 'yesterday' | '2ago';
-const WHEN_OPTIONS: ChipOption<WhenChoice>[] = [
-  { label: 'Today', value: 'today' },
-  { label: 'Yesterday', value: 'yesterday' },
-  { label: '2 days ago', value: '2ago' },
-];
-const WHEN_OFFSET_DAYS: Record<WhenChoice, number> = { today: 0, yesterday: 1, '2ago': 2 };
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 const ACTIVITY_OPTIONS: ChipOption<ActivityTag>[] = ACTIVITY_TAGS.map((a) => ({
@@ -53,7 +47,7 @@ export function JournalForm({ journalId }: { journalId?: string }) {
   const router = useRouter();
   const editing = Boolean(journalId);
 
-  const [when, setWhen] = useState<WhenChoice>('today');
+  const [day, setDay] = useState(() => now());
   const [existingDate, setExistingDate] = useState<number | null>(null);
   const [activities, setActivities] = useState<ActivityTag[]>([]);
   const [intensity, setIntensity] = useState<JournalIntensity | null>(null);
@@ -91,7 +85,7 @@ export function JournalForm({ journalId }: { journalId?: string }) {
       if (journalId) {
         await repo.updateJournal(journalId, fields);
       } else {
-        const date = now() - WHEN_OFFSET_DAYS[when] * MS_PER_DAY;
+        const date = day;
         // The journal is one entry per day. Logging a day that already has one
         // used to create a second that the app then couldn't reliably show, so
         // fold into the existing entry instead.
@@ -126,7 +120,7 @@ export function JournalForm({ journalId }: { journalId?: string }) {
           {editing ? (
             <p>{existingDate ? formatDate(existingDate) : '—'}</p>
           ) : (
-            <OptionChips options={WHEN_OPTIONS} selected={when} onSelect={setWhen} />
+            <DayPicker value={day} onChange={setDay} />
           )}
         </div>
 
