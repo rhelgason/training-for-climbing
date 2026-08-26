@@ -95,12 +95,24 @@ export interface AbilityTierInfo {
   /** Suggested % of time on general conditioning (mobility, core, antagonist, aerobic). */
   generalConditioningPct: number;
   guidance: string;
+  /**
+   * The grade at which a climber is generally working in this tier, as a
+   * consolidated level rather than a best-ever send. Used to notice when
+   * someone has outgrown the tier they signed up with.
+   *
+   * Source (maintainers only): Eric J. Hörst, *Training for Climbing* (3rd ed.)
+   * — the ability-tier discussion in Ch. 2.
+   */
+  boulderFloor: string;
+  routeFloor: string;
 }
 
 export const ABILITY_TIERS: AbilityTierInfo[] = [
   {
     id: 'beginner',
     label: 'Beginner',
+    boulderFloor: 'VB',
+    routeFloor: '5.5',
     climbingPct: 75,
     specificStrengthPct: 5,
     generalConditioningPct: 20,
@@ -110,6 +122,8 @@ export const ABILITY_TIERS: AbilityTierInfo[] = [
   {
     id: 'intermediate',
     label: 'Intermediate',
+    boulderFloor: 'V3',
+    routeFloor: '5.10a',
     climbingPct: 60,
     specificStrengthPct: 30,
     generalConditioningPct: 10,
@@ -119,6 +133,8 @@ export const ABILITY_TIERS: AbilityTierInfo[] = [
   {
     id: 'elite',
     label: 'Elite',
+    boulderFloor: 'V7',
+    routeFloor: '5.12a',
     climbingPct: 50,
     specificStrengthPct: 40,
     generalConditioningPct: 10,

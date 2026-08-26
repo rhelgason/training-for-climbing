@@ -41,6 +41,7 @@ export * from './features/plan/macrocycle';
 export * from './features/plan/microcycle';
 export * from './features/plan/program';
 export * from './features/progress/dashboard';
+export * from './features/profile/insights';
 export * from './features/review/filterGlossary';
 
 // ── Sync ───────────────────────────────────────────────────────────────────

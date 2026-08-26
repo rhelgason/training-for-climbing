@@ -6,8 +6,14 @@ import { useRouter } from 'next/navigation';
 import {
   ACTIVITY_LABELS,
   INTENSITY_LABELS,
+  acceptInsight,
   buildDailyRecommendation,
+  detectAbilityDrift,
+  dismissInsight,
   formatBands,
+  pendingInsights,
+  type Insight,
+  type ProfileRecord,
   dayIndex,
   effectiveProfile,
   flaggedPromptsForArea,
@@ -32,6 +38,7 @@ import { Screen } from '../../components/Screen';
 import { GettingStarted, type OnboardingStep } from '../../components/GettingStarted';
 import { BackupBanner } from '../../components/BackupBanner';
 import { TodayContext } from '../../components/TodayContext';
+import { InsightCard } from '../../components/InsightCard';
 import { ProtocolMetric } from '../../components/ProtocolMetric';
 import { WhyThisPlan } from '../../components/WhyThisPlan';
 import { useRepository, useSync } from '../../lib/db/RepositoryProvider';
@@ -66,6 +73,9 @@ interface LoadState {
   hasAssessment: boolean;
   hasGoal: boolean;
   benchmarks: BenchmarkRecord[];
+  profile: ProfileRecord | null;
+  /** Profile updates the app is proposing, already filtered to undecided ones. */
+  insights: Insight[];
 }
 
 export default function TrainHome() {
@@ -78,6 +88,7 @@ export default function TrainHome() {
   const daily = useDailyContext(repo, dataVersion);
   const [feedback, setFeedback] = useState<'up' | 'down' | null>(null);
   const [marking, setMarking] = useState(false);
+  const [decidingInsight, setDecidingInsight] = useState(false);
   const [showLight, setShowLight] = useState(false);
   /** Prescribed steps the climber has unticked as not done. */
   const [skippedSteps, setSkippedSteps] = useState<string[]>([]);
@@ -247,6 +258,15 @@ export default function TrainHome() {
         hasAssessment: assessments.length > 0,
         hasGoal: goals.length > 0,
         benchmarks,
+        profile,
+        // Deterministic and on-device: whether someone is climbing a grade is a
+        // query over their own sends, not something worth asking a model.
+        insights: pendingInsights(
+          [detectAbilityDrift(climbs, profile, settings.defaultDiscipline, nowMs)].filter(
+            (i): i is Insight => i !== null,
+          ),
+          profile,
+        ),
       });
     });
     return () => {
@@ -256,6 +276,25 @@ export default function TrainHome() {
 
   if (state === null || today === null) return <Screen />;
   const { journals, recommendation: rec, todayJournalId, hasAssessment, hasGoal } = state;
+
+  /** Apply the climber's decision, then drop the card whichever way it went. */
+  const decideInsight = async (insight: Insight, accepted: boolean) => {
+    setDecidingInsight(true);
+    try {
+      const patch = accepted
+        ? acceptInsight(insight, state.profile)
+        : dismissInsight(insight, state.profile);
+      const profile = await repo.saveProfile(patch);
+      trackEvent(accepted ? 'insight_accepted' : 'insight_dismissed', { kind: insight.kind });
+      setState((prev) =>
+        prev
+          ? { ...prev, profile, insights: prev.insights.filter((i) => i.id !== insight.id) }
+          : prev,
+      );
+    } finally {
+      setDecidingInsight(false);
+    }
+  };
   const ai = coach.suggestion;
 
   const onboardingSteps: OnboardingStep[] = [
@@ -329,6 +368,17 @@ export default function TrainHome() {
         <p className="mt-2 text-sm leading-5 text-muted">
           {ai ? ai.rationale || rec.detail : rec.detail}
         </p>
+
+        {state.insights.map((insight) => (
+          <div key={insight.id} className="mt-4">
+            <InsightCard
+              insight={insight}
+              onAccept={(i) => void decideInsight(i, true)}
+              onDismiss={(i) => void decideInsight(i, false)}
+              busy={decidingInsight}
+            />
+          </div>
+        ))}
 
         {rec.climbing && rec.kind === 'train' && (
           <div className="mt-4 rounded-xl border border-border/70 bg-surface-alt/40 px-3 py-2.5">
