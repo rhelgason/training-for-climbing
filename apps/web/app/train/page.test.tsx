@@ -264,3 +264,72 @@ describe('TrainHome — prescribed numbers', () => {
     expect(screen.getByText(/your best of 2 recent sessions/i)).toBeInTheDocument();
   });
 });
+
+describe('TrainHome — profile drift', () => {
+  /** Enough consolidated sends at V4 to imply the intermediate tier. */
+  async function seedOutgrownProfile() {
+    await repo.saveProfile({ abilityTier: 'beginner', defaultDiscipline: 'boulder' });
+    for (const daysAgo of [4, 9, 15]) {
+      await repo.saveClimb({
+        date: now() - daysAgo * DAY,
+        environment: 'indoor',
+        discipline: 'boulder',
+        grade: 'V4',
+        outcome: 'send',
+      });
+    }
+  }
+
+  it('offers to update a profile the climber has outgrown', async () => {
+    await seedOutgrownProfile();
+    await renderScreen();
+
+    expect(await screen.findByText(/Move your ability tier to Intermediate/i)).toBeInTheDocument();
+    // The evidence, not just the verdict.
+    expect(screen.getByText(/sent V4 3 times/i)).toBeInTheDocument();
+  });
+
+  it('applies the change on accept and stops asking', async () => {
+    await seedOutgrownProfile();
+    await renderScreen();
+
+    await click(await screen.findByRole('button', { name: /Update my profile/i }));
+
+    await waitFor(async () => {
+      const profile = await repo.getProfile();
+      expect(profile?.abilityTier).toBe('intermediate');
+      expect(profile?.dismissedInsights).toContain('ability-tier:intermediate');
+    });
+    expect(screen.queryByText(/Move your ability tier/i)).not.toBeInTheDocument();
+  });
+
+  it('changes nothing on decline, and does not ask again', async () => {
+    await seedOutgrownProfile();
+    await renderScreen();
+
+    await click(await screen.findByRole('button', { name: /Not right/i }));
+
+    await waitFor(async () => {
+      const profile = await repo.getProfile();
+      // Declining is a real answer: the tier stays put but the card is retired.
+      expect(profile?.abilityTier).toBe('beginner');
+      expect(profile?.dismissedInsights).toContain('ability-tier:intermediate');
+    });
+    expect(screen.queryByText(/Move your ability tier/i)).not.toBeInTheDocument();
+  });
+
+  it('says nothing when the profile already matches the climbing', async () => {
+    await repo.saveProfile({ abilityTier: 'intermediate', defaultDiscipline: 'boulder' });
+    for (const daysAgo of [4, 9, 15]) {
+      await repo.saveClimb({
+        date: now() - daysAgo * DAY,
+        environment: 'indoor',
+        discipline: 'boulder',
+        grade: 'V4',
+        outcome: 'send',
+      });
+    }
+    await renderScreen();
+    expect(screen.queryByText(/Move your ability tier/i)).not.toBeInTheDocument();
+  });
+});
