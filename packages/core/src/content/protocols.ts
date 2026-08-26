@@ -23,6 +23,24 @@
 /** The unit of a protocol's progression variable. */
 export type ProtocolUnit = 'lb' | 'mm' | 'level' | 'rung' | 'reps' | 'seconds';
 
+/**
+ * How far the daily plan goes in telling the climber what number to hit.
+ *
+ *  - `exact`   — the plan prescribes a specific target off their logged baseline,
+ *                and prescribes a test session when there isn't one yet.
+ *  - `general` — the plan gives dosage guidance but no number to chase.
+ *  - `track`   — the plan names the exercise and records what they did; choosing
+ *                the load is theirs.
+ *
+ * Only the fingerboard protocols are `exact`. That's a deliberate limit, not an
+ * unfinished one: fingers are the tissue that takes months to heal and the one
+ * where a confidently wrong number does real damage, so they're the place worth
+ * the rigour of a measured baseline. Barbell work stays `track` — prescribing
+ * someone's deadlift is a different sport with its own coaching, and this app
+ * has no business doing it.
+ */
+export type ProtocolPrescriptionMode = 'exact' | 'general' | 'track';
+
 export interface TrackableProtocol {
   /** Stable id, used directly as the benchmark `testId`. Never renumber these. */
   id: string;
@@ -41,6 +59,8 @@ export interface TrackableProtocol {
   defaultValue: number;
   /** Increment for the +/− controls. */
   step: number;
+  /** How far the daily plan goes in prescribing this number. */
+  prescription: ProtocolPrescriptionMode;
 }
 
 export const TRACKABLE_PROTOCOLS: TrackableProtocol[] = [
@@ -53,6 +73,7 @@ export const TRACKABLE_PROTOCOLS: TrackableProtocol[] = [
     heldConstant: 'on a 14–20 mm edge, half-crimp or open-hand',
     defaultValue: 0,
     step: 5,
+    prescription: 'exact',
   },
   {
     id: 'protocol-repeaters-level',
@@ -63,6 +84,7 @@ export const TRACKABLE_PROTOCOLS: TrackableProtocol[] = [
     heldConstant: 'L1 10/30 · L2 10/20 · L3 10/10 · L4 10/5',
     defaultValue: 1,
     step: 1,
+    prescription: 'exact',
   },
   {
     id: 'protocol-moving-hang-seconds',
@@ -72,6 +94,7 @@ export const TRACKABLE_PROTOCOLS: TrackableProtocol[] = [
     unit: 'seconds',
     defaultValue: 30,
     step: 5,
+    prescription: 'exact',
   },
   {
     id: 'protocol-hit-weight',
@@ -82,6 +105,7 @@ export const TRACKABLE_PROTOCOLS: TrackableProtocol[] = [
     heldConstant: 'hardest grip first, each set under 15 s',
     defaultValue: 0,
     step: 5,
+    prescription: 'track',
   },
   {
     id: 'protocol-hypergravity-boulder-weight',
@@ -91,6 +115,7 @@ export const TRACKABLE_PROTOCOLS: TrackableProtocol[] = [
     unit: 'lb',
     defaultValue: 0,
     step: 5,
+    prescription: 'track',
   },
   {
     id: 'protocol-campus-rung',
@@ -101,6 +126,7 @@ export const TRACKABLE_PROTOCOLS: TrackableProtocol[] = [
     heldConstant: 'from rung 1, matched hands',
     defaultValue: 4,
     step: 1,
+    prescription: 'track',
   },
   {
     id: 'protocol-weighted-pullup',
@@ -110,6 +136,7 @@ export const TRACKABLE_PROTOCOLS: TrackableProtocol[] = [
     unit: 'lb',
     defaultValue: 0,
     step: 5,
+    prescription: 'track',
   },
   {
     id: 'protocol-pullup-reps',
@@ -119,6 +146,7 @@ export const TRACKABLE_PROTOCOLS: TrackableProtocol[] = [
     unit: 'reps',
     defaultValue: 8,
     step: 1,
+    prescription: 'track',
   },
   {
     id: 'protocol-lock-off-seconds',
@@ -129,6 +157,7 @@ export const TRACKABLE_PROTOCOLS: TrackableProtocol[] = [
     heldConstant: 'weakest side',
     defaultValue: 5,
     step: 1,
+    prescription: 'track',
   },
   {
     id: 'protocol-arc-minutes',
@@ -139,6 +168,7 @@ export const TRACKABLE_PROTOCOLS: TrackableProtocol[] = [
     heldConstant: 'RPE 4–6, no pump',
     defaultValue: 900,
     step: 300,
+    prescription: 'general',
   },
   {
     id: 'protocol-deadlift',
@@ -149,6 +179,7 @@ export const TRACKABLE_PROTOCOLS: TrackableProtocol[] = [
     heldConstant: 'top set of 3',
     defaultValue: 135,
     step: 10,
+    prescription: 'track',
   },
   {
     id: 'protocol-squat',
@@ -159,6 +190,7 @@ export const TRACKABLE_PROTOCOLS: TrackableProtocol[] = [
     heldConstant: 'top set of 5',
     defaultValue: 95,
     step: 10,
+    prescription: 'track',
   },
 ];
 
