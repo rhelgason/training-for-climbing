@@ -1,11 +1,10 @@
 /**
  * Central logging + usage-event abstraction (platform-neutral).
  *
- * This is the shared core version — a thin wrapper over `console` with no
- * React Native dependency. Platform apps (mobile via react-native-logs, web via
- * the browser console) can swap the transport, but the public surface —
- * `log.*`, `trackEvent`, `registerEventSink` — stays identical so feature code
- * is portable.
+ * A thin wrapper over `console` with no platform dependency. The transport is
+ * swappable via `registerEventSink`, but the public surface — `log.*`,
+ * `trackEvent`, `registerEventSink` — is fixed, so feature code never has to
+ * care where it ends up.
  *
  * Rules for the codebase:
  *  - Never call `console.log` directly in feature code — use `log.*`.

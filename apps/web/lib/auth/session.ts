@@ -4,7 +4,7 @@
  * Cloud sync and the AI coach read the token from here.
  *
  * The API base is always the same-origin proxy (see lib/config), so the session
- * doesn't store a server URL the way the mobile app does.
+ * doesn't store a server URL — there is only ever one, and it is same-origin.
  */
 import { API_BASE } from '../config';
 import type { SyncConfig } from '@tfc/core';

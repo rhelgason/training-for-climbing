@@ -1,8 +1,8 @@
 # Training for Climbing — Web
 
-A mobile-friendly, installable (PWA) web build of the Training for Climbing app.
-Next.js (App Router) + Tailwind CSS v4, sharing all domain logic with the mobile
-app via the `@tfc/core` workspace package.
+The Training for Climbing app: a mobile-friendly, installable (PWA) web app.
+Next.js (App Router) + Tailwind CSS v4, with all domain logic in the `@tfc/core`
+workspace package.
 
 - **Local-first:** data is stored in the browser (IndexedDB) and works offline.
 - **Cloud-backed:** signing in backs up / syncs your data. Accounts, snapshots,
@@ -51,9 +51,6 @@ npm run build:web
 
 No `vercel.json` is needed — the App Router handles routing, and the `/api/*`
 route handlers are the backend.
-
-The mobile app points at the same endpoints: set `EXPO_PUBLIC_SYNC_URL` to
-`https://<your-app>/api`.
 
 ## Backend routes
 

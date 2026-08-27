@@ -2,7 +2,7 @@
   "name": "@tfc/core",
   "version": "0.1.0",
   "private": true,
-  "description": "Platform-neutral domain logic shared by the Training for Climbing mobile and web apps.",
+  "description": "Platform-neutral domain logic for the Training for Climbing app — no UI, fully unit-tested.",
   "main": "src/index.ts",
   "types": "src/index.ts",
   "sideEffects": false,
