@@ -3,8 +3,10 @@ name: CI
 on:
   push:
     branches: [main]
+  # Every PR, not just those targeting main. Stacked branches are how this repo
+  # actually gets worked on, and restricting to `main` meant a run of PRs merged
+  # without CI ever having looked at them.
   pull_request:
-    branches: [main]
 
 # Cancel superseded runs on the same ref.
 concurrency:
@@ -47,8 +49,17 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Typecheck (@tfc/core)
         run: npm run typecheck --workspace @tfc/core
-      - name: Test (@tfc/core)
-        run: npm run test --workspace @tfc/core
+      # Coverage rather than a plain run: the threshold in jest.config.js is the
+      # thing that fails, and it only fails if coverage is actually collected.
+      - name: Test with coverage (@tfc/core)
+        run: npm run test:coverage --workspace @tfc/core
+      - name: Upload coverage artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-core
+          path: packages/core/coverage/
+          if-no-files-found: ignore
       # Runners are UTC, where UTC-vs-local day bugs pass silently. Day
       # arithmetic drives streaks, rest rules, and "today", so re-run the suite
       # west of and east of Greenwich.
