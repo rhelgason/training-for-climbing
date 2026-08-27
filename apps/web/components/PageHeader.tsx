@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 
 /**
  * Screen header with an optional back button. Mirrors the native-stack header
- * used on the mobile app's nested screens.
+ * used on nested screens.
  */
 export function PageHeader({ title, back = true }: { title: string; back?: boolean }) {
   const router = useRouter();

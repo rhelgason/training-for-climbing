@@ -1,6 +1,6 @@
 /**
  * Caches the last AI-coach suggestion in localStorage so it shows instantly on
- * load and survives offline, mirroring the mobile app's coach cache.
+ * load and survives offline.
  */
 import type { CoachSuggestion } from '@tfc/core';
 

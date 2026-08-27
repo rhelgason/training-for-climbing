@@ -1,6 +1,6 @@
 /**
- * @tfc/core — platform-neutral domain logic shared by the mobile app and the web
- * app. Contains NO react-native and NO DOM dependencies: data model, static book
+ * @tfc/core — platform-neutral domain logic for the app. Deliberately holds no
+ * UI and no DOM dependency, so it stays testable in plain Node: data model, book
  * content, the deterministic training logic, sync/merge, and the HTTP clients.
  */
 

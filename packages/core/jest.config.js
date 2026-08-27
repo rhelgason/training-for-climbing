@@ -1,4 +1,4 @@
-/** Jest config for @tfc/core — pure TypeScript, no React Native. */
+/** Jest config for @tfc/core — pure TypeScript, no UI framework. */
 module.exports = {
   testEnvironment: 'node',
   watchman: false,
