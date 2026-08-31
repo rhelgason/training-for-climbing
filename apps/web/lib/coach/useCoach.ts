@@ -14,7 +14,7 @@
  * plan that has already changed underneath it.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { now, isSyncConfigured, type Repository, type CoachSuggestion } from '@tfc/core';
+import { log, now, isSyncConfigured, type Repository, type CoachSuggestion } from '@tfc/core';
 import { getSyncConfig } from '../auth/session';
 import { getCachedSuggestion } from './cache';
 import { refreshCoachSuggestion } from './coach';
@@ -53,7 +53,13 @@ export function useCoach(repo: Repository, contextKey?: string): CoachState {
       setSuggestion(fresh);
       setGeneratedAt(now());
       setStatus('ready');
-    } catch {
+    } catch (err) {
+      // The screen only shows "couldn't reach the coach", which is all the
+      // climber needs — but discarding the reason made "why is my coach never
+      // working" impossible to answer. The status codes matter here: 503 is an
+      // unconfigured key, 502 the model rejecting a plan that contradicted the
+      // scheduler, 401 an expired session.
+      log.warn('coach refresh failed; staying on the deterministic plan', err);
       setStatus('error');
     }
   }, [repo, contextKey]);

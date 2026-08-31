@@ -6,6 +6,7 @@
  * The API base is always the same-origin proxy (see lib/config), so the session
  * doesn't store a server URL — there is only ever one, and it is same-origin.
  */
+import { log } from '@tfc/core';
 import { API_BASE } from '../config';
 import type { SyncConfig } from '@tfc/core';
 
@@ -42,7 +43,11 @@ export function getSession(): AuthSession | null {
   if (!raw) return null;
   try {
     return withUsername(JSON.parse(raw) as AuthSession);
-  } catch {
+  } catch (err) {
+    // Returning null signs the climber out. That is the right call on corrupt
+    // data, but it happens with no visible cause, so leave a trace — otherwise
+    // "it logged me out for no reason" has nothing behind it.
+    log.warn('discarding an unreadable stored session; signing out', err);
     return null;
   }
 }

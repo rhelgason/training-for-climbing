@@ -19,8 +19,9 @@ module.exports = {
   collectCoverageFrom: ['src/**/*.ts', '!src/**/*.test.ts', '!src/index.ts'],
   /**
    * A floor, not a target. Set a few points under where the suite actually sits
-   * (92/86/89/93 at the time of writing) so ordinary work doesn't trip it, but
-   * a module landing with no tests at all does.
+   * (93/88/90/95 at the time of writing) so ordinary work doesn't trip it, but
+   * a module landing with no tests at all does. Ratchet it up when a batch of
+   * tests moves the real number, rather than leaving slack that quietly erodes.
    *
    * This replaces a repo-root threshold of 20%, which was only that low because
    * it averaged in a React Native app whose screens were largely untested. With
@@ -28,10 +29,10 @@ module.exports = {
    */
   coverageThreshold: {
     global: {
-      statements: 88,
-      branches: 82,
-      functions: 85,
-      lines: 90,
+      statements: 90,
+      branches: 85,
+      functions: 87,
+      lines: 92,
     },
   },
 };

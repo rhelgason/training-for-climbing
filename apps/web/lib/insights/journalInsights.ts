@@ -11,6 +11,7 @@
  * everything else.
  */
 import {
+  log,
   requestJournalInsights,
   type Insight,
   type JournalEntry,
@@ -52,7 +53,12 @@ export async function maybeScanJournals(
     // week of silence.
     markScanned(nowMs);
     return insights;
-  } catch {
+  } catch (err) {
+    // Deliberately not surfaced to the climber — a background scan that didn't
+    // happen is not worth an interruption. But it was silent to *everyone*,
+    // which meant a scan failing every week for months would look exactly like
+    // a scan that kept finding nothing.
+    log.warn('journal scan failed; no insights this cycle', err);
     return [];
   }
 }
