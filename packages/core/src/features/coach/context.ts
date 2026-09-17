@@ -102,6 +102,7 @@ function scheduleFrom(
   cycle: Microcycle,
   suggestedFocus: SessionFocusId | null,
   plannedDaysPerWeek: number,
+  injury: CoachSchedule['injury'] = null,
 ): CoachSchedule {
   return {
     restDay: cycle.restDay,
@@ -126,6 +127,7 @@ function scheduleFrom(
     plannedDaysPerWeek,
     hardDaysInARow: cycle.hardDaysInARow,
     recentLoadSummary: cycle.recentLoadSummary,
+    injury,
   };
 }
 
@@ -159,6 +161,10 @@ export function buildCoachContext(input: CoachContextInput): CoachContext {
     benchmarks: input.benchmarks,
     climbs: input.climbs,
     discipline: profile.defaultDiscipline,
+    journals: input.journals,
+    dailyNote: daily?.note,
+    climberContext: profile.climberContext,
+    derivedNotes: input.profile?.derivedContext,
   });
 
   // `history` is always supplied above, so the scheduler always ran.
@@ -197,7 +203,21 @@ export function buildCoachContext(input: CoachContextInput): CoachContext {
       readiness,
       note: daily?.note,
     },
-    schedule: scheduleFrom(cycle, recommendation.focus, profile.daysPerWeek),
+    schedule: scheduleFrom(
+      cycle,
+      recommendation.focus,
+      profile.daysPerWeek,
+      recommendation.injury
+        ? {
+            summary: recommendation.injury.summary,
+            evidence: recommendation.injury.evidence,
+            region: recommendation.injury.region,
+            severity: recommendation.injury.severity,
+            noClimbing: recommendation.injury.noClimbing,
+            noHighIntensity: recommendation.injury.noHighIntensity,
+          }
+        : null,
+    ),
     recentDays: recentDays(input.journals, input.climbs, input.nowMs, MAX_RECENT_DAYS).map((d) => ({
       date: d.date,
       daysAgo: d.daysAgo,

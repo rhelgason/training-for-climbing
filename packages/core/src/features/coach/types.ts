@@ -49,6 +49,19 @@ export interface CoachSchedule {
   hardDaysInARow: number;
   /** One-line plain-English summary of the last few days. */
   recentLoadSummary: string;
+  /**
+   * Unresolved injury from recent logs. When set this is a hard constraint:
+   * do not load the injured area, and do not prescribe performance climbing
+   * if `noClimbing` is true.
+   */
+  injury?: {
+    summary: string;
+    evidence: string;
+    region: string;
+    severity: string;
+    noClimbing: boolean;
+    noHighIntensity: boolean;
+  } | null;
 }
 
 /** A compact, privacy-reviewed snapshot of the user's training picture. */

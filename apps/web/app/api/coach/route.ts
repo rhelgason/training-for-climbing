@@ -29,10 +29,11 @@ export function POST(req: Request) {
       const suggestion = await generateCoachSuggestion(context);
       return NextResponse.json({ suggestion });
     } catch (err) {
-      // Distinguish an upstream model failure (502) from our own (500) — the
-      // client treats both as "fall back to the baseline", but the logs matter.
+      // Surface the real upstream reason — this app has two users, and a
+      // generic "coach upstream error" made a broken key/model undiagnosable.
+      const message = err instanceof Error ? err.message : 'coach upstream error';
       console.error('POST /api/coach upstream failed', err);
-      return NextResponse.json({ error: 'coach upstream error' }, { status: 502 });
+      return NextResponse.json({ error: message }, { status: 502 });
     }
   });
 }

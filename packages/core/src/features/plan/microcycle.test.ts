@@ -141,6 +141,43 @@ describe('readiness', () => {
     expect(cycle.restReason).toContain('hurts');
   });
 
+  it('rests when recent logs report a severe injury, even if readiness is ok', () => {
+    const cycle = buildMicrocycle(
+      input({
+        injury: {
+          severity: 'severe',
+          region: 'leg',
+          summary: 'Logged a leg issue that reads as more than post-session soreness.',
+          evidence: 'MRI for a leg injury',
+          noClimbing: true,
+          noHighIntensity: true,
+        },
+      }),
+    );
+    expect(cycle.restDay).toBe(true);
+    expect(cycle.restKind).toBe('recovery');
+    expect(cycle.lightAlternative).toBeNull();
+    expect(cycle.restReason).toMatch(/leg/i);
+  });
+
+  it('blocks high-intensity work for a moderate injury without cancelling the whole day', () => {
+    const cycle = buildMicrocycle(
+      input({
+        injury: {
+          severity: 'moderate',
+          region: 'finger',
+          summary: 'Logged a finger issue.',
+          evidence: 'ring finger tweaked',
+          noClimbing: false,
+          noHighIntensity: true,
+        },
+      }),
+    );
+    expect(cycle.restDay).toBe(false);
+    expect(verdictFor(cycle, 'maxStrength').status).toBe('blocked');
+    expect(verdictFor(cycle, 'skill').status).not.toBe('blocked');
+  });
+
   it('blocks high-intensity work when tired but still offers easy work', () => {
     const cycle = buildMicrocycle(input({ readiness: 'tired' }));
     expect(cycle.restDay).toBe(false);

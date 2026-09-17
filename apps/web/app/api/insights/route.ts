@@ -40,7 +40,8 @@ export function POST(req: Request) {
       return NextResponse.json({ findings: await scanJournals(text) });
     } catch (err) {
       console.error('POST /api/insights upstream failed', err);
-      return NextResponse.json({ error: 'insight upstream error' }, { status: 502 });
+      const message = err instanceof Error ? err.message : 'insight upstream error';
+      return NextResponse.json({ error: message }, { status: 502 });
     }
   });
 }

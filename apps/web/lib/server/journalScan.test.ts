@@ -31,10 +31,12 @@ describe('scannableEntries', () => {
   });
 
   it('gives back nothing when there is too little to conclude from', () => {
-    // The model is told to require two separate days; one entry cannot satisfy
-    // that, so there is no point spending a call on it.
     expect(scannableEntries([], NOW)).toBeNull();
-    expect(scannableEntries([entry(1, 'Finger sore')], NOW)).toBeNull();
+  });
+
+  it('will scan a single recent entry so a severe mention is not dropped', () => {
+    const text = scannableEntries([entry(1, 'Leg injury, getting an MRI')], NOW);
+    expect(text).toContain('MRI');
   });
 
   it('ignores entries with no free text at all', () => {
@@ -42,17 +44,20 @@ describe('scannableEntries', () => {
       [entry(1, undefined), entry(2, undefined), entry(3, 'Sore')],
       NOW,
     );
-    expect(text).toBeNull(); // only one entry had prose
+    expect(text).toContain('Sore');
   });
 
   it('drops entries outside the recent window', () => {
     const text = scannableEntries([entry(2, 'Recent'), entry(200, 'Ancient')], NOW);
-    expect(text).toBeNull(); // only the recent one survives, which is not enough
+    expect(text).toContain('Recent');
+    expect(text).not.toContain('Ancient');
   });
 
   it('ignores entries dated in the future', () => {
     const future = { ...entry(0, 'Tomorrow'), date: NOW + 5 * DAY };
-    expect(scannableEntries([future, entry(3, 'Sore')], NOW)).toBeNull();
+    const text = scannableEntries([future, entry(3, 'Sore')], NOW);
+    expect(text).toContain('Sore');
+    expect(text).not.toContain('Tomorrow');
   });
 
   it('combines the several free-text fields of one entry', () => {

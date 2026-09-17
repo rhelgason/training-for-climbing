@@ -134,6 +134,7 @@ describe('buildDailyRecommendation with recent load', () => {
       input({
         weakestArea: 'physical',
         history: loadHistory(journals, []),
+        journals,
         daysPerWeek: 5,
         equipment: ['boulder-wall', 'rope-wall', 'hangboard', 'pull-up-bar', 'campus-board'],
         ...overrides,
@@ -164,6 +165,21 @@ describe('buildDailyRecommendation with recent load', () => {
   it('never names equipment the climber does not have', () => {
     const rec = withHistory([], { equipment: ['bands'] });
     expect(rec.plan.join(' ')).not.toMatch(/campus|fingerboard|hangboard/i);
+  });
+
+  it('rests instead of prescribing performance climbing when a severe injury is logged', () => {
+    const rec = withHistory([
+      journal(-1, {
+        struggles: 'Potentially severe leg injury, planning to get an MRI.',
+        focus: ['skill'],
+        intensity: 'easy',
+      }),
+    ]);
+    expect(rec.kind).toBe('rest');
+    expect(rec.injury?.noClimbing).toBe(true);
+    expect(rec.plan.join(' ')).toMatch(/MRI|injury/i);
+    expect(rec.headline).toMatch(/injury/i);
+    expect(rec.plan.join(' ')).not.toMatch(/Max strength —|5 hangs × 10 s/i);
   });
 
   it('exposes the scheduler working so the UI can show the why', () => {

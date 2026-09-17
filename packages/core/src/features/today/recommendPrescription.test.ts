@@ -109,7 +109,7 @@ describe('daily plan — protocol prescriptions', () => {
       // 90% of the best of two recent sessions (40), rounded down to a 5 lb step.
       expect(step.prescription?.target).toBe(35);
       expect(step.text).toContain('+35 lb');
-      expect(step.text).toContain('5 sets · 10 s hang · 3 min rest');
+      expect(step.text).toMatch(/10 s/);
     }
   });
 

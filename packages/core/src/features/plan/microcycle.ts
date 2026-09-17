@@ -18,6 +18,7 @@
 import { ABILITY_TIERS, type AbilityTier } from '../../content/planning';
 import type { TriadArea } from '../../content/types';
 import {
+  CLIMBABLE_EQUIPMENT,
   focusIsPossible,
   missingEquipmentLabel,
   sessionFocus,
@@ -38,6 +39,7 @@ import {
   type LoadEvent,
 } from '../train/load';
 import { dayIndex } from '../train/log';
+import type { DetectedInjury } from '../train/injury';
 
 export interface MicrocycleInput {
   /** Applied load, newest first (from `loadHistory`). */
@@ -58,6 +60,11 @@ export interface MicrocycleInput {
    * one. A block emphasis outranks style preference when choosing the day's work.
    */
   blockFocuses?: SessionFocusId[];
+  /**
+   * Unresolved injury from recent logs. Optional so existing callers keep
+   * working; when set it is a hard constraint, not a suggestion.
+   */
+  injury?: DetectedInjury | null;
 }
 
 export type FocusStatus = 'due' | 'available' | 'blocked';
@@ -178,8 +185,25 @@ function evaluate(focus: SessionFocusId, input: MicrocycleInput): FocusVerdict {
   if (tierIndex(input.abilityTier) < spec.minTierIndex) {
     return blocked('Save this until your base of climbing mileage is bigger.');
   }
-  if (input.readiness === 'tweaky' && spec.intensity === 'high') {
-    return blocked('Something hurts — no near-limit loading until it settles.');
+  if (input.injury?.noClimbing) {
+    const loadsClimbing =
+      spec.requiresAnyOf.length > 0 &&
+      spec.requiresAnyOf.some(
+        (e) => CLIMBABLE_EQUIPMENT.includes(e) || e === 'hangboard' || e === 'campus-board',
+      );
+    if (loadsClimbing) {
+      return blocked(`Logged injury — ${input.injury.summary}`);
+    }
+  }
+  if (
+    (input.injury?.noHighIntensity || input.readiness === 'tweaky') &&
+    spec.intensity === 'high'
+  ) {
+    return blocked(
+      input.injury
+        ? `Logged issue — no near-limit loading. ${input.injury.summary}`
+        : 'Something hurts — no near-limit loading until it settles.',
+    );
   }
   if (input.readiness === 'tired' && spec.intensity === 'high') {
     return blocked('You reported feeling tired — hard efforts today would be low quality.');
@@ -287,6 +311,10 @@ export function buildMicrocycle(input: MicrocycleInput): Microcycle {
     recentLoadSummary,
   });
 
+  const loggedInjury = input.injury;
+  if (loggedInjury?.noClimbing || loggedInjury?.severity === 'severe') {
+    return rest(loggedInjury.summary, 'recovery');
+  }
   if (input.readiness === 'tweaky') {
     return rest(
       'You flagged that something hurts. Train around it or take the day — a small tweak ignored becomes a long layoff.',

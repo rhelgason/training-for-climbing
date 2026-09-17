@@ -76,23 +76,30 @@ interface Dosage {
  */
 const DOSAGE: Record<string, Dosage> = {
   'protocol-max-weight-hang': {
-    work: '5 sets · 10 s hang · 3 min rest',
-    test: 'Work up in small jumps: 10 s hangs, 3 min rest, adding weight until a hang gets hard but stays clean. Stop the moment your form breaks — that last good hang is your number.',
+    work: '5 hangs × 10 s · 3 min rest between hangs · 2–3 sets · 5 min between sets · 14–20 mm edge, half-crimp or open-hand, no thumb lock',
+    test: 'Work up in small jumps on a 14–20 mm edge, half-crimp (no thumb lock): 10 s hangs, 3 min rest, adding weight until a hang gets hard but stays clean. Stop the moment your form breaks — that last good hang is your number.',
   },
   'protocol-repeaters-level': {
-    work: '6 sets · 7 s on / 3 s off × 6 reps · 3 min rest between sets',
-    test: 'Start at L1 (10 s on / 30 s off) and hold the level where you can finish every set with the last rep still clean. That level is your number.',
+    work: '6 hangs × 10 s · rest between hangs per level (L1 30s, L2 20s, L3 10s, L4 5s) · 3–5 sets · 1 min between sets · alternate half-crimp / open-hand',
+    test: 'Start at L1 (10 s on / 30 s off), 6 hangs per set, 1 min between sets. Hold the level where you can finish every set with the last hang still clean. That level is your number.',
   },
   'protocol-moving-hang-seconds': {
-    work: '4 sets · 2 min rest',
-    test: 'One set, moving between holds, until the grip starts to open. Time it — that time is your number.',
+    work: '3–6 min per set · 3–6 sets · work:rest 1:1 · feet on a chair · RPE 5–8',
+    test: 'One set, feet on a chair, moving between holds until the grip starts to open. Time it — that time is your number.',
   },
   'protocol-arc-minutes': {
     work: '',
     test: '',
     general:
-      'Continuous easy traversing or laps at RPE 4–6 — pumped enough to feel it, never enough to have to stop. 20–30 minutes is the useful range.',
+      'Continuous easy traversing or laps at RPE 4–6 — conversation pace, light pump at most, never enough to have to stop. 20–30 minutes is the useful range.',
   },
+};
+
+const REPEATER_REST: Record<number, string> = {
+  1: '10 s on / 30 s off',
+  2: '10 s on / 20 s off',
+  3: '10 s on / 10 s off',
+  4: '10 s on / 5 s off',
 };
 
 /** Round toward the safe side: down for load, up for an edge size. */
@@ -177,7 +184,10 @@ export function prescribeProtocol(
     target,
     targetLabel,
     dosage: dosage.work,
-    text: `${protocol.name} — ${targetLabel} · ${dosage.work}`,
+    text:
+      protocolId === 'protocol-repeaters-level'
+        ? `${protocol.name} — ${targetLabel} (${REPEATER_REST[target] ?? REPEATER_REST[1]}) · 6 hangs per set · 4 sets · 1 min between sets · alternate half-crimp and open-hand`
+        : `${protocol.name} — ${targetLabel} · ${dosage.work}`,
     because,
     confidence: baseline.confidence,
   };

@@ -229,6 +229,10 @@ export default function TrainHome() {
         benchmarks,
         climbs,
         discipline: settings.defaultDiscipline,
+        journals,
+        dailyNote: today.note,
+        climberContext: settings.climberContext,
+        derivedNotes: profile?.derivedContext,
       });
       // Newest-edit-wins rather than first match: sync can leave two entries
       // for one day, and editing an arbitrary one loses the other's text.
@@ -570,8 +574,9 @@ export default function TrainHome() {
         </Button>
       )}
       {coach.status === 'error' && (
-        <p className="text-sm italic text-muted">
-          Couldn&apos;t reach your coach — showing the built-in plan instead.
+        <p className="rounded-xl border border-warning/40 bg-warning/10 px-3 py-2 text-sm leading-5 text-warning">
+          Coach error: {coach.errorMessage ?? "Couldn't reach the coach."} Showing the built-in plan
+          instead.
         </p>
       )}
 

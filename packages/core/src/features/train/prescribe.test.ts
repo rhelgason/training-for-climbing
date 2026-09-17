@@ -30,7 +30,7 @@ describe('prescribeProtocol', () => {
     const p = prescribeProtocol(HANG, [record(30, 4), record(28, 10)], NOW);
     expect(p).toMatchObject({ kind: 'work', target: 25, confidence: 'established' });
     expect(p?.targetLabel).toBe('+25 lb');
-    expect(p?.text).toContain('5 sets · 10 s hang · 3 min rest');
+    expect(p?.text).toContain('5 hangs × 10 s');
   });
 
   it('holds a single unconfirmed session to a lighter fraction', () => {
@@ -76,7 +76,8 @@ describe('prescribeProtocol', () => {
     );
     expect(p?.kind).toBe('work');
     expect(p?.targetLabel).toMatch(/^L\d$/);
-    expect(p?.dosage).toMatch(/7 s on \/ 3 s off/);
+    expect(p?.dosage).toMatch(/10 s/);
+    expect(p?.text).toMatch(/L2/);
   });
 
   it('gives cardio dosage guidance and no number to chase', () => {

@@ -232,6 +232,22 @@ describe('buildCoachContext', () => {
       const ctx = buildCoachContext(input());
       expect(ctx.baselinePlan.length).toBeGreaterThan(0);
     });
+
+    it('binds a logged injury onto the schedule so the model cannot ignore it', () => {
+      const ctx = buildCoachContext(
+        input({
+          journals: [
+            journal(-1, {
+              struggles: 'Severe leg injury, getting an MRI this week.',
+              intensity: 'easy',
+            }),
+          ],
+        }),
+      );
+      expect(ctx.schedule.injury?.noClimbing).toBe(true);
+      expect(ctx.schedule.restDay).toBe(true);
+      expect(ctx.schedule.allowed).toEqual([]);
+    });
   });
 
   describe("today's check-in", () => {

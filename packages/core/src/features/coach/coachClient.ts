@@ -51,7 +51,18 @@ export async function requestCoachSuggestion(
   }
 
   if (!res.ok) {
-    throw new CoachUnavailableError(`Coach request failed (HTTP ${res.status})`, res.status);
+    let detail = '';
+    try {
+      const payload = (await res.json()) as { error?: unknown };
+      detail = typeof payload.error === 'string' && payload.error.trim() ? payload.error : '';
+    } catch {
+      detail = '';
+    }
+    const suffix = detail ? `: ${detail}` : '';
+    throw new CoachUnavailableError(
+      `Coach request failed (HTTP ${res.status})${suffix}`,
+      res.status,
+    );
   }
 
   const body = (await res.json()) as { suggestion?: unknown };

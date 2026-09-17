@@ -1,6 +1,8 @@
 # === Source book (copyrighted — never commit) ===
 *.pdf
+*.epub
 training-for-climbing.pdf
+training-for-climbing.epub
 
 # === Node / JS ===
 node_modules/

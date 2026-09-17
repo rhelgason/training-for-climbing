@@ -34,6 +34,7 @@ export * from './features/train/log';
 export * from './features/train/load';
 export * from './features/train/baseline';
 export * from './features/train/prescribe';
+export * from './features/train/injury';
 export * from './features/train/energyEmotion';
 export * from './features/train/exercises';
 export * from './features/plan/goals';

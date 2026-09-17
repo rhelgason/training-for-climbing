@@ -14,7 +14,14 @@
  * plan that has already changed underneath it.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { log, now, isSyncConfigured, type Repository, type CoachSuggestion } from '@tfc/core';
+import {
+  CoachUnavailableError,
+  log,
+  now,
+  isSyncConfigured,
+  type Repository,
+  type CoachSuggestion,
+} from '@tfc/core';
 import { getSyncConfig } from '../auth/session';
 import { getCachedSuggestion } from './cache';
 import { refreshCoachSuggestion } from './coach';
@@ -30,6 +37,8 @@ export interface CoachState {
   status: CoachStatus;
   /** True when the AI coach is opted-in (profile) and the server is configured. */
   enabled: boolean;
+  /** The real failure reason when status is `error`; null otherwise. */
+  errorMessage: string | null;
   refresh: () => void;
 }
 
@@ -38,14 +47,17 @@ export function useCoach(repo: Repository, contextKey?: string): CoachState {
   const [generatedAt, setGeneratedAt] = useState<number | null>(null);
   const [status, setStatus] = useState<CoachStatus>('idle');
   const [enabled, setEnabled] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   /** The context key we last auto-fetched for, so we try each one only once. */
   const autoTriedKey = useRef<string | null>(null);
 
   const runRefresh = useCallback(async () => {
     setStatus('loading');
+    setErrorMessage(null);
     const config = getSyncConfig();
     if (!isSyncConfigured(config)) {
       setStatus('error');
+      setErrorMessage('Not signed in — the coach needs an account session.');
       return;
     }
     try {
@@ -54,12 +66,14 @@ export function useCoach(repo: Repository, contextKey?: string): CoachState {
       setGeneratedAt(now());
       setStatus('ready');
     } catch (err) {
-      // The screen only shows "couldn't reach the coach", which is all the
-      // climber needs — but discarding the reason made "why is my coach never
-      // working" impossible to answer. The status codes matter here: 503 is an
-      // unconfigured key, 502 the model rejecting a plan that contradicted the
-      // scheduler, 401 an expired session.
+      const message =
+        err instanceof CoachUnavailableError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : String(err);
       log.warn('coach refresh failed; staying on the deterministic plan', err);
+      setErrorMessage(message);
       setStatus('error');
     }
   }, [repo, contextKey]);
@@ -97,5 +111,5 @@ export function useCoach(repo: Repository, contextKey?: string): CoachState {
     void runRefresh();
   }, [runRefresh]);
 
-  return { suggestion, generatedAt, status, enabled, refresh };
+  return { suggestion, generatedAt, status, enabled, errorMessage, refresh };
 }

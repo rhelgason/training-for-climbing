@@ -94,6 +94,22 @@ describe('requestCoachSuggestion', () => {
     });
   });
 
+  it('includes the server error body so the UI can show the real reason', async () => {
+    mockFetch(
+      (async () =>
+        ({
+          ok: false,
+          status: 502,
+          json: async () => ({ error: 'Gemini error 404: model not found' }),
+        }) as Response) as unknown as typeof fetch,
+    );
+    await expect(requestCoachSuggestion(config, context)).rejects.toMatchObject({
+      name: 'CoachUnavailableError',
+      status: 502,
+      message: expect.stringContaining('Gemini error 404'),
+    });
+  });
+
   it('throws CoachUnavailableError when the network call fails', async () => {
     mockFetch((async () => {
       throw new Error('offline');

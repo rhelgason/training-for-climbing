@@ -24,10 +24,11 @@ const SYSTEM_PROMPT = `You read a climber's training journal and report physical
 have written about themselves. You are an extractor, not a coach or a doctor: you report what
 they said, you do not diagnose, treat, or advise.
 
-Report a problem ONLY when it meets all of these:
+Report a problem when it meets these:
 - It is a physical niggle, pain, tweak, strain, or injury affecting their climbing.
-- They mention it on at least TWO separate days. A single mention of sore forearms after a hard
-  session is ordinary training, not a problem worth changing their plan over.
+- ONE mention is enough when the language is severe (MRI, surgery, tear, rupture, fracture,
+  sprain, "can't climb", "injury"). Ordinary post-session soreness (pumped, sore forearms,
+  DOMS) still needs TWO separate days, and is usually not a problem at all.
 - It appears unresolved — they have not written that it cleared up.
 
 For each one, give:
@@ -81,9 +82,9 @@ export function scannableEntries(journals: JournalEntry[], nowMs: number): strin
     })
     .filter((line): line is string => line !== null);
 
-  // Two entries can't establish the "mentioned on two separate days" rule, so
-  // there is nothing a scan could legitimately conclude.
-  return recent.length < 2 ? null : recent.join('\n');
+  // A single severe mention (MRI, tear, "injury") is enough to scan; ordinary
+  // niggles still need two days, which the model is told to require.
+  return recent.length < 1 ? null : recent.join('\n');
 }
 
 function coerceFindings(text: string): JournalFinding[] {

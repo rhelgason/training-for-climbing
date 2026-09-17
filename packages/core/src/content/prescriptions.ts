@@ -24,22 +24,22 @@ export const MENTAL_PRESCRIPTIONS: Prescription[] = [
   {
     title: 'Pre-climb visualization',
     detail:
-      'Before each climb, close your eyes and rehearse the moves and the successful send in vivid detail.',
+      'Before each climb, close your eyes and rehearse the moves and the successful send in vivid detail — 2 minutes, once from behind your own eyes and once watching yourself send.',
   },
   {
     title: 'Tactical breathing',
     detail:
-      'On rests and before cruxes, take slow belly breaths to drop tension and stay in the performance zone.',
+      'On rests and before cruxes, take slow belly breaths (5 breaths of ~10 s at the ground, 3 at each rest) to drop tension and stay in the performance zone.',
   },
   {
     title: 'Practice falls',
     detail:
-      'On a safe overhanging route, take progressively bigger controlled falls to recalibrate your fear response.',
+      'On a safe overhanging route with a competent belayer, take 3–5 progressively bigger controlled falls to recalibrate your fear response. Stop if anything feels structurally wrong.',
   },
   {
     title: 'Climb in the now',
     detail:
-      'Use a one-word focus cue ("smooth", "breathe") to silence outcome thoughts and stay on the present move.',
+      'Use a one-word focus cue ("smooth", "breathe", "feet") on every climb today to silence outcome thoughts and stay on the present move.',
   },
 ];
 
@@ -51,22 +51,22 @@ export const TECHNICAL_PRESCRIPTIONS: Prescription[] = [
   {
     title: 'Silent feet',
     detail:
-      'Climb easy routes placing each foot so precisely it makes no sound — trains foot accuracy and trust.',
+      'Climb easy routes placing each foot so precisely it makes no sound — 15–20 min, 1–2 grades below your limit. If a foot scrapes, reverse and replace it.',
   },
   {
     title: 'Straight-arm hanging',
     detail:
-      'Traverse keeping arms straight and weight on your skeleton, initiating moves from the hips and feet.',
+      'Traverse 10–15 min keeping arms straight and weight on your skeleton, initiating moves from the hips and feet. Rest the moment you start pulling with bent arms.',
   },
   {
     title: 'Downclimbing',
     detail:
-      'Downclimb routes you just sent to sharpen footwork, body awareness, and movement economy.',
+      'Downclimb every route or problem you send today. Lead with the feet, keep hips in, no jumping off. This is the drill — the send is just the setup.',
   },
   {
     title: 'Flash on-sight practice',
     detail:
-      'On unfamiliar easy routes, read the sequence from the ground then execute it first try, deliberately.',
+      'On 4–6 unfamiliar easy routes, read the sequence from the ground (30–60 s), then execute it first try. No mid-climb invention. If you fall, sit, re-read, try once more.',
   },
 ];
 
