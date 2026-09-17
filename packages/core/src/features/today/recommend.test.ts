@@ -1,6 +1,6 @@
 import type { GoalRecord, JournalEntry } from '../../db/types';
 import { loadHistory } from '../train/load';
-import { buildDailyRecommendation, type DailyInput } from './recommend';
+import { buildDailyRecommendation, dailyRecommendationFrom, type DailyInput } from './recommend';
 
 const DAY = 24 * 60 * 60 * 1000;
 const NOW = 1000 * DAY + DAY / 2;
@@ -215,5 +215,41 @@ describe('buildDailyRecommendation with recent load', () => {
     expect(rec.microcycle).toBeNull();
     expect(rec.because).toBe('');
     expect(rec.kind).toBe('train');
+  });
+
+  it('keeps a moderate injury off max-strength in the streak-based fallback', () => {
+    const finger: JournalEntry = {
+      id: 'j-finger',
+      createdAt: NOW - DAY,
+      updatedAt: NOW - DAY,
+      date: NOW - DAY,
+      activities: ['climbing'],
+      struggles: 'Right ring finger tweaked on a crimp.',
+    };
+    const physical = buildDailyRecommendation(
+      input({ weakestArea: 'physical', journals: [finger] }),
+    );
+    expect(physical.kind).toBe('train');
+    expect(physical.injury?.noHighIntensity).toBe(true);
+    expect(physical.plan.some((s) => /^Max strength — /.test(s))).toBe(false);
+    expect(physical.plan.some((s) => /Skill/.test(s))).toBe(true);
+
+    const mental = buildDailyRecommendation(input({ weakestArea: 'mental', journals: [finger] }));
+    expect(mental.plan.some((s) => /Mental game/.test(s))).toBe(true);
+  });
+});
+
+describe('dailyRecommendationFrom', () => {
+  it('classifies journals and climbs into history for the scheduler', () => {
+    const rec = dailyRecommendationFrom({
+      weakestArea: 'physical',
+      goals: [],
+      trainingDates: [],
+      nowMs: NOW,
+      journals: [],
+      climbs: [],
+    });
+    expect(rec.kind).toBe('train');
+    expect(rec.microcycle).not.toBeNull();
   });
 });

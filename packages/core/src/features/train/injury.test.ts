@@ -91,4 +91,48 @@ describe('detectInjury', () => {
       }),
     ).toBeNull();
   });
+
+  it('acts on a current severe profile blurb that is not a past story', () => {
+    const found = detectInjury({
+      journals: [],
+      nowMs: NOW,
+      climberContext: "Currently can't climb — waiting on an MRI for my knee.",
+    });
+    expect(found?.severity).toBe('severe');
+    expect(found?.region).toBe('knee');
+    expect(found?.noClimbing).toBe(true);
+  });
+
+  it('cancels an older tweak once a later journal says it cleared up', () => {
+    expect(
+      detectInjury({
+        journals: [
+          journal(5, 'Right ring finger tweaked on a crimp.'),
+          journal(1, 'Finger tweak has cleared up, feeling better, no longer sore.'),
+        ],
+        nowMs: NOW,
+      }),
+    ).toBeNull();
+  });
+
+  it('ranks a severe finding above a moderate one on a different region', () => {
+    const found = detectInjury({
+      journals: [
+        journal(3, 'Right ring finger tweaked on a crimp.'),
+        journal(1, "Knee still swollen, can't walk right. MRI Friday."),
+      ],
+      nowMs: NOW,
+    });
+    expect(found?.region).toBe('knee');
+    expect(found?.severity).toBe('severe');
+  });
+
+  it('reads a derived note stored as a plain string', () => {
+    const found = detectInjury({
+      journals: [],
+      nowMs: NOW,
+      derivedNotes: ['Right ring finger has been sore on crimps since early August.'],
+    });
+    expect(found?.region).toBe('finger');
+  });
 });

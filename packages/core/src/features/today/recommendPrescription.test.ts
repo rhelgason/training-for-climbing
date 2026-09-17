@@ -4,7 +4,7 @@
  * `recommend.test.ts` covers the scheduler's verdicts; this covers the numbers.
  */
 import type { BenchmarkRecord, ClimbRecord } from '../../db/types';
-import { buildDailyRecommendation, type DailyInput } from './recommend';
+import { buildDailyRecommendation, dailyRecommendationFrom, type DailyInput } from './recommend';
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const NOW = Date.UTC(2026, 7, 26);
@@ -193,13 +193,13 @@ describe('daily plan — climbing grades', () => {
     // dailyRecommendationFrom takes climbs for load classification; they should
     // reach the grade prescription too rather than being dropped on the floor.
     const climbs = [climb('V3', 5), climb('V3', 9), climb('V3', 14)];
-    const plan = buildDailyRecommendation({
+    const plan = dailyRecommendationFrom({
       weakestArea: 'physical',
       goals: [],
       trainingDates: [],
       nowMs: NOW,
+      journals: [],
       climbs,
-      history: [],
     });
     expect(plan.climbing?.anchor).toBe('V3');
   });

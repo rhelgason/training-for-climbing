@@ -251,4 +251,9 @@ describe('notesFromCoachInjuries', () => {
       ),
     ).toBeNull();
   });
+
+  it('returns null when the coach found nothing, and slugs a blank body part', () => {
+    expect(notesFromCoachInjuries([], profile(), NOW)).toBeNull();
+    expect(injuryNoteId('  ', NOW)).toMatch(/^injury:other:/);
+  });
 });

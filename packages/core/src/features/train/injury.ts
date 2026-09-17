@@ -142,9 +142,9 @@ function snippet(text: string, max = 160): string {
 function classify(text: string, source: Finding['source']): Finding | null {
   const body = text.trim();
   if (body.length < 4) return null;
-  if (RESOLVED.test(body) && source === 'profile') return null;
-  if (RESOLVED.test(body) && !SEVERE.test(body)) return null;
-  // "Coming back from a pulley strain" is background, not a current constraint.
+  // Profile blurbs are lifetime context; "coming back from" is not today's constraint.
+  // Journals that say it cleared up still become findings so a newer entry can
+  // cancel an older one in the same region (see detectInjury below).
   if (source === 'profile' && RESOLVED.test(body)) return null;
   if (ORDINARY.test(body) && !SEVERE.test(body) && !/\binjur/i.test(body)) return null;
 
