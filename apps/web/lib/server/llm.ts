@@ -4,10 +4,9 @@
  * Ported verbatim in behaviour from the standalone Express server
  * (`server/llm.js`) when the backend moved into Next route handlers.
  *
- * Default provider is Google **Gemini 2.5 Flash**, whose free tier covers this
- * app's volume (a few users × a handful of prompts/week) at $0. Groq
- * (Llama-3.3-70B) is a drop-in alternative. Both are called over plain REST so
- * the app needs no extra npm dependency.
+ * Default provider is Google **Gemini 3.6 Flash**. Groq (Llama-3.3-70B) is a
+ * drop-in alternative. Both are called over plain REST so the app needs no extra
+ * npm dependency.
  *
  * Swapping to a paid / no-train provider later is a one-module change: add a
  * branch here keyed off `LLM_PROVIDER`; the app and the `/api/coach` route are
@@ -19,11 +18,11 @@
  *   GROQ_API_KEY     – free key from https://console.groq.com/keys
  *   LLM_MODEL        – optional model override
  */
-import type { CoachContext, CoachSuggestion } from '@tfc/core';
+import type { CoachContext, CoachInjuryFinding, CoachSuggestion } from '@tfc/core';
 import { TRAINING_REFERENCE } from './coachKnowledge';
 
 const DEFAULT_MODELS: Record<string, string> = {
-  gemini: 'gemini-2.5-flash',
+  gemini: 'gemini-3.6-flash',
   groq: 'llama-3.3-70b-versatile',
 };
 
@@ -37,12 +36,19 @@ external sources.
 
 HARD CONSTRAINTS. These are computed from the climber's actual logged history and are not
 suggestions. Violating one produces a plan that will injure or overtrain them:
-- If \`schedule.injury\` is set, that is a HARD CONSTRAINT. Name the injury in the rationale.
+- READ THE JOURNALS AND TODAY'S NOTE FOR INJURIES YOURSELF. Keyword detection on
+  \`schedule.injury\` is a backup, not the last word. If recent free text describes an
+  unresolved physical problem (MRI, tear, sprain, "can't climb", a body part that hurts
+  in a way that is more than ordinary pump), treat it as real even if \`schedule.injury\`
+  is null. Report every such problem in \`injuries\`. If they should not climb or load
+  that tissue today, prescribe REST / rehab, set \`restDay\` true, and say why.
+- If \`schedule.injury\` is set, that is also a HARD CONSTRAINT. Name it in the rationale.
   If \`noClimbing\` is true, prescribe REST / rehab only — no performance climbing, hangboard,
   campus, or limit boulders. If \`noHighIntensity\` is true, do not prescribe max strength,
   power, or power-endurance.
 - If \`schedule.restDay\` is true, prescribe a REST day. Do not find a workout that "still
   counts". Say why, using \`schedule.restReason\`, and give recovery guidance only.
+  You MAY also rest when the scheduler did not, if you found an injury it missed.
 - Prescribe ONLY focuses listed in \`schedule.allowed\`. Never prescribe anything in
   \`schedule.blocked\` — each carries the reason it is out (too soon since the last one, weekly
   ceiling reached, equipment missing, injury, or they reported feeling beaten up).
@@ -92,6 +98,15 @@ Coaching rules:
   rather than vague instructions.
 - \`baselinePlan\` is what the app would prescribe without you. Treat it as the floor: your
   plan should be at least as specific and better tailored, not vaguer.
+- THINK IN BLOCKS, NOT JUST TODAY. \`macrocycle.current\` is the training block they are
+  in (Hörst Ch 10). Today's session must serve that block, not just the weakest area:
+  skill/stamina/mileage blocks = volume of submaximal climbing; max-strength/power blocks
+  = short near-limit efforts and isolation, 48h apart; power-endurance blocks = 4x4s /
+  repeaters for 2–4 weeks then stop; taper = keep intensity, cut volume ~50% then ~75%,
+  last 1–2 days mobility only. A well-chosen session this week that does not fit the
+  season is still the wrong session. If no current block is set, assume an all-round
+  4-3-2-1 shape for intermediates (4 wk skill/stamina → 3 wk max strength/power →
+  2 wk PE → 1 wk taper) and say which phase you are treating today as.
 
 ${TRAINING_REFERENCE}
 
@@ -102,7 +117,10 @@ Reply with ONLY a JSON object of this exact shape (no markdown, no prose outside
   "plan": string[],              // 3–6 ordered, concrete steps for today
   "rationale": string,           // 1–3 sentences citing their data, incl. their recent sessions
   "watchOuts": string[],         // 0–3 short cautions (injury, overtraining, technique)
-  "restDay": boolean             // MUST equal schedule.restDay — it is checked
+  "restDay": boolean,            // true if they should rest; MUST be true when schedule.restDay is
+  "injuries": [                  // unresolved physical problems you read in their prose; [] if none
+    { "note": string, "evidence": string, "bodyPart": string, "noClimbing": boolean }
+  ]
 }`;
 
 /** A JSON schema Gemini can enforce for structured output. */
@@ -115,8 +133,21 @@ const RESPONSE_SCHEMA = {
     rationale: { type: 'string' },
     watchOuts: { type: 'array', items: { type: 'string' } },
     restDay: { type: 'boolean' },
+    injuries: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          note: { type: 'string' },
+          evidence: { type: 'string' },
+          bodyPart: { type: 'string' },
+          noClimbing: { type: 'boolean' },
+        },
+        required: ['note', 'bodyPart', 'noClimbing'],
+      },
+    },
   },
-  required: ['headline', 'plan', 'rationale', 'watchOuts', 'restDay'],
+  required: ['headline', 'plan', 'rationale', 'watchOuts', 'restDay', 'injuries'],
 };
 
 /**
@@ -184,6 +215,22 @@ export function isLlmConfigured(): boolean {
   return Boolean(process.env.GEMINI_API_KEY);
 }
 
+function coerceInjuries(raw: unknown): CoachInjuryFinding[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((item): item is Record<string, unknown> => typeof item === 'object' && item !== null)
+    .map((item) => ({
+      note: String(item.note ?? '').trim(),
+      evidence: String(item.evidence ?? '').trim(),
+      bodyPart: String(item.bodyPart ?? 'other')
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, '-'),
+      noClimbing: Boolean(item.noClimbing),
+    }))
+    .filter((item) => item.note.length > 0 && item.bodyPart.length > 0);
+}
+
 function coerceSuggestion(
   raw: string | Record<string, unknown>,
 ): CoachSuggestion & { restDay?: boolean } {
@@ -194,6 +241,7 @@ function coerceSuggestion(
     plan: Array.isArray(obj.plan) ? obj.plan.map(String) : [],
     rationale: String(obj.rationale || ''),
     watchOuts: Array.isArray(obj.watchOuts) ? obj.watchOuts.map(String) : [],
+    injuries: coerceInjuries(obj.injuries),
     restDay: typeof obj.restDay === 'boolean' ? obj.restDay : undefined,
   };
 }

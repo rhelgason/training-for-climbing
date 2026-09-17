@@ -38,6 +38,7 @@ const context: CoachContext = {
   journals: [],
   training: { currentStreak: 0, daysLast14: 0 },
   baselinePlan: ['Warm up'],
+  macrocycle: { current: null, upcoming: null, periods: [] },
 };
 
 const suggestion: CoachSuggestion = {

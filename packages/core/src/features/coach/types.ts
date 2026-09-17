@@ -137,6 +137,25 @@ export interface CoachContext {
    * climber from the same screen is worse than either alone.
    */
   prescriptions: CoachPrescriptions;
+  /**
+   * The annual block they are in, plus neighbours, so today's session can serve
+   * the season rather than only the last 48 hours.
+   */
+  macrocycle: {
+    current: CoachMacrocycleBlock | null;
+    upcoming: CoachMacrocycleBlock | null;
+    periods: CoachMacrocycleBlock[];
+  };
+}
+
+export interface CoachMacrocycleBlock {
+  label: string;
+  focus?: string;
+  objective?: string;
+  startDate: string;
+  endDate: string;
+  /** Whole days remaining in the block, including today. */
+  daysRemaining: number;
 }
 
 export interface CoachPrescriptions {
@@ -162,6 +181,15 @@ export interface CoachPrescriptions {
   }[];
 }
 
+/** An unresolved physical problem the coach read in the climber's own prose. */
+export interface CoachInjuryFinding {
+  note: string;
+  evidence: string;
+  bodyPart: string;
+  /** True when they should not climb or load that tissue today. */
+  noClimbing: boolean;
+}
+
 /** Structured coaching reply. Mirrors the deterministic baseline's shape. */
 export interface CoachSuggestion {
   focusArea: TriadArea | null;
@@ -169,4 +197,6 @@ export interface CoachSuggestion {
   plan: string[];
   rationale: string;
   watchOuts: string[];
+  /** Empty when nothing qualifies. */
+  injuries?: CoachInjuryFinding[];
 }

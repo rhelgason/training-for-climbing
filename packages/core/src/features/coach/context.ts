@@ -22,6 +22,7 @@ import type {
   DailyContextRecord,
   GoalRecord,
   JournalEntry,
+  MacrocyclePeriodRecord,
   ProfileRecord,
 } from '../../db/types';
 import { effectiveProfile } from '../../content/profile';
@@ -29,13 +30,20 @@ import { protocolById } from '../../content/protocols';
 import { sessionFocus, type SessionFocusId } from '../../content/trainingContext';
 import { flaggedPromptsForArea } from '../assess/scoring';
 import { activeGoals } from '../plan/goals';
+import {
+  currentPeriod,
+  daysRemainingInPeriod,
+  formatYmd,
+  inferBlockFocuses,
+  upcomingPeriod,
+} from '../plan/macrocycle';
 import { buildMicrocycle, type Microcycle } from '../plan/microcycle';
 import { countInLastDays, hardestSend, sendRate } from '../progress/dashboard';
 import { buildDailyRecommendation } from '../today/recommend';
 import { formatBands } from '../today/climbingPrescription';
 import { loadHistory, recentDays } from '../train/load';
 import { currentStreak, trainingDates } from '../train/log';
-import type { CoachContext, CoachSchedule } from './types';
+import type { CoachContext, CoachMacrocycleBlock, CoachSchedule } from './types';
 
 export interface CoachContextInput {
   profile: ProfileRecord | null;
@@ -46,6 +54,8 @@ export interface CoachContextInput {
   journals: JournalEntry[];
   /** Today's check-in, if the climber filled one in. */
   dailyContext?: DailyContextRecord | null;
+  /** Annual training blocks, if the climber has planned any. */
+  periods?: MacrocyclePeriodRecord[];
   nowMs: number;
 }
 
@@ -98,6 +108,21 @@ function label(focus: SessionFocusId): string {
   return sessionFocus(focus).label;
 }
 
+function toBlock(
+  period: MacrocyclePeriodRecord | null,
+  nowMs: number,
+): CoachMacrocycleBlock | null {
+  if (!period) return null;
+  return {
+    label: period.label,
+    focus: period.focus,
+    objective: period.objective,
+    startDate: formatYmd(period.startDate),
+    endDate: formatYmd(period.endDate),
+    daysRemaining: daysRemainingInPeriod(period, nowMs),
+  };
+}
+
 function scheduleFrom(
   cycle: Microcycle,
   suggestedFocus: SessionFocusId | null,
@@ -137,6 +162,10 @@ export function buildCoachContext(input: CoachContextInput): CoachContext {
   const trainDates = trainingDates(input.journals, input.climbs);
   const history = loadHistory(input.journals, input.climbs);
   const daily = input.dailyContext ?? null;
+  const periods = input.periods ?? [];
+  const currentBlock = currentPeriod(periods, input.nowMs);
+  const nextBlock = upcomingPeriod(periods, input.nowMs);
+  const blockFocuses = inferBlockFocuses(currentBlock);
 
   // Today's check-in overrides the profile's usual setup where it disagrees.
   const equipment = daily?.equipment ?? profile.equipment;
@@ -165,6 +194,7 @@ export function buildCoachContext(input: CoachContextInput): CoachContext {
     dailyNote: daily?.note,
     climberContext: profile.climberContext,
     derivedNotes: input.profile?.derivedContext,
+    blockFocuses,
   });
 
   // `history` is always supplied above, so the scheduler always ran.
@@ -180,6 +210,7 @@ export function buildCoachContext(input: CoachContextInput): CoachContext {
       equipment,
       readiness,
       sessionLength,
+      blockFocuses,
     });
 
   return {
@@ -294,6 +325,11 @@ export function buildCoachContext(input: CoachContextInput): CoachContext {
             ]),
         ).values(),
       ],
+    },
+    macrocycle: {
+      current: toBlock(currentBlock, input.nowMs),
+      upcoming: toBlock(nextBlock, input.nowMs),
+      periods: periods.map((p) => toBlock(p, input.nowMs)!),
     },
   };
 }

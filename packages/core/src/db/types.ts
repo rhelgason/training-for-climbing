@@ -68,7 +68,7 @@ export interface ProfileRecord {
 export interface DerivedNote {
   id: string;
   text: string;
-  source: 'history' | 'journal-scan';
+  source: 'history' | 'journal-scan' | 'coach';
   addedAt: number;
 }
 

@@ -5,11 +5,12 @@
  */
 import {
   buildCoachContext,
-  requestCoachSuggestion,
+  notesFromCoachInjuries,
   now,
+  requestCoachSuggestion,
+  type CoachSuggestion,
   type Repository,
   type SyncConfig,
-  type CoachSuggestion,
 } from '@tfc/core';
 import { saveCachedSuggestion } from './cache';
 
@@ -19,7 +20,7 @@ export async function refreshCoachSuggestion(
   contextKey?: string,
 ): Promise<CoachSuggestion> {
   const nowMs = now();
-  const [profile, assessments, benchmarks, climbs, goals, journals, dailyContext] =
+  const [profile, assessments, benchmarks, climbs, goals, journals, dailyContext, periods] =
     await Promise.all([
       repo.getProfile(),
       repo.listAssessments(),
@@ -28,6 +29,7 @@ export async function refreshCoachSuggestion(
       repo.listGoals(),
       repo.listJournals(),
       repo.getDailyContext(nowMs),
+      repo.listMacrocyclePeriods(),
     ]);
 
   const context = buildCoachContext({
@@ -38,10 +40,18 @@ export async function refreshCoachSuggestion(
     goals,
     journals,
     dailyContext,
+    periods,
     nowMs,
   });
 
   const suggestion = await requestCoachSuggestion(config, context);
   saveCachedSuggestion({ suggestion, generatedAt: nowMs, contextKey });
+
+  // The coach read the journals; if it found an injury the keyword detector
+  // missed, store it so tomorrow's scheduler is bound by it too. No-op when
+  // the note is already there or was declined.
+  const patch = notesFromCoachInjuries(suggestion.injuries ?? [], profile, nowMs);
+  if (patch) await repo.saveProfile(patch);
+
   return suggestion;
 }

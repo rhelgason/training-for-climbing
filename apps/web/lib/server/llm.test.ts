@@ -39,6 +39,7 @@ function makeContext(restDay = false) {
     training: { currentStreak: 0, daysLast14: 0 },
     baselinePlan: ['Warm up'],
     prescriptions: { climbing: null, protocols: [] },
+    macrocycle: { current: null, upcoming: null, periods: [] },
   } satisfies CoachContext;
 }
 
@@ -103,10 +104,11 @@ describe('generateCoachSuggestion', () => {
       plan: ['Warm up', 'Max hangs'],
       rationale: 'Physical is your weakest area.',
       watchOuts: ['Stop if your fingers ache'],
+      injuries: [],
     });
     // The key belongs in the URL, and the default model should be used.
     const url = fetchMock.mock.calls[0][0] as string;
-    expect(url).toContain('gemini-2.5-flash');
+    expect(url).toContain('gemini-3.6-flash');
     expect(url).toContain('key=test-key');
   });
 
@@ -122,7 +124,42 @@ describe('generateCoachSuggestion', () => {
       plan: [],
       rationale: '',
       watchOuts: [],
+      injuries: [],
     });
+  });
+
+  it('passes through injuries the model read in the journal', async () => {
+    process.env.GEMINI_API_KEY = 'test-key';
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        geminiReply({
+          headline: 'Rest — injury first',
+          plan: ['No climbing'],
+          rationale: 'MRI pending.',
+          watchOuts: [],
+          restDay: false,
+          injuries: [
+            {
+              note: 'Severe leg injury, MRI pending.',
+              evidence: 'planning to get an MRI',
+              bodyPart: 'leg',
+              noClimbing: true,
+            },
+          ],
+        }),
+      ),
+    );
+
+    const suggestion = await generateCoachSuggestion(context);
+    expect(suggestion.injuries).toEqual([
+      {
+        note: 'Severe leg injury, MRI pending.',
+        evidence: 'planning to get an MRI',
+        bodyPart: 'leg',
+        noClimbing: true,
+      },
+    ]);
   });
 
   it('honours the LLM_MODEL override', async () => {

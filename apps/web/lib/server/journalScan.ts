@@ -121,7 +121,7 @@ function coerceFindings(text: string): JournalFinding[] {
 export async function scanJournals(text: string): Promise<JournalFinding[]> {
   const key = process.env.GEMINI_API_KEY;
   if (!key) throw new Error('journal scan needs GEMINI_API_KEY');
-  const model = process.env.LLM_MODEL || 'gemini-2.5-flash';
+  const model = process.env.LLM_MODEL || 'gemini-3.6-flash';
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
     {

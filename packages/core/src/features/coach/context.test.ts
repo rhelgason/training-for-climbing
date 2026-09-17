@@ -233,6 +233,28 @@ describe('buildCoachContext', () => {
       expect(ctx.baselinePlan.length).toBeGreaterThan(0);
     });
 
+    it('includes the current macrocycle block when one is planned', () => {
+      const ctx = buildCoachContext(
+        input({
+          periods: [
+            {
+              id: 'spring',
+              createdAt: 0,
+              updatedAt: 0,
+              label: 'Spring power',
+              focus: 'Max strength & power',
+              objective: 'V6 outdoors',
+              startDate: NOW - DAY,
+              endDate: NOW + 20 * DAY,
+            },
+          ],
+        }),
+      );
+      expect(ctx.macrocycle.current?.label).toBe('Spring power');
+      expect(ctx.macrocycle.current?.focus).toMatch(/Max strength/);
+      expect(ctx.macrocycle.current?.daysRemaining).toBeGreaterThan(0);
+    });
+
     it('binds a logged injury onto the schedule so the model cannot ignore it', () => {
       const ctx = buildCoachContext(
         input({

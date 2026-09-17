@@ -1,6 +1,60 @@
 import { dayIndex } from '../../lib/day';
 /** Pure helpers for the macrocycle planner. No I/O — unit-testable. */
 import type { MacrocyclePeriodRecord } from '../../db/types';
+import type { SessionFocusId } from '../../content/trainingContext';
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+/**
+ * Map a block's free-text emphasis onto session focuses the scheduler can
+ * prefer. Hörst's annual plan is written in these terms (skill/stamina, max
+ * strength, power, power-endurance, taper); the planner stores them as a
+ * sentence, so this is a best-effort read, not a second form.
+ */
+const BLOCK_FOCUS_ALIASES: { pattern: RegExp; focuses: SessionFocusId[] }[] = [
+  { pattern: /taper|deload|peak week|rest week/i, focuses: ['skill', 'conditioning'] },
+  {
+    pattern: /power[\s-]*endurance|\bpe\b|4\s*[x×]\s*4|anaerobic/i,
+    focuses: ['powerEndurance'],
+  },
+  { pattern: /max[\s-]*strength|fingerboard|hangboard|limit strength/i, focuses: ['maxStrength'] },
+  { pattern: /\bpower\b|campus|contact strength|explosive/i, focuses: ['power'] },
+  { pattern: /aerobic|stamina|arc|local endurance/i, focuses: ['enduranceAerobic'] },
+  { pattern: /skill|technique|movement|mileage/i, focuses: ['skill'] },
+  { pattern: /mental|fear|visuali/i, focuses: ['mental'] },
+  { pattern: /antagonist|core|condition/i, focuses: ['conditioning'] },
+];
+
+export function inferBlockFocuses(period: MacrocyclePeriodRecord | null): SessionFocusId[] {
+  if (!period) return [];
+  const blob = [period.focus, period.label, period.objective, period.notes]
+    .filter(Boolean)
+    .join(' ');
+  if (!blob.trim()) return [];
+  const found: SessionFocusId[] = [];
+  for (const { pattern, focuses } of BLOCK_FOCUS_ALIASES) {
+    if (!pattern.test(blob)) continue;
+    for (const focus of focuses) {
+      if (!found.includes(focus)) found.push(focus);
+    }
+  }
+  return found;
+}
+
+/** The next period that starts after `nowMs`, or null. */
+export function upcomingPeriod(
+  periods: MacrocyclePeriodRecord[],
+  nowMs: number,
+): MacrocyclePeriodRecord | null {
+  return (
+    [...periods].filter((p) => p.startDate > nowMs).sort((a, b) => a.startDate - b.startDate)[0] ??
+    null
+  );
+}
+
+export function daysRemainingInPeriod(period: MacrocyclePeriodRecord, nowMs: number): number {
+  return Math.max(0, Math.ceil((period.endDate - nowMs) / MS_PER_DAY));
+}
 
 export interface PeriodValidation {
   valid: boolean;

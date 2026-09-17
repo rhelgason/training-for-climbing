@@ -8,9 +8,11 @@ import {
   INTENSITY_LABELS,
   acceptInsight,
   buildDailyRecommendation,
+  currentPeriod,
   detectAbilityDrift,
   dismissInsight,
   formatBands,
+  inferBlockFocuses,
   pendingInsights,
   type Insight,
   type ProfileRecord,
@@ -103,9 +105,13 @@ export default function TrainHome() {
     );
 
   const today = daily.value;
-  // Fingerprints today's context for the coach cache — changing any of these
-  // makes yesterday's AI advice wrong, so it forces a regeneration. Debounced,
-  // because toggling four equipment chips is one decision, not four.
+  // Fingerprints the picture the coach was generated for. A new calendar day,
+  // a changed check-in, or new journal text each forces a fresh AI call.
+  // Debounced because toggling four equipment chips is one decision, not four.
+  const journalStamp = (state?.journals ?? [])
+    .map((j) => `${j.id}:${j.updatedAt}`)
+    .sort()
+    .join(',');
   const contextKey = today
     ? [
         dayIndex(now()),
@@ -113,6 +119,7 @@ export default function TrainHome() {
         today.sessionLength,
         today.readiness,
         [...today.equipment].sort().join(','),
+        journalStamp,
       ].join('|')
     : undefined;
   const coach = useCoach(repo, useDebouncedValue(contextKey, COACH_SETTLE_MS));
@@ -192,7 +199,8 @@ export default function TrainHome() {
       repo.listGoals(),
       repo.getProfile(),
       repo.listBenchmarks(),
-    ]).then(([journals, climbs, assessments, goals, profile, benchmarks]) => {
+      repo.listMacrocyclePeriods(),
+    ]).then(([journals, climbs, assessments, goals, profile, benchmarks, periods]) => {
       if (!on) return;
       const nowMs = now();
 
@@ -212,6 +220,7 @@ export default function TrainHome() {
       const settings = effectiveProfile(profile);
       const latest = assessments[0] ?? null;
       const weakestArea = latest?.weakestArea ?? null;
+      const currentBlock = currentPeriod(periods, nowMs);
       const recommendation = buildDailyRecommendation({
         weakestArea,
         weakSpots:
@@ -233,6 +242,7 @@ export default function TrainHome() {
         dailyNote: today.note,
         climberContext: settings.climberContext,
         derivedNotes: profile?.derivedContext,
+        blockFocuses: inferBlockFocuses(currentBlock),
       });
       // Newest-edit-wins rather than first match: sync can leave two entries
       // for one day, and editing an arbitrary one loses the other's text.

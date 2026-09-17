@@ -1,9 +1,12 @@
 import type { MacrocyclePeriodRecord } from '../../db/types';
 import {
   currentPeriod,
+  daysRemainingInPeriod,
   formatYmd,
+  inferBlockFocuses,
   parseYmd,
   trainingDaysInRange,
+  upcomingPeriod,
   validatePeriodInput,
 } from './macrocycle';
 
@@ -40,6 +43,45 @@ describe('currentPeriod', () => {
     ];
     expect(currentPeriod(periods, 15 * DAY)?.id).toBe('b');
     expect(currentPeriod(periods, 100 * DAY)).toBeNull();
+  });
+});
+
+describe('inferBlockFocuses', () => {
+  it('reads Hörst block language into scheduler focuses', () => {
+    expect(inferBlockFocuses(period({ focus: 'Max strength & power' }))).toEqual(
+      expect.arrayContaining(['maxStrength', 'power']),
+    );
+    expect(inferBlockFocuses(period({ label: 'PE block', focus: '4x4s' }))).toContain(
+      'powerEndurance',
+    );
+    expect(inferBlockFocuses(period({ focus: 'Taper for the trip' }))).toEqual([
+      'skill',
+      'conditioning',
+    ]);
+  });
+
+  it('returns nothing when the block has no usable emphasis', () => {
+    expect(inferBlockFocuses(period({ focus: undefined, label: 'Spring' }))).toEqual([]);
+    expect(inferBlockFocuses(null)).toEqual([]);
+  });
+});
+
+describe('upcomingPeriod', () => {
+  it('picks the next block that has not started', () => {
+    const periods = [
+      period({ id: 'now', startDate: 0, endDate: 10 * DAY }),
+      period({ id: 'next', startDate: 11 * DAY, endDate: 20 * DAY }),
+      period({ id: 'later', startDate: 21 * DAY, endDate: 30 * DAY }),
+    ];
+    expect(upcomingPeriod(periods, 5 * DAY)?.id).toBe('next');
+    expect(upcomingPeriod(periods, 25 * DAY)).toBeNull();
+  });
+});
+
+describe('daysRemainingInPeriod', () => {
+  it('counts remaining whole days including a partial today', () => {
+    const p = period({ startDate: 0, endDate: 10 * DAY });
+    expect(daysRemainingInPeriod(p, 8 * DAY)).toBe(2);
   });
 });
 

@@ -5,6 +5,8 @@ import {
   acceptInsight,
   detectAbilityDrift,
   dismissInsight,
+  injuryNoteId,
+  notesFromCoachInjuries,
   pendingInsights,
   revokeDerivedNote,
   type Insight,
@@ -212,5 +214,41 @@ describe('revokeDerivedNote', () => {
     expect(revokeDerivedNote('a', p).derivedContext).toEqual([
       { id: 'b', text: 'Shoulder', source: 'journal-scan', addedAt: 2 },
     ]);
+  });
+});
+
+describe('notesFromCoachInjuries', () => {
+  it('writes a new derived note from the daily coach reading', () => {
+    const patch = notesFromCoachInjuries(
+      [{ note: 'Left calf is waiting on an MRI.', bodyPart: 'leg' }],
+      profile(),
+      NOW,
+    );
+    expect(patch?.derivedContext).toEqual([
+      {
+        id: injuryNoteId('leg', NOW),
+        text: 'Left calf is waiting on an MRI.',
+        source: 'coach',
+        addedAt: NOW,
+      },
+    ]);
+  });
+
+  it('does not duplicate a note already stored or declined', () => {
+    const id = injuryNoteId('leg', NOW);
+    expect(
+      notesFromCoachInjuries(
+        [{ note: 'Leg MRI', bodyPart: 'leg' }],
+        profile({ derivedContext: [{ id, text: 'already', source: 'coach', addedAt: 1 }] }),
+        NOW,
+      ),
+    ).toBeNull();
+    expect(
+      notesFromCoachInjuries(
+        [{ note: 'Leg MRI', bodyPart: 'leg' }],
+        profile({ dismissedInsights: [id] }),
+        NOW,
+      ),
+    ).toBeNull();
   });
 });

@@ -31,6 +31,43 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 export type InsightKind = 'ability-tier' | 'injury';
 
+/** One id per body part per month — same scheme the journal-scan cards use. */
+export function injuryNoteId(bodyPart: string, detectedAt: number): string {
+  const d = new Date(detectedAt);
+  const month = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  const slug = bodyPart.trim().toLowerCase().replace(/\s+/g, '-') || 'other';
+  return `injury:${slug}:${month}`;
+}
+
+/**
+ * Profile patch that records injuries the daily coach read in journal prose.
+ * Returns null when there is nothing new (already stored or previously declined).
+ */
+export function notesFromCoachInjuries(
+  injuries: { note: string; bodyPart: string }[],
+  profile: ProfileRecord | null,
+  nowMs: number,
+): Partial<ProfileRecord> | null {
+  if (injuries.length === 0) return null;
+  const dismissed = new Set(profile?.dismissedInsights ?? []);
+  const existing: DerivedNote[] = profile?.derivedContext ?? [];
+  const have = new Set(existing.map((n) => n.id));
+  const added: DerivedNote[] = [];
+  for (const injury of injuries) {
+    const id = injuryNoteId(injury.bodyPart, nowMs);
+    if (dismissed.has(id) || have.has(id)) continue;
+    have.add(id);
+    added.push({
+      id,
+      text: injury.note,
+      source: 'coach',
+      addedAt: nowMs,
+    });
+  }
+  if (added.length === 0) return null;
+  return { derivedContext: [...existing, ...added] };
+}
+
 export interface Insight {
   /**
    * Stable identity for the *proposal*, not the occasion. Dismissing
