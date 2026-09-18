@@ -16,7 +16,7 @@
  *   LLM_PROVIDER     – 'gemini' (default) | 'groq'
  *   GEMINI_API_KEY   – free key from https://aistudio.google.com/apikey
  *   GROQ_API_KEY     – free key from https://console.groq.com/keys
- *   LLM_MODEL        – optional model override
+ *   LLM_MODEL        – optional model override (retired Gemini ids are remapped)
  */
 import type { CoachContext, CoachInjuryFinding, CoachSuggestion } from '@tfc/core';
 import { TRAINING_REFERENCE } from './coachKnowledge';
@@ -25,6 +25,32 @@ const DEFAULT_MODELS: Record<string, string> = {
   gemini: 'gemini-3.6-flash',
   groq: 'llama-3.3-70b-versatile',
 };
+
+/**
+ * Google retired these for new API keys. A leftover Vercel `LLM_MODEL` of
+ * `gemini-2.5-flash` still 404s even though the code default is 3.6.
+ */
+const RETIRED_GEMINI_MODELS = new Set([
+  'gemini-2.5-flash',
+  'gemini-2.5-pro',
+  'gemini-1.5-flash',
+  'gemini-1.5-pro',
+]);
+
+/** Resolve the model id, remapping retired Gemini names to the current default. */
+export function resolveLlmModel(
+  requested: string | undefined,
+  currentProvider: string = 'gemini',
+): string {
+  const fallback = DEFAULT_MODELS[currentProvider] || DEFAULT_MODELS.gemini;
+  const raw = requested?.trim();
+  if (!raw) return fallback;
+  const id = raw.replace(/^models\//, '');
+  if (currentProvider === 'gemini' && RETIRED_GEMINI_MODELS.has(id)) {
+    return fallback;
+  }
+  return id;
+}
 
 /** The static coaching brief sent on every call. */
 const SYSTEM_PROMPT = `You are an expert climbing coach writing one climber's session for today.
@@ -206,7 +232,7 @@ function provider(): string {
 }
 
 function modelName(): string {
-  return process.env.LLM_MODEL || DEFAULT_MODELS[provider()] || DEFAULT_MODELS.gemini;
+  return resolveLlmModel(process.env.LLM_MODEL, provider());
 }
 
 /** Whether a usable provider key is configured. */

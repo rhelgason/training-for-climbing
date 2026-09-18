@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CoachContext, CoachSuggestion } from '@tfc/core';
-import { assertRespectsPrescriptions, generateCoachSuggestion, isLlmConfigured } from './llm';
+import {
+  assertRespectsPrescriptions,
+  generateCoachSuggestion,
+  isLlmConfigured,
+  resolveLlmModel,
+} from './llm';
 
 function makeContext(restDay = false) {
   return {
@@ -64,6 +69,22 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+});
+
+describe('resolveLlmModel', () => {
+  it('defaults to Gemini 3.6 Flash', () => {
+    expect(resolveLlmModel(undefined, 'gemini')).toBe('gemini-3.6-flash');
+  });
+
+  it('rewrites retired Gemini ids, including the models/ prefix Google uses', () => {
+    expect(resolveLlmModel('gemini-2.5-flash', 'gemini')).toBe('gemini-3.6-flash');
+    expect(resolveLlmModel('models/gemini-2.5-flash', 'gemini')).toBe('gemini-3.6-flash');
+  });
+
+  it('leaves a current override and Groq models alone', () => {
+    expect(resolveLlmModel('gemini-3-experimental', 'gemini')).toBe('gemini-3-experimental');
+    expect(resolveLlmModel('llama-3.3-70b-versatile', 'groq')).toBe('llama-3.3-70b-versatile');
+  });
 });
 
 describe('isLlmConfigured', () => {
@@ -171,6 +192,19 @@ describe('generateCoachSuggestion', () => {
     await generateCoachSuggestion(context);
 
     expect(fetchMock.mock.calls[0][0]).toContain('gemini-3-experimental');
+  });
+
+  it('does not call a retired Gemini model left in LLM_MODEL', async () => {
+    process.env.GEMINI_API_KEY = 'test-key';
+    process.env.LLM_MODEL = 'gemini-2.5-flash';
+    const fetchMock = vi.fn().mockResolvedValue(geminiReply({ headline: 'x' }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await generateCoachSuggestion(context);
+
+    const url = fetchMock.mock.calls[0][0] as string;
+    expect(url).toContain('gemini-3.6-flash');
+    expect(url).not.toContain('gemini-2.5-flash');
   });
 
   it('throws when the provider errors, so the route can return 502', async () => {

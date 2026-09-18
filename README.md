@@ -151,7 +151,7 @@ rather than retrying forever.
   to train within the allowed focuses, never _whether_. The rest-day rule is enforced, not
   requested — the model must restate the verdict, and a plan that trains through a rest day is
   rejected so the client falls back to the deterministic one. Free at this scale (default
-  **Gemini 2.5 Flash** free tier), cached for offline display, regenerated when today's check-in
+  **Gemini 3.6 Flash** free tier), cached for offline display, regenerated when today's check-in
   changes, and **falls back to the deterministic baseline** whenever it's off, offline, or
   rate-limited. See [`apps/web/README.md`](apps/web/README.md).
 - **Closing the loop (done):** "I did this — log it" records today's journal with the focus that
