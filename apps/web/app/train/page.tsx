@@ -19,7 +19,7 @@ import {
   dayIndex,
   effectiveProfile,
   flaggedPromptsForArea,
-  isOnboarded,
+  hasCompletedSetup,
   latestForTest,
   loadHistory,
   now,
@@ -205,14 +205,16 @@ export default function TrainHome() {
       const nowMs = now();
 
       // A brand-new install with nothing in it goes through guided sign-up.
-      // Existing users predate `onboardedAt`, so their data is what protects
-      // them from being dropped into the wizard.
-      const empty =
-        journals.length === 0 &&
-        climbs.length === 0 &&
-        assessments.length === 0 &&
-        goals.length === 0;
-      if (!isOnboarded(profile) && empty) {
+      // Existing users predate `onboardedAt`, so a profile or any logged
+      // history is what protects them from being dropped into the wizard.
+      if (
+        !hasCompletedSetup(profile, {
+          journals: journals.length,
+          climbs: climbs.length,
+          assessments: assessments.length,
+          goals: goals.length,
+        })
+      ) {
         router.replace('/welcome');
         return;
       }
@@ -284,25 +286,31 @@ export default function TrainHome() {
           profile,
         ),
       });
-
-      // The journal scan needs the network and a model, so it lands separately
-      // rather than holding up the plan. At most weekly, opt-in with the coach,
-      // and silent on failure — a missing insight is a non-event.
-      if (settings.aiCoachEnabled) {
-        void maybeScanJournals(getSyncConfig(), journals, nowMs).then((found) => {
-          if (!on || found.length === 0) return;
-          setState((prev) =>
-            prev
-              ? { ...prev, insights: [...prev.insights, ...pendingInsights(found, prev.profile)] }
-              : prev,
-          );
-        });
-      }
     });
     return () => {
       on = false;
     };
   }, [repo, dataVersion, router, today]);
+
+  // After the daily coach call, not beside it — two Gemini requests at once
+  // is how a 429/503 spike knocks the plan over.
+  useEffect(() => {
+    if (!state) return;
+    if (!effectiveProfile(state.profile).aiCoachEnabled) return;
+    if (coach.status === 'loading' || coach.status === 'idle') return;
+    let on = true;
+    void maybeScanJournals(getSyncConfig(), state.journals, now()).then((found) => {
+      if (!on || found.length === 0) return;
+      setState((prev) =>
+        prev
+          ? { ...prev, insights: [...prev.insights, ...pendingInsights(found, prev.profile)] }
+          : prev,
+      );
+    });
+    return () => {
+      on = false;
+    };
+  }, [state, coach.status]);
 
   if (state === null || today === null) return <Screen />;
   const { journals, recommendation: rec, todayJournalId, hasAssessment, hasGoal } = state;

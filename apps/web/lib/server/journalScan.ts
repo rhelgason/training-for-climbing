@@ -15,6 +15,7 @@
  */
 import type { JournalEntry } from '@tfc/core';
 import { currentLlmModel } from './llm';
+import { fetchWithLlmRetries } from './llmRetry';
 
 /** Entries older than this say little about how the climber feels now. */
 const WINDOW_DAYS = 45;
@@ -123,7 +124,7 @@ export async function scanJournals(text: string): Promise<JournalFinding[]> {
   const key = process.env.GEMINI_API_KEY;
   if (!key) throw new Error('journal scan needs GEMINI_API_KEY');
   const model = currentLlmModel();
-  const res = await fetch(
+  const res = await fetchWithLlmRetries(
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
     {
       method: 'POST',
@@ -139,11 +140,9 @@ export async function scanJournals(text: string): Promise<JournalFinding[]> {
         },
       }),
     },
+    (status, detail) =>
+      new Error(`journal scan error ${status} (model ${model}): ${detail.slice(0, 300)}`),
   );
-  if (!res.ok) {
-    const detail = await res.text().catch(() => '');
-    throw new Error(`journal scan error ${res.status}: ${detail.slice(0, 300)}`);
-  }
   const body = await res.json();
   const out = body?.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!out) throw new Error('journal scan returned no content');

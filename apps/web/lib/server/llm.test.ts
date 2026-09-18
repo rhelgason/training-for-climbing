@@ -6,6 +6,7 @@ import {
   generateCoachSuggestion,
   isLlmConfigured,
 } from './llm';
+import { llmRetry } from './llmRetry';
 
 function makeContext(restDay = false) {
   return {
@@ -65,6 +66,7 @@ beforeEach(() => {
   delete process.env.GEMINI_API_KEY;
   delete process.env.GROQ_API_KEY;
   delete process.env.LLM_MODEL;
+  vi.spyOn(llmRetry, 'sleepMs').mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -202,12 +204,43 @@ describe('generateCoachSuggestion', () => {
       'fetch',
       vi.fn().mockResolvedValue({
         ok: false,
-        status: 429,
-        text: async () => 'rate limited',
+        status: 404,
+        text: async () => 'no such model',
       } as Response),
     );
 
-    await expect(generateCoachSuggestion(context)).rejects.toThrow(/429/);
+    await expect(generateCoachSuggestion(context)).rejects.toThrow(/404/);
+  });
+
+  it('retries a 503 spike and succeeds if Gemini recovers', async () => {
+    process.env.GEMINI_API_KEY = 'test-key';
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 503,
+        text: async () => 'high demand',
+      } as Response)
+      .mockResolvedValueOnce(geminiReply({ headline: 'Recovered' }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const suggestion = await generateCoachSuggestion(context);
+    expect(suggestion.headline).toBe('Recovered');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(llmRetry.sleepMs).toHaveBeenCalled();
+  });
+
+  it('gives up after retrying a persistent 503', async () => {
+    process.env.GEMINI_API_KEY = 'test-key';
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+      text: async () => 'high demand',
+    } as Response);
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(generateCoachSuggestion(context)).rejects.toThrow(/503/);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 
   it('throws when the reply has no content', async () => {

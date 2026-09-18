@@ -73,3 +73,16 @@ export function effectiveProfile(profile: ProfileRecord | null): ProfileSettings
 export function isOnboarded(profile: ProfileRecord | null): boolean {
   return typeof profile?.onboardedAt === 'number';
 }
+
+/**
+ * Whether this climber already has a setup the wizard should not overwrite.
+ * `onboardedAt` is the stamp the wizard writes; a profile or any logged history
+ * also counts, because older accounts predate that field.
+ */
+export function hasCompletedSetup(
+  profile: ProfileRecord | null,
+  history: { journals: number; climbs: number; assessments: number; goals: number },
+): boolean {
+  if (isOnboarded(profile) || profile !== null) return true;
+  return history.journals + history.climbs + history.assessments + history.goals > 0;
+}

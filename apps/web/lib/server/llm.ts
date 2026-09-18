@@ -21,6 +21,7 @@
  */
 import type { CoachContext, CoachInjuryFinding, CoachSuggestion } from '@tfc/core';
 import { TRAINING_REFERENCE } from './coachKnowledge';
+import { fetchWithLlmRetries } from './llmRetry';
 
 const DEFAULT_MODELS: Record<string, string> = {
   gemini: 'gemini-3.6-flash',
@@ -264,23 +265,24 @@ function coerceSuggestion(
 async function callGemini(context: CoachContext): Promise<CoachSuggestion & { restDay?: boolean }> {
   const key = process.env.GEMINI_API_KEY;
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName()}:generateContent?key=${key}`;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-      contents: [{ role: 'user', parts: [{ text: JSON.stringify(context) }] }],
-      generationConfig: {
-        responseMimeType: 'application/json',
-        responseSchema: RESPONSE_SCHEMA,
-        temperature: 0.6,
-      },
-    }),
-  });
-  if (!res.ok) {
-    const detail = await res.text().catch(() => '');
-    throw new Error(`Gemini error ${res.status} (model ${modelName()}): ${detail.slice(0, 300)}`);
-  }
+  const res = await fetchWithLlmRetries(
+    url,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+        contents: [{ role: 'user', parts: [{ text: JSON.stringify(context) }] }],
+        generationConfig: {
+          responseMimeType: 'application/json',
+          responseSchema: RESPONSE_SCHEMA,
+          temperature: 0.6,
+        },
+      }),
+    },
+    (status, detail) =>
+      new Error(`Gemini error ${status} (model ${modelName()}): ${detail.slice(0, 300)}`),
+  );
   const body = await res.json();
   const text = body?.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!text) throw new Error('Gemini returned no content');
@@ -289,26 +291,26 @@ async function callGemini(context: CoachContext): Promise<CoachSuggestion & { re
 
 async function callGroq(context: CoachContext): Promise<CoachSuggestion & { restDay?: boolean }> {
   const key = process.env.GROQ_API_KEY;
-  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${key}`,
+  const res = await fetchWithLlmRetries(
+    'https://api.groq.com/openai/v1/chat/completions',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${key}`,
+      },
+      body: JSON.stringify({
+        model: modelName(),
+        response_format: { type: 'json_object' },
+        temperature: 0.6,
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'user', content: JSON.stringify(context) },
+        ],
+      }),
     },
-    body: JSON.stringify({
-      model: modelName(),
-      response_format: { type: 'json_object' },
-      temperature: 0.6,
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: JSON.stringify(context) },
-      ],
-    }),
-  });
-  if (!res.ok) {
-    const detail = await res.text().catch(() => '');
-    throw new Error(`Groq error ${res.status}: ${detail.slice(0, 300)}`);
-  }
+    (status, detail) => new Error(`Groq error ${status}: ${detail.slice(0, 300)}`),
+  );
   const body = await res.json();
   const text = body?.choices?.[0]?.message?.content;
   if (!text) throw new Error('Groq returned no content');

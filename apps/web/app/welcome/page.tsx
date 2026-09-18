@@ -11,7 +11,7 @@
  * Answers are held in local state and written once at the end, so backing out
  * halfway leaves no half-configured profile behind.
  */
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ABILITY_TIERS,
@@ -25,6 +25,7 @@ import {
   SESSION_LENGTH_LABELS,
   STYLE_FOCUSES,
   STYLE_FOCUS_LABELS,
+  hasCompletedSetup,
   log,
   login,
   now,
@@ -107,9 +108,34 @@ export default function Welcome() {
   const [sessionLength, setSessionLength] = useState<SessionLength>('standard');
   const [equipment, setEquipment] = useState<EquipmentId[]>([...DEFAULT_EQUIPMENT]);
 
+  const alreadySetUp = useCallback(async (): Promise<boolean> => {
+    const [profile, journals, climbs, assessments, loggedGoals] = await Promise.all([
+      repo.getProfile(),
+      repo.listJournals(),
+      repo.listClimbs(),
+      repo.listAssessments(),
+      repo.listGoals(),
+    ]);
+    return hasCompletedSetup(profile, {
+      journals: journals.length,
+      climbs: climbs.length,
+      assessments: assessments.length,
+      goals: loggedGoals.length,
+    });
+  }, [repo]);
+
   useEffect(() => {
-    setSignedIn(Boolean(getSession()?.token));
-  }, []);
+    const session = getSession();
+    setSignedIn(Boolean(session?.token));
+    if (!session?.token) return;
+    let on = true;
+    void alreadySetUp().then((done) => {
+      if (on && done) router.replace('/train');
+    });
+    return () => {
+      on = false;
+    };
+  }, [alreadySetUp, repo, router]);
 
   const submitAuth = async () => {
     if (!username.trim() || !password) {
@@ -141,6 +167,12 @@ export default function Welcome() {
       setPassword('');
       setSignedIn(true);
       setAuthStatus(null);
+      // An existing account already has a profile (and usually logs). Sending
+      // them through About you would overwrite it with wizard defaults.
+      if (await alreadySetUp()) {
+        router.replace('/train');
+        return;
+      }
       setStep(1);
     } catch (err) {
       const message =
@@ -261,7 +293,17 @@ export default function Welcome() {
           )}
 
           {signedIn ? (
-            <Button onClick={() => setStep(1)}>Continue</Button>
+            <Button
+              onClick={async () => {
+                if (await alreadySetUp()) {
+                  router.replace('/train');
+                  return;
+                }
+                setStep(1);
+              }}
+            >
+              Continue
+            </Button>
           ) : (
             <>
               <Button onClick={submitAuth} disabled={busy}>

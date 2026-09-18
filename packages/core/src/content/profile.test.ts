@@ -1,5 +1,5 @@
 import type { ProfileRecord } from '../db/types';
-import { PROFILE_DEFAULTS, effectiveProfile, isOnboarded } from './profile';
+import { PROFILE_DEFAULTS, effectiveProfile, hasCompletedSetup, isOnboarded } from './profile';
 
 /** A profile as written by a build that had the new fields. */
 function profile(overrides: Partial<ProfileRecord> = {}): ProfileRecord {
@@ -85,5 +85,19 @@ describe('isOnboarded', () => {
 
   it('is true once the wizard has stamped a completion time', () => {
     expect(isOnboarded(profile({ onboardedAt: 1 }))).toBe(true);
+  });
+});
+
+describe('hasCompletedSetup', () => {
+  const none = { journals: 0, climbs: 0, assessments: 0, goals: 0 };
+
+  it('is false for a blank install', () => {
+    expect(hasCompletedSetup(null, none)).toBe(false);
+  });
+
+  it('is true when the wizard finished, a profile exists, or anything is logged', () => {
+    expect(hasCompletedSetup(profile({ onboardedAt: 1 }), none)).toBe(true);
+    expect(hasCompletedSetup(profile(), none)).toBe(true);
+    expect(hasCompletedSetup(null, { ...none, journals: 1 })).toBe(true);
   });
 });
