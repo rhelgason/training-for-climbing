@@ -8,7 +8,7 @@
  */
 import { NextResponse } from 'next/server';
 import { isAuthConfigured } from '../../../lib/server/auth';
-import { isLlmConfigured } from '../../../lib/server/llm';
+import { currentLlmModel, isLlmConfigured } from '../../../lib/server/llm';
 import { getPool } from '../../../lib/server/db';
 
 export const runtime = 'nodejs';
@@ -22,5 +22,11 @@ export async function GET() {
   } catch (err) {
     console.error('GET /api/health: database unreachable', err);
   }
-  return NextResponse.json({ ok: true, coach: isLlmConfigured(), auth: isAuthConfigured(), db });
+  return NextResponse.json({
+    ok: true,
+    coach: isLlmConfigured(),
+    auth: isAuthConfigured(),
+    db,
+    model: currentLlmModel(),
+  });
 }

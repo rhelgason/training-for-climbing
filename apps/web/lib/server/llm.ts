@@ -16,7 +16,8 @@
  *   LLM_PROVIDER     – 'gemini' (default) | 'groq'
  *   GEMINI_API_KEY   – free key from https://aistudio.google.com/apikey
  *   GROQ_API_KEY     – free key from https://console.groq.com/keys
- *   LLM_MODEL        – optional model override (retired Gemini ids are remapped)
+ *   LLM_MODEL        – Groq override only. Gemini always uses gemini-3.6-flash
+ *                      (a leftover Vercel LLM_MODEL=gemini-2.5-flash 404s).
  */
 import type { CoachContext, CoachInjuryFinding, CoachSuggestion } from '@tfc/core';
 import { TRAINING_REFERENCE } from './coachKnowledge';
@@ -27,29 +28,17 @@ const DEFAULT_MODELS: Record<string, string> = {
 };
 
 /**
- * Google retired these for new API keys. A leftover Vercel `LLM_MODEL` of
- * `gemini-2.5-flash` still 404s even though the code default is 3.6.
+ * Model id the server will actually call.
+ *
+ * Gemini ignores `LLM_MODEL`. Production still has that env var set to the
+ * retired `gemini-2.5-flash`, and Next inlines `process.env.LLM_MODEL` at
+ * build time, so reading it at all is how the 404 keeps coming back.
  */
-const RETIRED_GEMINI_MODELS = new Set([
-  'gemini-2.5-flash',
-  'gemini-2.5-pro',
-  'gemini-1.5-flash',
-  'gemini-1.5-pro',
-]);
-
-/** Resolve the model id, remapping retired Gemini names to the current default. */
-export function resolveLlmModel(
-  requested: string | undefined,
-  currentProvider: string = 'gemini',
-): string {
-  const fallback = DEFAULT_MODELS[currentProvider] || DEFAULT_MODELS.gemini;
-  const raw = requested?.trim();
-  if (!raw) return fallback;
-  const id = raw.replace(/^models\//, '');
-  if (currentProvider === 'gemini' && RETIRED_GEMINI_MODELS.has(id)) {
-    return fallback;
+export function currentLlmModel(): string {
+  if (provider() === 'groq') {
+    return (process.env.LLM_MODEL || DEFAULT_MODELS.groq).trim();
   }
-  return id;
+  return DEFAULT_MODELS.gemini;
 }
 
 /** The static coaching brief sent on every call. */
@@ -232,7 +221,7 @@ function provider(): string {
 }
 
 function modelName(): string {
-  return resolveLlmModel(process.env.LLM_MODEL, provider());
+  return currentLlmModel();
 }
 
 /** Whether a usable provider key is configured. */
@@ -290,7 +279,7 @@ async function callGemini(context: CoachContext): Promise<CoachSuggestion & { re
   });
   if (!res.ok) {
     const detail = await res.text().catch(() => '');
-    throw new Error(`Gemini error ${res.status}: ${detail.slice(0, 300)}`);
+    throw new Error(`Gemini error ${res.status} (model ${modelName()}): ${detail.slice(0, 300)}`);
   }
   const body = await res.json();
   const text = body?.candidates?.[0]?.content?.parts?.[0]?.text;

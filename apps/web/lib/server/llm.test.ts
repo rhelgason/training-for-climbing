@@ -2,9 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CoachContext, CoachSuggestion } from '@tfc/core';
 import {
   assertRespectsPrescriptions,
+  currentLlmModel,
   generateCoachSuggestion,
   isLlmConfigured,
-  resolveLlmModel,
 } from './llm';
 
 function makeContext(restDay = false) {
@@ -71,19 +71,19 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('resolveLlmModel', () => {
-  it('defaults to Gemini 3.6 Flash', () => {
-    expect(resolveLlmModel(undefined, 'gemini')).toBe('gemini-3.6-flash');
+describe('currentLlmModel', () => {
+  it('is Gemini 3.6 Flash even when LLM_MODEL is a retired id', () => {
+    expect(currentLlmModel()).toBe('gemini-3.6-flash');
+    process.env.LLM_MODEL = 'gemini-2.5-flash';
+    expect(currentLlmModel()).toBe('gemini-3.6-flash');
+    process.env.LLM_MODEL = 'models/gemini-2.5-flash';
+    expect(currentLlmModel()).toBe('gemini-3.6-flash');
   });
 
-  it('rewrites retired Gemini ids, including the models/ prefix Google uses', () => {
-    expect(resolveLlmModel('gemini-2.5-flash', 'gemini')).toBe('gemini-3.6-flash');
-    expect(resolveLlmModel('models/gemini-2.5-flash', 'gemini')).toBe('gemini-3.6-flash');
-  });
-
-  it('leaves a current override and Groq models alone', () => {
-    expect(resolveLlmModel('gemini-3-experimental', 'gemini')).toBe('gemini-3-experimental');
-    expect(resolveLlmModel('llama-3.3-70b-versatile', 'groq')).toBe('llama-3.3-70b-versatile');
+  it('honours LLM_MODEL only for Groq', () => {
+    process.env.LLM_PROVIDER = 'groq';
+    process.env.LLM_MODEL = 'llama-3.3-70b-versatile';
+    expect(currentLlmModel()).toBe('llama-3.3-70b-versatile');
   });
 });
 
@@ -183,18 +183,7 @@ describe('generateCoachSuggestion', () => {
     ]);
   });
 
-  it('honours the LLM_MODEL override', async () => {
-    process.env.GEMINI_API_KEY = 'test-key';
-    process.env.LLM_MODEL = 'gemini-3-experimental';
-    const fetchMock = vi.fn().mockResolvedValue(geminiReply({ headline: 'x' }));
-    vi.stubGlobal('fetch', fetchMock);
-
-    await generateCoachSuggestion(context);
-
-    expect(fetchMock.mock.calls[0][0]).toContain('gemini-3-experimental');
-  });
-
-  it('does not call a retired Gemini model left in LLM_MODEL', async () => {
+  it('never sends a retired Gemini id from LLM_MODEL', async () => {
     process.env.GEMINI_API_KEY = 'test-key';
     process.env.LLM_MODEL = 'gemini-2.5-flash';
     const fetchMock = vi.fn().mockResolvedValue(geminiReply({ headline: 'x' }));

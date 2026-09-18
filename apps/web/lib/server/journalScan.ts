@@ -14,7 +14,7 @@
  * missed injury that keeps loading a hurt tendon is not.
  */
 import type { JournalEntry } from '@tfc/core';
-import { resolveLlmModel } from './llm';
+import { currentLlmModel } from './llm';
 
 /** Entries older than this say little about how the climber feels now. */
 const WINDOW_DAYS = 45;
@@ -122,7 +122,7 @@ function coerceFindings(text: string): JournalFinding[] {
 export async function scanJournals(text: string): Promise<JournalFinding[]> {
   const key = process.env.GEMINI_API_KEY;
   if (!key) throw new Error('journal scan needs GEMINI_API_KEY');
-  const model = resolveLlmModel(process.env.LLM_MODEL, 'gemini');
+  const model = currentLlmModel();
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
     {
