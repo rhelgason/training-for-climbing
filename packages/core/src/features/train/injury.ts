@@ -10,11 +10,16 @@
  * Nothing here writes to the profile or the journal. Existing records are the
  * input, never rewritten.
  */
-import type { DerivedNote, JournalEntry } from '../../db/types';
+import type { JournalEntry } from '../../db/types';
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 /** Older than this is history, not today's constraint. */
 const WINDOW_DAYS = 21;
+/**
+ * If they have not mentioned the problem in this many days, treat it as settled.
+ * Healing language cancels sooner; this is the silence rule.
+ */
+const SILENCE_DAYS = 7;
 
 export type InjuryRegion =
   | 'leg'
@@ -51,8 +56,8 @@ export interface InjuryInput {
   dailyNote?: string;
   /** The climber's own profile blurb — often historical, so scored more strictly. */
   climberContext?: string;
-  /** Notes they accepted from an insight card. Treated as current. */
-  derivedNotes?: Array<Pick<DerivedNote, 'text'> | string>;
+  /** Notes they accepted from an insight card. Dated so silence can expire them. */
+  derivedNotes?: Array<{ text: string; addedAt?: number } | string>;
 }
 
 interface Finding {
@@ -195,18 +200,13 @@ export function detectInjury(input: InjuryInput): DetectedInjury | null {
 
   for (const note of input.derivedNotes ?? []) {
     const text = typeof note === 'string' ? note : note.text;
+    const date = typeof note === 'string' ? input.nowMs : (note.addedAt ?? input.nowMs);
     const found = classify(text, 'derived');
-    if (found) findings.push({ ...found, date: input.nowMs });
+    if (found) findings.push({ ...found, date });
   }
 
-  if (input.climberContext) {
-    const found = classify(input.climberContext, 'profile');
-    // Profile blurbs are often lifetime context. Only act when the language is
-    // clearly current (MRI, can't climb, "currently") rather than a past story.
-    if (found && found.severity === 'severe' && !RESOLVED.test(input.climberContext)) {
-      findings.push({ ...found, date: input.nowMs - MS_PER_DAY });
-    }
-  }
+  // Profile blurbs stay in the coach prompt as lifetime context. They are not
+  // a hard scheduler constraint — recent journals (or silence in them) decide.
 
   if (findings.length === 0) return null;
 
@@ -232,11 +232,15 @@ export function detectInjury(input: InjuryInput): DetectedInjury | null {
 
   if (current.length === 0) return null;
 
-  current.sort((a, b) => {
+  const silenceCutoff = input.nowMs - SILENCE_DAYS * MS_PER_DAY;
+  const recent = current.filter((f) => f.date >= silenceCutoff);
+  if (recent.length === 0) return null;
+
+  recent.sort((a, b) => {
     if (a.severity !== b.severity) return a.severity === 'severe' ? -1 : 1;
     return b.date - a.date;
   });
-  const top = current[0];
+  const top = recent[0];
   const noClimbing = top.severity === 'severe' || isStructural(top.region);
   return {
     severity: top.severity,

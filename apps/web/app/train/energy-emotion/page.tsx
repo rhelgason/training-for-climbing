@@ -93,7 +93,9 @@ export default function EnergyEmotionScreen() {
     <Screen>
       <h1 className="text-2xl font-bold">Energy &amp; emotion</h1>
       <p className="mt-2 text-base leading-6 text-muted">
-        Log your physical energy and mind-set through the day to spot patterns and triggers.
+        Log physical energy and mind-set. Today&apos;s latest reading changes the plan: the
+        performance zone (high energy, positive) leaves it alone; low energy plus a bad mood is a
+        rest day; the other off-zones drop high-intensity work.
       </p>
 
       <Link href="/train/checkin" className="mt-4 block">

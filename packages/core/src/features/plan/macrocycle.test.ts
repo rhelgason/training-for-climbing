@@ -1,10 +1,12 @@
 import type { MacrocyclePeriodRecord } from '../../db/types';
 import {
+  autoMesocyclePhase,
   currentPeriod,
   daysRemainingInPeriod,
   formatYmd,
   inferBlockFocuses,
   parseYmd,
+  resolveTrainingBlock,
   trainingDaysInRange,
   upcomingPeriod,
   validatePeriodInput,
@@ -63,6 +65,40 @@ describe('inferBlockFocuses', () => {
   it('returns nothing when the block has no usable emphasis', () => {
     expect(inferBlockFocuses(period({ focus: undefined, label: 'Spring' }))).toEqual([]);
     expect(inferBlockFocuses(null)).toEqual([]);
+  });
+});
+
+describe('autoMesocyclePhase', () => {
+  const start = Date.UTC(2026, 0, 1);
+
+  it('walks Hörst 4-3-2-1 from the anchor date', () => {
+    expect(autoMesocyclePhase(start, start).label).toBe('Skill & stamina');
+    expect(autoMesocyclePhase(start + 4 * 7 * DAY, start).label).toBe('Max strength & power');
+    expect(autoMesocyclePhase(start + 7 * 7 * DAY, start).focuses).toEqual(['powerEndurance']);
+    expect(autoMesocyclePhase(start + 9 * 7 * DAY, start).label).toBe('Taper');
+  });
+
+  it('repeats after 10 weeks', () => {
+    expect(autoMesocyclePhase(start + 10 * 7 * DAY, start).label).toBe('Skill & stamina');
+  });
+});
+
+describe('resolveTrainingBlock', () => {
+  it('prefers a planned period over the auto cycle', () => {
+    const start = 0;
+    const periods = [
+      period({ label: 'Trip taper', focus: 'Taper', startDate: 0, endDate: 20 * DAY }),
+    ];
+    const block = resolveTrainingBlock(periods, 5 * DAY, start);
+    expect(block.source).toBe('planned');
+    expect(block.label).toBe('Trip taper');
+    expect(block.focuses).toEqual(['skill', 'conditioning']);
+  });
+
+  it('falls back to 4-3-2-1 when nothing is planned', () => {
+    const block = resolveTrainingBlock([], 0, 0);
+    expect(block.source).toBe('auto');
+    expect(block.label).toBe('Skill & stamina');
   });
 });
 

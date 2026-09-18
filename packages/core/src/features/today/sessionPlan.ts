@@ -11,7 +11,7 @@
  * campus (Ch 8–9), 4x4s and ARC (Ch 8), antagonists (Ch 6), core (Ch 7).
  */
 import { PRESCRIPTIONS_BY_AREA } from '../../content/prescriptions';
-import { protocolForExercise } from '../../content/protocols';
+import { protocolForExercise, TRACKABLE_PROTOCOLS } from '../../content/protocols';
 import type { AbilityTier } from '../../content/planning';
 import {
   sessionFocus,
@@ -524,4 +524,64 @@ export function buildSessionSteps(
 /** So callers can still label a focus without importing the catalog. */
 export function focusLabel(id: SessionFocusId): string {
   return sessionFocus(id).label;
+}
+
+function normalizePlanText(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[×]/g, 'x')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function overlayMatchScore(aiText: string, step: PlanStep): number {
+  const a = normalizePlanText(aiText);
+  const b = normalizePlanText(step.text);
+  if (a === b) return 100;
+  let score = 0;
+  if (step.protocolId) {
+    const protocol = TRACKABLE_PROTOCOLS.find((p) => p.id === step.protocolId);
+    if (protocol && a.includes(normalizePlanText(protocol.name))) score += 8;
+  }
+  const hints = [
+    /min(?:imum)?\s*edge/,
+    /\b7\s*53\b/,
+    /max[\s-]*weight hang/,
+    /repeater/,
+    /frenchie/,
+    /4\s*x\s*4/,
+    /\barc\b/,
+    /campus/,
+    /deadlift/,
+    /moving hang/,
+    /weighted pull/,
+  ];
+  for (const re of hints) {
+    if (re.test(a) && re.test(b)) score += 6;
+  }
+  return score;
+}
+
+/**
+ * Keep the AI's wording, re-attach protocol/exercise ids from the built-in
+ * steps so inline number loggers still work after a rewrite.
+ */
+export function overlayAiPlan(baseline: PlanStep[], aiPlan?: string[] | null): PlanStep[] {
+  if (!aiPlan?.length) return baseline;
+  const taken = new Set<number>();
+  return aiPlan.map((text) => {
+    let best = -1;
+    let bestScore = 0;
+    for (let i = 0; i < baseline.length; i++) {
+      if (taken.has(i)) continue;
+      const score = overlayMatchScore(text, baseline[i]);
+      if (score > bestScore) {
+        bestScore = score;
+        best = i;
+      }
+    }
+    if (best < 0 || bestScore < 4) return { text };
+    taken.add(best);
+    return { ...baseline[best], text };
+  });
 }

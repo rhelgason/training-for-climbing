@@ -303,8 +303,7 @@ describe('generateCoachSuggestion', () => {
 
     const suggestion = await generateCoachSuggestion(makeContext(true));
     expect(suggestion.headline).toBe('Rest today');
-    // The validation channel is stripped before the client sees it.
-    expect(suggestion).not.toHaveProperty('restDay');
+    expect(suggestion.restDay).toBe(true);
   });
 });
 

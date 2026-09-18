@@ -15,9 +15,10 @@ import { Card } from './Card';
 interface Props {
   microcycle: Microcycle | null;
   because: string;
+  blockLabel?: string;
 }
 
-export function WhyThisPlan({ microcycle, because }: Props) {
+export function WhyThisPlan({ microcycle, because, blockLabel }: Props) {
   const [open, setOpen] = useState(false);
   if (!microcycle) return null;
 
@@ -42,6 +43,13 @@ export function WhyThisPlan({ microcycle, because }: Props) {
 
       {open && (
         <div className="mt-3 flex flex-col gap-4">
+          {blockLabel ? (
+            <div>
+              <p className="text-sm font-semibold text-muted">This block</p>
+              <p className="mt-1 text-sm leading-5">{blockLabel}</p>
+            </div>
+          ) : null}
+
           {because ? (
             <div>
               <p className="text-sm font-semibold text-muted">Your recent training</p>

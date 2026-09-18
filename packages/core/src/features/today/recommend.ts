@@ -32,13 +32,7 @@ import {
 } from '../../content/trainingContext';
 import { TRIAD_LABELS, type TriadArea } from '../../content/types';
 import type { AbilityTier } from '../../content/planning';
-import type {
-  BenchmarkRecord,
-  ClimbRecord,
-  DerivedNote,
-  GoalRecord,
-  JournalEntry,
-} from '../../db/types';
+import type { BenchmarkRecord, ClimbRecord, GoalRecord, JournalEntry } from '../../db/types';
 import { activeGoals } from '../plan/goals';
 import { buildMicrocycle, type Microcycle, type RestKind } from '../plan/microcycle';
 import { detectInjury, type DetectedInjury } from '../train/injury';
@@ -95,7 +89,7 @@ export interface DailyInput {
   journals?: JournalEntry[];
   dailyNote?: string;
   climberContext?: string;
-  derivedNotes?: Array<Pick<DerivedNote, 'text'> | string>;
+  derivedNotes?: Array<{ text: string; addedAt?: number } | string>;
 }
 
 export type DailyKind = 'rest' | 'assess' | 'train';

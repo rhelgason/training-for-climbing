@@ -11,6 +11,7 @@ import { dayIndex } from '../../lib/day';
  *   IV  = low energy,  positive emotion
  */
 import type { CheckinRecord } from '../../db/types';
+import type { Readiness } from '../../content/trainingContext';
 
 export const ENERGY_MIN = 0;
 export const ENERGY_MAX = 10;
@@ -52,6 +53,40 @@ export function quadrantOf(energy: number, emotion: number): QuadrantInfo {
   if (highEnergy && !positive) return QUADRANTS.I;
   if (!highEnergy && positive) return QUADRANTS.IV;
   return QUADRANTS.III;
+}
+
+const READINESS_RANK: Record<Readiness, number> = {
+  fresh: 0,
+  ok: 1,
+  tired: 2,
+  tweaky: 3,
+};
+
+/**
+ * Map Appendix B quadrant onto today's readiness.
+ * II (performance zone) does not override. III (in the hole) is a rest day.
+ * I and IV are tired — no high-intensity work.
+ */
+export function readinessFromEnergyEmotion(energy: number, emotion: number): Readiness | null {
+  const q = quadrantOf(energy, emotion);
+  if (q.id === 'II') return null;
+  if (q.id === 'III') return 'tweaky';
+  return 'tired';
+}
+
+/** The more conservative of two readiness readings. */
+export function combineReadiness(base: Readiness, extra: Readiness | null | undefined): Readiness {
+  if (!extra) return base;
+  return READINESS_RANK[extra] > READINESS_RANK[base] ? extra : base;
+}
+
+/** Latest reading on that calendar day, or null. */
+export function latestReadingForDay(
+  checkins: CheckinRecord[],
+  dayMs: number,
+): CheckinRecord | null {
+  const days = readingsForDay(checkins, dayMs);
+  return days.length > 0 ? days[days.length - 1] : null;
 }
 
 /** Readings whose `time` falls on the same calendar day as `dayMs`, oldest-first. */

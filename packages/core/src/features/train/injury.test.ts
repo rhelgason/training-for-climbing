@@ -92,15 +92,50 @@ describe('detectInjury', () => {
     ).toBeNull();
   });
 
-  it('acts on a current severe profile blurb that is not a past story', () => {
+  it('does not treat a profile blurb as a hard constraint — journals decide', () => {
+    expect(
+      detectInjury({
+        journals: [],
+        nowMs: NOW,
+        climberContext: "Currently can't climb — waiting on an MRI for my knee.",
+      }),
+    ).toBeNull();
+  });
+
+  it('drops an injury that has not been mentioned in a week', () => {
+    expect(
+      detectInjury({
+        journals: [journal(8, 'Potentially severe leg injury — planning to get an MRI.')],
+        nowMs: NOW,
+      }),
+    ).toBeNull();
+  });
+
+  it('keeps an older injury when a later journal still talks about it', () => {
     const found = detectInjury({
-      journals: [],
+      journals: [
+        journal(8, 'Potentially severe leg injury — planning to get an MRI.'),
+        journal(1, 'Knee still swollen, waiting on that MRI.'),
+      ],
       nowMs: NOW,
-      climberContext: "Currently can't climb — waiting on an MRI for my knee.",
     });
-    expect(found?.severity).toBe('severe');
     expect(found?.region).toBe('knee');
     expect(found?.noClimbing).toBe(true);
+  });
+
+  it('expires a derived note whose addedAt is older than a week', () => {
+    expect(
+      detectInjury({
+        journals: [],
+        nowMs: NOW,
+        derivedNotes: [
+          {
+            text: 'Right ring finger has been sore on crimps since early August.',
+            addedAt: NOW - 10 * DAY,
+          },
+        ],
+      }),
+    ).toBeNull();
   });
 
   it('cancels an older tweak once a later journal says it cleared up', () => {

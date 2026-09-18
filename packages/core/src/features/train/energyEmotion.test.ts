@@ -1,5 +1,12 @@
 import type { CheckinRecord } from '../../db/types';
-import { clampEmotion, clampEnergy, quadrantOf, readingsForDay } from './energyEmotion';
+import {
+  clampEmotion,
+  clampEnergy,
+  combineReadiness,
+  quadrantOf,
+  readingsForDay,
+  readinessFromEnergyEmotion,
+} from './energyEmotion';
 
 describe('clamping', () => {
   it('clamps energy to 0..10 and emotion to -5..5, rounding', () => {
@@ -27,6 +34,24 @@ describe('quadrantOf', () => {
   it('marks only quadrant II as optimal', () => {
     expect(quadrantOf(9, 4).optimal).toBe(true);
     expect(quadrantOf(9, -4).optimal).toBe(false);
+  });
+});
+
+describe('readinessFromEnergyEmotion', () => {
+  it('does not override a performance-zone reading', () => {
+    expect(readinessFromEnergyEmotion(8, 3)).toBeNull();
+  });
+
+  it('rests when energy and emotion are both low, and deloads the other off-zones', () => {
+    expect(readinessFromEnergyEmotion(2, -3)).toBe('tweaky');
+    expect(readinessFromEnergyEmotion(8, -3)).toBe('tired');
+    expect(readinessFromEnergyEmotion(2, 3)).toBe('tired');
+  });
+
+  it('keeps the more conservative of two readings', () => {
+    expect(combineReadiness('ok', null)).toBe('ok');
+    expect(combineReadiness('fresh', 'tired')).toBe('tired');
+    expect(combineReadiness('tweaky', 'tired')).toBe('tweaky');
   });
 });
 

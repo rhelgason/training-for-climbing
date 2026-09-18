@@ -233,6 +233,12 @@ describe('buildCoachContext', () => {
       expect(ctx.baselinePlan.length).toBeGreaterThan(0);
     });
 
+    it('fills a rolling 4-3-2-1 block when none is planned', () => {
+      const ctx = buildCoachContext(input());
+      expect(ctx.macrocycle.current?.label).toMatch(/4-3-2-1/);
+      expect(ctx.schedule.allowed.length + ctx.schedule.blocked.length).toBeGreaterThan(0);
+    });
+
     it('includes the current macrocycle block when one is planned', () => {
       const ctx = buildCoachContext(
         input({

@@ -20,17 +20,27 @@ export async function refreshCoachSuggestion(
   contextKey?: string,
 ): Promise<CoachSuggestion> {
   const nowMs = now();
-  const [profile, assessments, benchmarks, climbs, goals, journals, dailyContext, periods] =
-    await Promise.all([
-      repo.getProfile(),
-      repo.listAssessments(),
-      repo.listBenchmarks(),
-      repo.listClimbs(),
-      repo.listGoals(),
-      repo.listJournals(),
-      repo.getDailyContext(nowMs),
-      repo.listMacrocyclePeriods(),
-    ]);
+  const [
+    profile,
+    assessments,
+    benchmarks,
+    climbs,
+    goals,
+    journals,
+    dailyContext,
+    periods,
+    checkins,
+  ] = await Promise.all([
+    repo.getProfile(),
+    repo.listAssessments(),
+    repo.listBenchmarks(),
+    repo.listClimbs(),
+    repo.listGoals(),
+    repo.listJournals(),
+    repo.getDailyContext(nowMs),
+    repo.listMacrocyclePeriods(),
+    repo.listCheckins(),
+  ]);
 
   const context = buildCoachContext({
     profile,
@@ -41,6 +51,7 @@ export async function refreshCoachSuggestion(
     journals,
     dailyContext,
     periods,
+    checkins,
     nowMs,
   });
 

@@ -8,12 +8,16 @@ import {
   INTENSITY_LABELS,
   acceptInsight,
   buildDailyRecommendation,
-  currentPeriod,
+  combineReadiness,
   detectAbilityDrift,
   dismissInsight,
   formatBands,
-  inferBlockFocuses,
+  latestReadingForDay,
+  mesocycleAnchor,
+  overlayAiPlan,
   pendingInsights,
+  readinessFromEnergyEmotion,
+  resolveTrainingBlock,
   type Insight,
   type ProfileRecord,
   dayIndex,
@@ -80,6 +84,7 @@ interface LoadState {
   profile: ProfileRecord | null;
   /** Profile updates the app is proposing, already filtered to undecided ones. */
   insights: Insight[];
+  blockLabel: string;
 }
 
 export default function TrainHome() {
@@ -139,14 +144,19 @@ export default function TrainHome() {
   const markDone = async () => {
     if (!state || marking) return;
     const { recommendation: plan, todayJournalId } = state;
-    const focus = [plan.focus, ...plan.supportingFocuses].filter(Boolean) as SessionFocusId[];
-    const intensity: JournalIntensity = plan.focus
-      ? sessionFocus(plan.focus).intensity === 'high'
-        ? 'hard'
-        : sessionFocus(plan.focus).intensity === 'low'
-          ? 'easy'
-          : 'moderate'
-      : 'easy';
+    const rest = Boolean(coach.suggestion?.restDay) || plan.kind === 'rest';
+    const focus = rest
+      ? (['rest'] as SessionFocusId[])
+      : ([plan.focus, ...plan.supportingFocuses].filter(Boolean) as SessionFocusId[]);
+    const intensity: JournalIntensity = rest
+      ? 'easy'
+      : plan.focus
+        ? sessionFocus(plan.focus).intensity === 'high'
+          ? 'hard'
+          : sessionFocus(plan.focus).intensity === 'low'
+            ? 'easy'
+            : 'moderate'
+        : 'easy';
     setMarking(true);
     try {
       let journalId = todayJournalId;
@@ -155,9 +165,9 @@ export default function TrainHome() {
       } else {
         const saved = await repo.saveJournal({
           date: now(),
-          activities: plan.kind === 'rest' ? ['rest'] : ['climbing'],
-          focus: plan.kind === 'rest' ? ['rest'] : focus,
-          intensity: plan.kind === 'rest' ? 'easy' : intensity,
+          activities: rest ? ['rest'] : ['climbing'],
+          focus,
+          intensity,
           skipped: skippedSteps.length > 0 ? skippedSteps : undefined,
         });
         journalId = saved.id;
@@ -167,8 +177,9 @@ export default function TrainHome() {
       // a step that was never on screen (because the AI rewrote the session)
       // was never confirmed — saving its seeded value would silently duplicate
       // last session's number as if it happened again.
-      const shown = new Set(coach.suggestion ? coach.suggestion.plan : plan.plan);
-      for (const step of plan.steps) {
+      const shownSteps = overlayAiPlan(plan.steps, coach.suggestion?.plan);
+      const shown = new Set(shownSteps.map((s) => s.text));
+      for (const step of shownSteps) {
         if (!step.protocolId) continue;
         if (!shown.has(step.text) || skippedSteps.includes(step.text)) continue;
         const value = metrics[step.protocolId];
@@ -176,8 +187,8 @@ export default function TrainHome() {
         await repo.saveBenchmark({ testId: step.protocolId, value, date: now() });
       }
       trackEvent('plan_completed', {
-        focus: plan.focus ?? 'rest',
-        kind: plan.kind,
+        focus: rest ? 'rest' : (plan.focus ?? 'rest'),
+        kind: rest ? 'rest' : plan.kind,
         skipped: skippedSteps.length,
       });
       // Open the log so they can add the free text the coach reads tomorrow.
@@ -200,7 +211,8 @@ export default function TrainHome() {
       repo.getProfile(),
       repo.listBenchmarks(),
       repo.listMacrocyclePeriods(),
-    ]).then(([journals, climbs, assessments, goals, profile, benchmarks, periods]) => {
+      repo.listCheckins(),
+    ]).then(([journals, climbs, assessments, goals, profile, benchmarks, periods, checkins]) => {
       if (!on) return;
       const nowMs = now();
 
@@ -222,20 +234,29 @@ export default function TrainHome() {
       const settings = effectiveProfile(profile);
       const latest = assessments[0] ?? null;
       const weakestArea = latest?.weakestArea ?? null;
-      const currentBlock = currentPeriod(periods, nowMs);
+      const dates = trainingDates(journals, climbs);
+      const block = resolveTrainingBlock(
+        periods,
+        nowMs,
+        mesocycleAnchor(profile, dates.length > 0 ? Math.min(...dates) : null, nowMs),
+      );
+      const energy = latestReadingForDay(checkins, nowMs);
       const recommendation = buildDailyRecommendation({
         weakestArea,
         weakSpots:
           latest && weakestArea ? flaggedPromptsForArea(latest.responses, weakestArea) : [],
         goals,
-        trainingDates: trainingDates(journals, climbs),
+        trainingDates: dates,
         nowMs,
         history: loadHistory(journals, climbs),
         abilityTier: settings.abilityTier,
         styleFocus: settings.styleFocus,
         daysPerWeek: settings.daysPerWeek,
         equipment: today.equipment,
-        readiness: today.readiness,
+        readiness: combineReadiness(
+          today.readiness,
+          energy ? readinessFromEnergyEmotion(energy.energy, energy.emotion) : null,
+        ),
         sessionLength: today.sessionLength,
         benchmarks,
         climbs,
@@ -244,7 +265,7 @@ export default function TrainHome() {
         dailyNote: today.note,
         climberContext: settings.climberContext,
         derivedNotes: profile?.derivedContext,
-        blockFocuses: inferBlockFocuses(currentBlock),
+        blockFocuses: block.focuses,
       });
       // Newest-edit-wins rather than first match: sync can leave two entries
       // for one day, and editing an arbitrary one loses the other's text.
@@ -277,6 +298,8 @@ export default function TrainHome() {
         hasGoal: goals.length > 0,
         benchmarks,
         profile,
+        blockLabel:
+          block.source === 'auto' ? `${block.label} (4-3-2-1)` : `${block.label} — ${block.focus}`,
         // Deterministic and on-device: whether someone is climbing a grade is a
         // query over their own sends, not something worth asking a model.
         insights: pendingInsights(
@@ -357,12 +380,10 @@ export default function TrainHome() {
   ];
   const showOnboarding = !onboarding.dismissed && onboardingSteps.some((s) => !s.done);
 
-  const planSteps = ai ? ai.plan : rec.plan;
-  const cardBorder = ai
-    ? 'border-success'
-    : rec.kind === 'rest'
-      ? 'border-warning'
-      : 'border-primary';
+  const displaySteps = overlayAiPlan(rec.steps, ai?.plan);
+  const planSteps = displaySteps.map((s) => s.text);
+  const restToday = Boolean(ai?.restDay) || rec.kind === 'rest';
+  const cardBorder = restToday ? 'border-warning' : ai ? 'border-success' : 'border-primary';
 
   return (
     <Screen>
@@ -418,7 +439,7 @@ export default function TrainHome() {
           </div>
         ))}
 
-        {rec.climbing && rec.kind === 'train' && (
+        {rec.climbing && rec.kind === 'train' && !restToday && (
           <div className="mt-4 rounded-xl border border-border/70 bg-surface-alt/40 px-3 py-2.5">
             <p className="text-sm font-bold uppercase tracking-wide text-muted">What to climb</p>
             <p className="mt-1 text-sm leading-5">{rec.climbing.style}</p>
@@ -440,14 +461,11 @@ export default function TrainHome() {
             {/* Steps start ticked, so a normal day is still one tap to log.
                 Unticking is how "ran out of time before the core work" gets
                 recorded — which the coach reads when planning tomorrow. */}
-            {planSteps.map((step, i) => {
+            {displaySteps.map((planStep, i) => {
+              const step = planStep.text;
               const done = !skippedSteps.includes(step);
-              // Protocols only attach to the deterministic plan's steps; when
-              // the AI has rewritten the session the texts no longer line up,
-              // so we match on text and simply show nothing if it doesn't.
-              const planStep = rec.steps.find((s) => s.text === step);
-              const protocol = protocolById(planStep?.protocolId ?? '');
-              const prescription = planStep?.prescription;
+              const protocol = protocolById(planStep.protocolId ?? '');
+              const prescription = planStep.prescription;
               return (
                 <div key={i}>
                   <button
@@ -580,7 +598,11 @@ export default function TrainHome() {
         </Card>
       )}
 
-      <WhyThisPlan microcycle={rec.microcycle} because={rec.because} />
+      <WhyThisPlan
+        microcycle={rec.microcycle}
+        because={rec.because}
+        blockLabel={state.blockLabel}
+      />
 
       {coach.enabled && (
         <Button variant="secondary" onClick={coach.refresh} disabled={coach.status === 'loading'}>
@@ -601,7 +623,7 @@ export default function TrainHome() {
       <Button onClick={markDone} disabled={marking}>
         {marking
           ? 'Saving…'
-          : rec.kind === 'rest'
+          : restToday
             ? 'Log today as a rest day'
             : skippedSteps.length > 0
               ? `Log it — ${planSteps.length - skippedSteps.length} of ${planSteps.length} done`

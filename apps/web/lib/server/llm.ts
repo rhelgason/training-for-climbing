@@ -258,7 +258,7 @@ function coerceSuggestion(
     rationale: String(obj.rationale || ''),
     watchOuts: Array.isArray(obj.watchOuts) ? obj.watchOuts.map(String) : [],
     injuries: coerceInjuries(obj.injuries),
-    restDay: typeof obj.restDay === 'boolean' ? obj.restDay : undefined,
+    ...(typeof obj.restDay === 'boolean' ? { restDay: obj.restDay } : {}),
   };
 }
 
@@ -322,7 +322,5 @@ export async function generateCoachSuggestion(context: CoachContext): Promise<Co
   const raw = provider() === 'groq' ? await callGroq(context) : await callGemini(context);
   assertRespectsSchedule(raw, context);
   assertRespectsPrescriptions(raw, context);
-  // `restDay` is a validation channel, not part of the client's contract.
-  const { restDay: _restDay, ...suggestion } = raw;
-  return suggestion;
+  return raw;
 }

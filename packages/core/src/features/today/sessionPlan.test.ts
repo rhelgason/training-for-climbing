@@ -6,6 +6,7 @@ import {
   buildSessionSteps,
   coolDownStep,
   focusLabel,
+  overlayAiPlan,
   restSteps,
   warmUpStep,
   type SessionPlanContext,
@@ -307,6 +308,24 @@ describe('buildFocusSteps — every focus, gym gear', () => {
       'primary',
     );
     expect(steps[0].text).toMatch(/Knee/);
+  });
+});
+
+describe('overlayAiPlan', () => {
+  it('keeps AI wording and re-attaches the matching protocol', () => {
+    const baseline = buildFocusSteps('maxStrength', ctx({ dayIdx: 0 }), 'primary');
+    const hang = baseline.find((s) => s.protocolId === 'protocol-max-weight-hang');
+    expect(hang).toBeTruthy();
+    const overlaid = overlayAiPlan(baseline, [
+      'Max-weight hangs today: 5 x 10 s, half-crimp, rest 3 min. Use the prescribed load.',
+    ]);
+    expect(overlaid[0].text).toMatch(/Max-weight hangs today/);
+    expect(overlaid[0].protocolId).toBe('protocol-max-weight-hang');
+  });
+
+  it('returns the baseline unchanged when there is no AI plan', () => {
+    const baseline = buildFocusSteps('skill', ctx(), 'supporting');
+    expect(overlayAiPlan(baseline, null)).toEqual(baseline);
   });
 });
 

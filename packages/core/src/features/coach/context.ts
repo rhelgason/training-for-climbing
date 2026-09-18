@@ -18,6 +18,7 @@ import { DISCIPLINE_LABELS, DISCIPLINES, ENVIRONMENT_LABELS } from '../../conten
 import type {
   AssessmentRecord,
   BenchmarkRecord,
+  CheckinRecord,
   ClimbRecord,
   DailyContextRecord,
   GoalRecord,
@@ -31,10 +32,10 @@ import { sessionFocus, type SessionFocusId } from '../../content/trainingContext
 import { flaggedPromptsForArea } from '../assess/scoring';
 import { activeGoals } from '../plan/goals';
 import {
-  currentPeriod,
   daysRemainingInPeriod,
   formatYmd,
-  inferBlockFocuses,
+  mesocycleAnchor,
+  resolveTrainingBlock,
   upcomingPeriod,
 } from '../plan/macrocycle';
 import { buildMicrocycle, type Microcycle } from '../plan/microcycle';
@@ -42,6 +43,11 @@ import { countInLastDays, hardestSend, sendRate } from '../progress/dashboard';
 import { buildDailyRecommendation } from '../today/recommend';
 import { formatBands } from '../today/climbingPrescription';
 import { loadHistory, recentDays } from '../train/load';
+import {
+  combineReadiness,
+  latestReadingForDay,
+  readinessFromEnergyEmotion,
+} from '../train/energyEmotion';
 import { currentStreak, trainingDates } from '../train/log';
 import type { CoachContext, CoachMacrocycleBlock, CoachSchedule } from './types';
 
@@ -56,6 +62,8 @@ export interface CoachContextInput {
   dailyContext?: DailyContextRecord | null;
   /** Annual training blocks, if the climber has planned any. */
   periods?: MacrocyclePeriodRecord[];
+  /** Energy/emotion readings; today's latest can tighten readiness. */
+  checkins?: CheckinRecord[];
   nowMs: number;
 }
 
@@ -163,14 +171,23 @@ export function buildCoachContext(input: CoachContextInput): CoachContext {
   const history = loadHistory(input.journals, input.climbs);
   const daily = input.dailyContext ?? null;
   const periods = input.periods ?? [];
-  const currentBlock = currentPeriod(periods, input.nowMs);
+  const earliest = trainDates.length > 0 ? Math.min(...trainDates) : null;
+  const block = resolveTrainingBlock(
+    periods,
+    input.nowMs,
+    mesocycleAnchor(input.profile, earliest, input.nowMs),
+  );
   const nextBlock = upcomingPeriod(periods, input.nowMs);
-  const blockFocuses = inferBlockFocuses(currentBlock);
+  const blockFocuses = block.focuses;
 
   // Today's check-in overrides the profile's usual setup where it disagrees.
   const equipment = daily?.equipment ?? profile.equipment;
   const sessionLength = daily?.sessionLength ?? profile.sessionLength;
-  const readiness = daily?.readiness ?? 'ok';
+  const energy = latestReadingForDay(input.checkins ?? [], input.nowMs);
+  const readiness = combineReadiness(
+    daily?.readiness ?? 'ok',
+    energy ? readinessFromEnergyEmotion(energy.energy, energy.emotion) : null,
+  );
 
   const recommendation = buildDailyRecommendation({
     weakestArea: assessment?.weakestArea ?? null,
@@ -327,7 +344,13 @@ export function buildCoachContext(input: CoachContextInput): CoachContext {
       ],
     },
     macrocycle: {
-      current: toBlock(currentBlock, input.nowMs),
+      current: {
+        label: block.source === 'auto' ? `${block.label} (4-3-2-1)` : block.label,
+        focus: block.focus,
+        startDate: formatYmd(input.nowMs),
+        endDate: formatYmd(input.nowMs + block.daysRemaining * 24 * 60 * 60 * 1000),
+        daysRemaining: block.daysRemaining,
+      },
       upcoming: toBlock(nextBlock, input.nowMs),
       periods: periods.map((p) => toBlock(p, input.nowMs)!),
     },

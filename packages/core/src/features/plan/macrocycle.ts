@@ -25,6 +25,110 @@ const BLOCK_FOCUS_ALIASES: { pattern: RegExp; focuses: SessionFocusId[] }[] = [
   { pattern: /antagonist|core|condition/i, focuses: ['conditioning'] },
 ];
 
+/**
+ * Hörst 4-3-2-1 mesocycle for intermediates (Ch 10): 4 weeks skill/stamina,
+ * 3 weeks max strength/power, 2 weeks power-endurance, 1 week taper. Used
+ * when the climber has not typed their own blocks.
+ */
+export const HORST_4321: {
+  weeks: number;
+  label: string;
+  focus: string;
+  focuses: SessionFocusId[];
+}[] = [
+  {
+    weeks: 4,
+    label: 'Skill & stamina',
+    focus: 'Volume of submaximal climbing — ARC, mileage, skill',
+    focuses: ['skill', 'enduranceAerobic'],
+  },
+  {
+    weeks: 3,
+    label: 'Max strength & power',
+    focus: 'Short near-limit efforts, hangboard, campus — 48h apart',
+    focuses: ['maxStrength', 'power'],
+  },
+  {
+    weeks: 2,
+    label: 'Power endurance',
+    focus: '4x4s and repeaters for 2–4 weeks, then stop',
+    focuses: ['powerEndurance'],
+  },
+  {
+    weeks: 1,
+    label: 'Taper',
+    focus: 'Keep intensity, cut volume ~50% then ~75%; last 1–2 days mobility',
+    focuses: ['skill', 'conditioning'],
+  },
+];
+
+const CYCLE_WEEKS = HORST_4321.reduce((sum, p) => sum + p.weeks, 0);
+
+export interface TrainingBlock {
+  label: string;
+  focus: string;
+  focuses: SessionFocusId[];
+  source: 'planned' | 'auto';
+  daysRemaining: number;
+}
+
+/** Anchor for the rolling 4-3-2-1: onboarded date, else profile created, else first training. */
+export function mesocycleAnchor(
+  profile: { onboardedAt?: number; createdAt?: number } | null,
+  earliestTrainingMs: number | null,
+  nowMs: number,
+): number {
+  return profile?.onboardedAt ?? profile?.createdAt ?? earliestTrainingMs ?? nowMs;
+}
+
+export function autoMesocyclePhase(nowMs: number, startMs: number): TrainingBlock {
+  const elapsedWeeks = Math.max(0, Math.floor((nowMs - startMs) / (7 * MS_PER_DAY)));
+  const weekInCycle = elapsedWeeks % CYCLE_WEEKS;
+  let cursor = 0;
+  for (const phase of HORST_4321) {
+    if (weekInCycle < cursor + phase.weeks) {
+      const weekIntoPhase = weekInCycle - cursor;
+      const daysRemaining = (phase.weeks - weekIntoPhase) * 7;
+      return {
+        label: phase.label,
+        focus: phase.focus,
+        focuses: phase.focuses,
+        source: 'auto',
+        daysRemaining,
+      };
+    }
+    cursor += phase.weeks;
+  }
+  const last = HORST_4321[HORST_4321.length - 1];
+  return {
+    label: last.label,
+    focus: last.focus,
+    focuses: last.focuses,
+    source: 'auto',
+    daysRemaining: 7,
+  };
+}
+
+/** Planned block if one is in range; otherwise the rolling 4-3-2-1. */
+export function resolveTrainingBlock(
+  periods: MacrocyclePeriodRecord[],
+  nowMs: number,
+  cycleStartMs: number,
+): TrainingBlock {
+  const planned = currentPeriod(periods, nowMs);
+  if (planned) {
+    const focuses = inferBlockFocuses(planned);
+    return {
+      label: planned.label,
+      focus: planned.focus ?? planned.objective ?? planned.label,
+      focuses: focuses.length > 0 ? focuses : autoMesocyclePhase(nowMs, cycleStartMs).focuses,
+      source: 'planned',
+      daysRemaining: daysRemainingInPeriod(planned, nowMs),
+    };
+  }
+  return autoMesocyclePhase(nowMs, cycleStartMs);
+}
+
 export function inferBlockFocuses(period: MacrocyclePeriodRecord | null): SessionFocusId[] {
   if (!period) return [];
   const blob = [period.focus, period.label, period.objective, period.notes]

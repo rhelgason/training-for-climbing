@@ -29,6 +29,7 @@ export * from './features/assess/scoring';
 export * from './features/assess/fitness';
 export * from './features/assess/reassessment';
 export * from './features/today/recommend';
+export { overlayAiPlan } from './features/today/sessionPlan';
 export * from './features/today/climbingPrescription';
 export * from './features/train/log';
 export * from './features/train/load';
