@@ -48,6 +48,15 @@ export interface CoachSchedule {
   trainingDaysThisWeek: number;
   plannedDaysPerWeek: number;
   hardDaysInARow: number;
+  /** Consecutive days that loaded the fingers. Three means today stays off the hands. */
+  fingerDaysInARow?: number;
+  /** Finger-loading days in the rolling 7. Four means today stays off the hands. */
+  fingerDaysThisWeek?: number;
+  /**
+   * True when today is a training day that must not grip a hold. Prescribe
+   * antagonist lifting, easy cardio, and stretching. Not a rest day.
+   */
+  offFingers?: boolean;
   /** One-line plain-English summary of the last few days. */
   recentLoadSummary: string;
   /**

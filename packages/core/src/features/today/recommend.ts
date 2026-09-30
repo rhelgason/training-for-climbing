@@ -167,6 +167,7 @@ function planContext(
   input: DailyInput,
   climbing: ClimbingPrescription | null,
   injury: DetectedInjury | null,
+  offFingers = false,
 ): SessionPlanContext {
   return {
     dayIdx: dayIndex(input.nowMs),
@@ -177,6 +178,7 @@ function planContext(
     sessionLength: input.sessionLength ?? 'standard',
     climbing,
     injury,
+    offFingers,
   };
 }
 
@@ -312,22 +314,30 @@ export function buildDailyRecommendation(input: DailyInput): DailyRecommendation
 
   if (cycle && cycle.primary) {
     const spec = sessionFocus(cycle.primary);
-    const climbing = prescribeClimbing(
-      input.climbs ?? [],
-      input.discipline ?? 'boulder',
-      cycle.primary,
-      input.nowMs,
-    );
+    const climbing = cycle.offFingers
+      ? null
+      : prescribeClimbing(
+          input.climbs ?? [],
+          input.discipline ?? 'boulder',
+          cycle.primary,
+          input.nowMs,
+        );
     const scheduled = buildSessionSteps(
       cycle.primary,
       cycle.supporting,
-      planContext(input, climbing, injury),
+      planContext(input, climbing, injury, cycle.offFingers),
     );
     return {
       ...common,
       kind: 'train',
-      headline: `Today: ${spec.label}`,
-      detail: injury ? `${spec.description} ${injury.summary}` : spec.description,
+      headline: cycle.offFingers ? 'Off the fingers' : `Today: ${spec.label}`,
+      detail: cycle.offFingers
+        ? cycle.fingerDaysInARow >= 3
+          ? `Hands have been loaded ${cycle.fingerDaysInARow} days running. Today is lifting, easy cardio, and stretching. The wall waits.`
+          : `Hands have been loaded ${cycle.fingerDaysThisWeek} days in the last 7. Today is lifting, easy cardio, and stretching. The wall waits.`
+        : injury
+          ? `${spec.description} ${injury.summary}`
+          : spec.description,
       focusArea: spec.triadArea,
       plan: texts(scheduled),
       steps: scheduled,

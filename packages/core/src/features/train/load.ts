@@ -31,6 +31,12 @@ export interface LoadEvent {
   intensity: JournalIntensity;
   /** True when the focus came from a recorded plan rather than inference. */
   recorded: boolean;
+  /**
+   * Climbing, hangboard, campus, or on-the-wall aerobic. Lifting, a run, and
+   * stretching do not. A recorded conditioning day stays off the hands even if
+   * an older client tagged the activity as climbing.
+   */
+  loadsFingers: boolean;
 }
 
 /** A recent day, flattened for the coach prompt and the "why" line in the UI. */
@@ -52,6 +58,37 @@ export interface RecentDay {
 }
 
 const DEFAULT_INTENSITY: JournalIntensity = 'moderate';
+
+/** On-the-wall or hangboard work. General cardio and antagonist lifting are not. */
+const HAND_FOCUSES: SessionFocusId[] = [
+  'skill',
+  'maxStrength',
+  'power',
+  'powerEndurance',
+  'mental',
+];
+
+/**
+ * Whether this entry loaded the fingers.
+ *
+ * A recorded focus wins over the activity tag. "I did this" used to stamp
+ * every training day as climbing, including a lifting day.
+ */
+export function entryLoadsFingers(journal: JournalEntry): boolean {
+  const activities = new Set(journal.activities ?? []);
+  if (activities.has('fingerboard')) return true;
+  const recorded = journal.focus ?? [];
+  if (recorded.length > 0) {
+    return recorded.some(
+      (focus) =>
+        HAND_FOCUSES.includes(focus) || (focus === 'enduranceAerobic' && !activities.has('cardio')),
+    );
+  }
+  if (activities.has('climbing')) return true;
+  const inferred = inferJournalFocuses(journal);
+  if (inferred.some((focus) => HAND_FOCUSES.includes(focus))) return true;
+  return inferred.includes('enduranceAerobic') && !activities.has('cardio');
+}
 
 /**
  * Map one activity tag at a given intensity onto the load it applies.
@@ -118,6 +155,7 @@ export function loadHistory(journals: JournalEntry[], climbs: ClimbRecord[]): Lo
       focuses,
       intensity: journal.intensity ?? DEFAULT_INTENSITY,
       recorded: Boolean(journal.focus && journal.focus.length > 0),
+      loadsFingers: entryLoadsFingers(journal),
     };
     // Two entries for one day: union the load and keep the harder intensity.
     byDay.set(day, existing ? mergeEvents(existing, event) : event);
@@ -133,6 +171,7 @@ export function loadHistory(journals: JournalEntry[], climbs: ClimbRecord[]): Lo
       focuses: ['skill'],
       intensity: DEFAULT_INTENSITY,
       recorded: false,
+      loadsFingers: true,
     });
   }
 
@@ -152,6 +191,7 @@ function mergeEvents(a: LoadEvent, b: LoadEvent): LoadEvent {
     intensity:
       INTENSITY_RANK[a.intensity] >= INTENSITY_RANK[b.intensity] ? a.intensity : b.intensity,
     recorded: a.recorded || b.recorded,
+    loadsFingers: a.loadsFingers || b.loadsFingers,
   };
 }
 
@@ -212,16 +252,29 @@ export function consecutiveHardDays(history: LoadEvent[], nowMs: number): number
  * yesterday instead, and only includes today if today is already on the books
  * (someone logging mid-session and reopening the app).
  */
-export function priorHardDayRun(history: LoadEvent[], nowMs: number): number {
-  const hardDays = new Set(history.filter(isHardDay).map((e) => e.day));
+function priorRun(
+  history: LoadEvent[],
+  nowMs: number,
+  match: (event: LoadEvent) => boolean,
+): number {
+  const days = new Set(history.filter(match).map((e) => e.day));
   const today = dayIndex(nowMs);
-  let day = hardDays.has(today) ? today : today - 1;
+  let day = days.has(today) ? today : today - 1;
   let count = 0;
-  while (hardDays.has(day)) {
+  while (days.has(day)) {
     count += 1;
     day -= 1;
   }
   return count;
+}
+
+export function priorHardDayRun(history: LoadEvent[], nowMs: number): number {
+  return priorRun(history, nowMs, isHardDay);
+}
+
+/** Consecutive finger-loading days the climber arrives with. An unlogged day breaks it. */
+export function priorFingerDayRun(history: LoadEvent[], nowMs: number): number {
+  return priorRun(history, nowMs, (event) => event.loadsFingers);
 }
 
 /**

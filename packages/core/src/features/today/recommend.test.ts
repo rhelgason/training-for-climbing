@@ -153,13 +153,20 @@ describe('buildDailyRecommendation with recent load', () => {
     expect(rec.because).toContain('max strength');
   });
 
-  it('rests when the scheduler says to, overriding the weakest area', () => {
+  it('prescribes lifting, cardio, and stretching after three days on the fingers', () => {
     const rec = withHistory(
       [journal(0, { focus: ['power'] }), journal(-1, { focus: ['maxStrength'] }), journal(-2)],
       { daysPerWeek: 7 },
     );
-    expect(rec.kind).toBe('rest');
-    expect(rec.detail).toMatch(/3 days running/);
+    expect(rec.kind).toBe('train');
+    expect(rec.headline).toBe('Off the fingers');
+    expect(rec.focus).toBe('conditioning');
+    expect(rec.climbing).toBeNull();
+    const plan = rec.plan.join('\n');
+    expect(plan).toMatch(/reverse wrist curls/i);
+    expect(plan).toMatch(/run, row, or bike/i);
+    expect(plan).toMatch(/stretch/i);
+    expect(plan).not.toMatch(/hangboard|limit boulder|ARC/i);
   });
 
   it('never names equipment the climber does not have', () => {

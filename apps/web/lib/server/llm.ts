@@ -133,9 +133,16 @@ suggestions. Violating one produces a plan that will injure or overtrain them:
   session from what \`schedule.allowed\` leaves.
 - If \`schedule.restDay\` is true, prescribe a REST day. Do not find a workout that "still
   counts". Say why, using \`schedule.restReason\`, and give recovery guidance only.
-- If \`schedule.restDay\` is false, write a real training session that fills
-  \`today.sessionLength\`. Prefer the hardest focus in \`schedule.allowed\` that serves
-  \`macrocycle.current\`. Do not shorten it, soften it, or turn it into an easy day.
+- If \`schedule.restDay\` is false and \`schedule.offFingers\` is not true, write a real
+  training session that fills \`today.sessionLength\`. Prefer the hardest focus in
+  \`schedule.allowed\` that serves \`macrocycle.current\`. Do not shorten it, soften it,
+  or turn it into an easy day.
+- If \`schedule.offFingers\` is true, the hands are due off. That is three finger days
+  running, or four specific days in the last seven (\`fingerDaysInARow\`, \`fingerDaysThisWeek\`).
+  \`restDay\` is false. This is a training day off the wall: antagonist and core lifting
+  (use last-logged weight, do not invent one), 20–30 minutes of easy running, rowing, or
+  cycling at conversation pace, and a real stretching block. Do not put them on the wall,
+  a hangboard, a campus board, limit boulders, or ARC. Do not turn it into a day off or a walk.
 - \`profile.trainingPush\` is \`full-time\` unless it says \`steady\`. Full-time means this
   climber is trying to improve quickly and trains most days. The weekly day-count is not a
   reason to rest them or to write an easier session. Push the best work they are allowed to do.
@@ -291,20 +298,46 @@ export function assertRespectsPrescriptions(
 const REST_SHAPED =
   /\b(rest day|full rest|complete rest|day off|off day|take it easy|taking it easy|take the day off|active recovery|mobility only|just mobility|just stretch|no climbing|deload|easy day|light day|recovery day|recovery only|recovery session|rest today)\b/i;
 
+/** Work that grips a hold. The off-finger session must not contain these. */
+const FINGER_WORK =
+  /\b(hangboard|fingerboard|campus|limit boulder|limit boulders|arc|repeater|half-crimp|open-hand|bouldering|boulder problem|climb|climbing|routes?|crimp)\b/i;
+
 function looksLikeRest(headline: string, plan: string[]): boolean {
   if (/^\s*rest\b/i.test(headline)) return true;
   return REST_SHAPED.test([headline, ...plan].join('\n'));
+}
+
+function looksLikeFingerWork(plan: string[]): boolean {
+  return FINGER_WORK.test(plan.join('\n'));
+}
+
+function baselineSteps(context: CoachContext): string[] {
+  return (context.baselinePlan ?? []).map((step) => step.trim()).filter(Boolean);
 }
 
 export function dropInventedRestDay<T extends CoachSuggestion & { restDay?: boolean }>(
   suggestion: T,
   context: CoachContext,
 ): T {
+  // Three finger days, or four in the week: the model does not get to climb
+  // or to send them home. The built-in session is lifting, cardio, stretching.
+  if (context.schedule?.offFingers === true) {
+    const baseline = baselineSteps(context);
+    const usable =
+      baseline.length > 0 && !looksLikeRest('', baseline) && !looksLikeFingerWork(baseline);
+    const inventedRest =
+      suggestion.restDay === true || looksLikeRest(suggestion.headline, suggestion.plan ?? []);
+    const inventedClimbing = looksLikeFingerWork(suggestion.plan ?? []);
+    if (usable && (inventedRest || inventedClimbing)) {
+      return { ...suggestion, restDay: false, plan: baseline, headline: 'Off the fingers' };
+    }
+    return { ...suggestion, restDay: false };
+  }
   if (context.schedule?.restDay === true) return suggestion;
   const inventedFlag = suggestion.restDay === true;
   const shaped = looksLikeRest(suggestion.headline, suggestion.plan ?? []);
   if (!inventedFlag && !shaped) return suggestion;
-  const baseline = (context.baselinePlan ?? []).map((step) => step.trim()).filter(Boolean);
+  const baseline = baselineSteps(context);
   const plan = baseline.length > 0 && !looksLikeRest('', baseline) ? baseline : suggestion.plan;
   return {
     ...suggestion,

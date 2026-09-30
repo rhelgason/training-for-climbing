@@ -57,6 +57,11 @@ export interface SessionPlanContext {
   sessionLength: SessionLength;
   climbing: ClimbingPrescription | null;
   injury: DetectedInjury | null;
+  /**
+   * Hands have been loaded three days running. The session is antagonists,
+   * easy cardio, and stretching. The warm-up must not put them on the wall.
+   */
+  offFingers?: boolean;
 }
 
 function has(ctx: SessionPlanContext, id: EquipmentId): boolean {
@@ -504,12 +509,43 @@ export function buildFocusSteps(
   }
 }
 
+function offFingerWarmUp(): PlanStep {
+  return step(
+    'Warm up (10 min): easy bike, row, or jog, then arm circles and shoulder openers. Keep your hands off the wall.',
+    { focus: 'conditioning' },
+  );
+}
+
+function offFingerCardio(): PlanStep {
+  return step(
+    'Cardio — 20–30 min easy run, row, or bike at conversation pace (RPE 4–6). General aerobic work, not laps on the wall and not a sprint.',
+    { focus: 'conditioning', exerciseId: 'aerobic-base' },
+  );
+}
+
+function offFingerStretch(): PlanStep {
+  return step(
+    'Stretch (10 min): finger flexors, 10 s then 20 s each arm, palm-down and palm-up; posterior shoulder; hip flexors. Foam-roll upper back and forearms if you have a roller. Eat a real meal and sleep 7–8 hours.',
+    { focus: 'conditioning' },
+  );
+}
+
 /** Ordered session: warm-up → primary → supporting → cool-down. */
 export function buildSessionSteps(
   primary: SessionFocusId | null,
   supporting: SessionFocusId[],
   ctx: SessionPlanContext,
 ): PlanStep[] {
+  // Three days on the hands. Hörst still trains this day — antagonists, core,
+  // a lift, easy cardio, and stretching — and does not put them back on a hold.
+  if (ctx.offFingers) {
+    return [
+      offFingerWarmUp(),
+      ...conditioningSteps(ctx, 'primary'),
+      offFingerCardio(),
+      offFingerStretch(),
+    ];
+  }
   if (!primary || primary === 'rest') return restSteps(ctx.injury);
   const steps: PlanStep[] = [warmUpStep(ctx)];
   steps.push(...buildFocusSteps(primary, ctx, 'primary'));

@@ -34,6 +34,7 @@ import {
   countFocusInWeek,
   daysSinceAnyLoad,
   daysSinceFocus,
+  priorFingerDayRun,
   priorHardDayRun,
   recentLoad,
   type LoadEvent,
@@ -132,6 +133,16 @@ export interface Microcycle {
   trainingDaysThisWeek: number;
   /** Consecutive hard days ending today. */
   hardDaysInARow: number;
+  /** Consecutive finger-loading days the climber arrives with. */
+  fingerDaysInARow: number;
+  /** Finger-loading days in the rolling 7, including today if it is already logged. */
+  fingerDaysThisWeek: number;
+  /**
+   * True when the hands are due a break: three days running, or four specific
+   * days in the last seven. Today is still a training day — lifting, cardio,
+   * and stretching — but nothing that grips a hold.
+   */
+  offFingers: boolean;
   /**
    * One line explaining how the last few days shaped today — surfaced in the UI
    * and handed to the coach so the advice visibly follows from recent work.
@@ -139,8 +150,34 @@ export interface Microcycle {
   recentLoadSummary: string;
 }
 
-/** Hard days in a row at which the body needs a break regardless of the week's plan. */
-export const MAX_CONSECUTIVE_HARD_DAYS = 3;
+/**
+ * Hard days the climber may arrive with. A third near-limit day is not
+ * prescribed — Hörst doesn't stack three hard days. The day can still be
+ * submaximal climbing until the finger cap below.
+ */
+export const MAX_CONSECUTIVE_HARD_DAYS = 2;
+
+/**
+ * Finger-loading days the climber may arrive with. The next day stays off the
+ * wall and the hangboard. Climbing, hangboard, campus, and on-the-wall aerobic
+ * all count. Lifting, a run, and stretching do not.
+ */
+export const MAX_CONSECUTIVE_FINGER_DAYS = 3;
+
+/**
+ * Specific finger days in a rolling week. Hörst keeps climbing and hangboard
+ * work to about four days; the other days are antagonists, cardio, and mobility.
+ */
+export const MAX_FINGER_DAYS_PER_WEEK = 4;
+
+const FINGER_FOCUSES: SessionFocusId[] = [
+  'skill',
+  'maxStrength',
+  'power',
+  'powerEndurance',
+  'enduranceAerobic',
+  'mental',
+];
 
 /** How many focus blocks fit in a session of each length. */
 const BLOCKS_BY_LENGTH: Record<SessionLength, number> = { quick: 1, standard: 2, long: 3 };
@@ -172,7 +209,11 @@ function describeDaysSince(daysSince: number | null): string {
  * recovery gap, and how the climber feels. The first gate that fails wins the
  * reason — they're ordered so the most actionable explanation surfaces.
  */
-function evaluate(focus: SessionFocusId, input: MicrocycleInput): FocusVerdict {
+function evaluate(
+  focus: SessionFocusId,
+  input: MicrocycleInput,
+  limits: { hardDaysInARow: number; fingerDaysInARow: number; offFingers: boolean },
+): FocusVerdict {
   const spec = sessionFocus(focus);
   const usedThisWeek = countFocusInWeek(input.history, focus, input.nowMs);
   const daysSince = daysSinceFocus(input.history, focus, input.nowMs);
@@ -220,7 +261,23 @@ function evaluate(focus: SessionFocusId, input: MicrocycleInput): FocusVerdict {
   if (input.readiness === 'tired' && spec.intensity === 'high') {
     return blocked('You reported feeling tired — hard efforts today would be low quality.');
   }
-  if (spec.maxPerWeek !== null && usedThisWeek >= spec.maxPerWeek) {
+  if (limits.offFingers && FINGER_FOCUSES.includes(focus)) {
+    const why =
+      limits.fingerDaysInARow >= MAX_CONSECUTIVE_FINGER_DAYS
+        ? `Fingers loaded ${limits.fingerDaysInARow} days running — no fourth day on the hands.`
+        : `Fingers already loaded ${MAX_FINGER_DAYS_PER_WEEK} days in the last 7 — specific work stays there.`;
+    return blocked(`${why} Lift, do cardio, or stretch instead.`);
+  }
+  if (limits.hardDaysInARow >= MAX_CONSECUTIVE_HARD_DAYS && spec.intensity === 'high') {
+    return blocked(
+      `Already ${limits.hardDaysInARow} hard days in a row. No near-limit work today.`,
+    );
+  }
+  if (
+    spec.maxPerWeek !== null &&
+    usedThisWeek >= spec.maxPerWeek &&
+    !(focus === 'conditioning' && limits.offFingers)
+  ) {
     return blocked(
       `Already ${usedThisWeek} of ${spec.maxPerWeek} this week — more would cost more than it gains.`,
     );
@@ -298,20 +355,31 @@ function pickLightAlternative(verdicts: FocusVerdict[]): SessionFocusId | null {
  * has been hammered for three days.
  */
 export function buildMicrocycle(input: MicrocycleInput): Microcycle {
-  const verdicts = TRAINABLE_FOCUSES.map((focus) => evaluate(focus, input)).sort(
-    (a, b) => b.priority - a.priority,
-  );
-  const week = recentLoad(input.history, input.nowMs, 7);
-  const trainingDaysThisWeek = week.filter((e) => !e.focuses.every((f) => f === 'rest')).length;
-  // The run the climber *arrives with*, not one that includes today — today is
+  // The runs the climber *arrives with*, not ones that include today — today is
   // the thing being decided and is usually not logged yet.
   const hardDaysInARow = priorHardDayRun(input.history, input.nowMs);
+  const fingerDaysInARow = priorFingerDayRun(input.history, input.nowMs);
+  const week = recentLoad(input.history, input.nowMs, 7);
+  const fingerDaysThisWeek = week.filter((e) => e.loadsFingers).length;
+  const offFingers =
+    fingerDaysInARow >= MAX_CONSECUTIVE_FINGER_DAYS ||
+    fingerDaysThisWeek >= MAX_FINGER_DAYS_PER_WEEK;
+  const verdicts = TRAINABLE_FOCUSES.map((focus) =>
+    evaluate(focus, input, { hardDaysInARow, fingerDaysInARow, offFingers }),
+  ).sort((a, b) => b.priority - a.priority);
+  const trainingDaysThisWeek = week.filter((e) => !e.focuses.every((f) => f === 'rest')).length;
   const daysSinceTraining = daysSinceAnyLoad(input.history, input.nowMs);
   const announced = resolveAnnouncedRests(input.journals ?? [], input.history, input.nowMs);
   const announcedNote = announcedRestSummary(announced);
-  const recentLoadSummary = announcedNote
+  const baseSummary = announcedNote
     ? `${summariseRecentLoad(input, daysSinceTraining)} ${announcedNote}`
     : summariseRecentLoad(input, daysSinceTraining);
+  // Injury and "something hurts" stay a real rest, even if the hands were also due off.
+  const fingerNote = offFingers
+    ? fingerDaysInARow >= MAX_CONSECUTIVE_FINGER_DAYS
+      ? ` Fingers loaded ${fingerDaysInARow} days running, so today stays off the wall: lifting, cardio, and stretching.`
+      : ` Fingers loaded ${fingerDaysThisWeek} days in the last 7, so today stays off the wall: lifting, cardio, and stretching.`
+    : '';
 
   const rest = (restReason: string, restKind: RestKind): Microcycle => ({
     restDay: true,
@@ -323,8 +391,11 @@ export function buildMicrocycle(input: MicrocycleInput): Microcycle {
     verdicts,
     trainingDaysThisWeek,
     hardDaysInARow,
+    fingerDaysInARow,
+    fingerDaysThisWeek,
+    offFingers: false,
     daysSinceTraining,
-    recentLoadSummary,
+    recentLoadSummary: baseSummary,
   });
 
   const loggedInjury = input.injury;
@@ -337,19 +408,16 @@ export function buildMicrocycle(input: MicrocycleInput): Microcycle {
       'recovery',
     );
   }
-  if (hardDaysInARow >= MAX_CONSECUTIVE_HARD_DAYS) {
-    return rest(
-      `You've trained hard ${hardDaysInARow} days running. Rest is when the adaptation actually happens.`,
-      'recovery',
-    );
-  }
-  // A named rest ("I'm resting tomorrow") is context for the coach, not a
+  // A third hard day is already blocked above (no near-limit work). Three days
+  // on the fingers does not send anyone home: the hands come off, and the
+  // session is lifting, cardio, and stretching. A named rest is context, not a
   // day off. The summary above already says not to honour it again.
   // Steady climbers still rest once the week they planned is done, and only
   // when they have not already had a day off. Full-time skips that budget:
   // the count is a target, not a ceiling.
   const push = input.trainingPush ?? 'full-time';
   if (
+    !offFingers &&
     push === 'steady' &&
     trainingDaysThisWeek >= input.daysPerWeek &&
     (daysSinceTraining ?? 0) < 2
@@ -387,8 +455,11 @@ export function buildMicrocycle(input: MicrocycleInput): Microcycle {
     verdicts,
     trainingDaysThisWeek,
     hardDaysInARow,
+    fingerDaysInARow,
+    fingerDaysThisWeek,
+    offFingers,
     daysSinceTraining,
-    recentLoadSummary,
+    recentLoadSummary: baseSummary + fingerNote,
   };
 }
 

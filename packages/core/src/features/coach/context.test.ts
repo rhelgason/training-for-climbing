@@ -259,7 +259,7 @@ describe('buildCoachContext', () => {
       expect(ctx.schedule.allowed.map((a) => a.focus)).not.toContain('maxStrength');
     });
 
-    it('reports a rest day so the model cannot prescribe training through it', () => {
+    it('keeps a third finger day off the wall without calling it a rest day', () => {
       const ctx = buildCoachContext(
         input({
           journals: [
@@ -269,9 +269,12 @@ describe('buildCoachContext', () => {
           ],
         }),
       );
-      expect(ctx.schedule.restDay).toBe(true);
-      expect(ctx.schedule.allowed).toEqual([]);
-      expect(ctx.schedule.hardDaysInARow).toBe(3);
+      expect(ctx.schedule.restDay).toBe(false);
+      expect(ctx.schedule.offFingers).toBe(true);
+      expect(ctx.schedule.fingerDaysInARow).toBe(3);
+      expect(ctx.schedule.fingerDaysThisWeek).toBe(3);
+      expect(ctx.schedule.allowed.map((a) => a.focus)).toEqual(['conditioning']);
+      expect(ctx.schedule.blocked.map((b) => b.focus)).toContain('skill');
     });
 
     it('carries the deterministic plan as a floor for the model to beat', () => {

@@ -171,7 +171,7 @@ describe('TrainHome — the daily check-in', () => {
 });
 
 describe('TrainHome — recovery is visible', () => {
-  it('rests and explains itself after three hard days', async () => {
+  it('leaves the wall after three finger days and still gives a session', async () => {
     for (const offset of [1, 2, 3]) {
       await repo.saveJournal({
         date: now() - offset * DAY,
@@ -181,8 +181,10 @@ describe('TrainHome — recovery is visible', () => {
       });
     }
     render(<TrainHome />);
-    await waitFor(() => expect(screen.getByText('Take a rest day')).toBeInTheDocument());
-    expect(screen.getByText(/3 days running/)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Off the fingers')).toBeInTheDocument());
+    expect(screen.getByText(/lifting, easy cardio, and stretching/i)).toBeInTheDocument();
+    expect(screen.getByText(/reverse wrist curls/i)).toBeInTheDocument();
+    expect(screen.queryByText('Take a rest day')).not.toBeInTheDocument();
   });
 
   it('names yesterday’s session in the why panel', async () => {

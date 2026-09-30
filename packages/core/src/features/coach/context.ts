@@ -161,6 +161,9 @@ function scheduleFrom(
     trainingDaysThisWeek: cycle.trainingDaysThisWeek,
     plannedDaysPerWeek,
     hardDaysInARow: cycle.hardDaysInARow,
+    fingerDaysInARow: cycle.fingerDaysInARow,
+    fingerDaysThisWeek: cycle.fingerDaysThisWeek,
+    offFingers: cycle.offFingers,
     recentLoadSummary: cycle.recentLoadSummary,
     injury,
     fulfilledRests: fulfilled

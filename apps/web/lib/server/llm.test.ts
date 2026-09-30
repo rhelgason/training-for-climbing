@@ -488,6 +488,53 @@ describe('generateCoachSuggestion', () => {
     expect(suggestion.plan).toEqual(['Warm up']);
   });
 
+  it('replaces climbing or a day off when the hands are due off the wall', async () => {
+    process.env.GEMINI_API_KEY = 'test-key';
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        geminiReply({
+          headline: 'One more hangboard session',
+          plan: ['Hangboard repeaters', 'Limit boulders'],
+          rationale: 'You can squeeze in one more.',
+          restDay: false,
+        }),
+      ),
+    );
+
+    const ctx = makeContext(false);
+    ctx.schedule.offFingers = true;
+    ctx.schedule.fingerDaysInARow = 3;
+    ctx.baselinePlan = ['Reverse wrist curls', 'Easy run', 'Stretch'];
+    const suggestion = await generateCoachSuggestion(ctx);
+    expect(suggestion.restDay).toBe(false);
+    expect(suggestion.headline).toBe('Off the fingers');
+    expect(suggestion.plan).toEqual(['Reverse wrist curls', 'Easy run', 'Stretch']);
+  });
+
+  it('keeps lifting, cardio, and stretching on an off-finger day', async () => {
+    process.env.GEMINI_API_KEY = 'test-key';
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        geminiReply({
+          headline: 'Off the fingers',
+          plan: ['Reverse wrist curls', '20 min easy run', 'Stretch the hips'],
+          rationale: 'Hands have been on holds three days running.',
+          restDay: false,
+        }),
+      ),
+    );
+
+    const ctx = makeContext(false);
+    ctx.schedule.offFingers = true;
+    ctx.baselinePlan = ['Built-in lifting'];
+    const suggestion = await generateCoachSuggestion(ctx);
+    expect(suggestion.restDay).toBe(false);
+    expect(suggestion.headline).toBe('Off the fingers');
+    expect(suggestion.plan).toEqual(['Reverse wrist curls', '20 min easy run', 'Stretch the hips']);
+  });
+
   it('keeps a training plan that only mentions rest between efforts', async () => {
     process.env.GEMINI_API_KEY = 'test-key';
     vi.stubGlobal(

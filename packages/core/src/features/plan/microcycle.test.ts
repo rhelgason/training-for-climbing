@@ -78,14 +78,28 @@ describe('weekly frequency ceilings', () => {
     );
   });
 
-  it('never caps aerobic endurance', () => {
+  it('does not give aerobic endurance its own weekly ceiling', () => {
+    // Easy ARC has no cap of its own. It still counts as a day on the fingers,
+    // so a long run of it is stopped by that rule, not by an aerobic quota.
+    const spaced = loadHistory(
+      [-2, -4].map((o) => day(o, ['enduranceAerobic'], 'easy')),
+      [],
+    );
+    expect(
+      verdictFor(buildMicrocycle(input({ history: spaced, daysPerWeek: 7 })), 'enduranceAerobic')
+        .status,
+    ).not.toBe('blocked');
+  });
+
+  it('treats a run of easy ARC as finger loading', () => {
     const history = loadHistory(
       [-1, -2, -3, -4, -5, -6].map((o) => day(o, ['enduranceAerobic'], 'easy')),
       [],
     );
-    expect(
-      verdictFor(buildMicrocycle(input({ history, daysPerWeek: 7 })), 'enduranceAerobic').status,
-    ).not.toBe('blocked');
+    const cycle = buildMicrocycle(input({ history, daysPerWeek: 7 }));
+    expect(cycle.offFingers).toBe(true);
+    expect(verdictFor(cycle, 'enduranceAerobic').status).toBe('blocked');
+    expect(cycle.primary).toBe('conditioning');
   });
 });
 
@@ -192,15 +206,21 @@ describe('whole-day rest rules', () => {
   // days has to be counted *up to* today, not including it. Counting from today
   // silently returns 0 before today is logged, which meant rest was only ever
   // advised after the climber had already trained.
-  it('rests when the three hard days were yesterday and before, with today unlogged', () => {
+  it('takes the hands off after three finger days, and still trains', () => {
     const history = loadHistory(
       [day(-1, ['maxStrength']), day(-2, ['power']), day(-3, ['powerEndurance'])],
       [],
     );
     const cycle = buildMicrocycle(input({ history, daysPerWeek: 7 }));
-    expect(cycle.restDay).toBe(true);
-    expect(cycle.restKind).toBe('recovery');
-    expect(cycle.hardDaysInARow).toBe(3);
+    expect(cycle.restDay).toBe(false);
+    expect(cycle.offFingers).toBe(true);
+    expect(cycle.fingerDaysInARow).toBe(3);
+    expect(cycle.primary).toBe('conditioning');
+    expect(verdictFor(cycle, 'skill').status).toBe('blocked');
+    expect(verdictFor(cycle, 'maxStrength').status).toBe('blocked');
+    expect(verdictFor(cycle, 'enduranceAerobic').status).toBe('blocked');
+    expect(verdictFor(cycle, 'conditioning').status).not.toBe('blocked');
+    expect(cycle.recentLoadSummary).toMatch(/off the wall/i);
   });
 
   it('does not rest when the hard run was broken by a day off', () => {
@@ -214,38 +234,87 @@ describe('whole-day rest rules', () => {
     expect(cycle.restDay).toBe(false);
   });
 
-  it('rests after three hard days in a row', () => {
+  it('does not add a fourth finger day when today is already the third', () => {
     const history = loadHistory(
       [day(0, ['skill']), day(-1, ['maxStrength']), day(-2, ['power'])],
       [],
     );
     const cycle = buildMicrocycle(input({ history, daysPerWeek: 7 }));
-    expect(cycle.restDay).toBe(true);
-    expect(cycle.hardDaysInARow).toBe(3);
-    expect(cycle.restReason).toContain('3 days running');
+    expect(cycle.restDay).toBe(false);
+    expect(cycle.offFingers).toBe(true);
+    expect(cycle.fingerDaysInARow).toBe(3);
+    expect(cycle.primary).toBe('conditioning');
+  });
+
+  it('allows a third finger day when only two have been hard', () => {
+    const history = loadHistory([day(-1, ['maxStrength']), day(-2, ['power'])], []);
+    const cycle = buildMicrocycle(input({ history, daysPerWeek: 7 }));
+    expect(cycle.offFingers).toBe(false);
+    expect(cycle.restDay).toBe(false);
+    expect(verdictFor(cycle, 'skill').status).not.toBe('blocked');
+    expect(verdictFor(cycle, 'powerEndurance').status).toBe('blocked');
+  });
+
+  it('does not count a lifting day toward the finger streak', () => {
+    const history = loadHistory(
+      [day(-1, ['conditioning'], 'easy'), day(-2, ['maxStrength']), day(-3, ['skill'], 'moderate')],
+      [],
+    );
+    const cycle = buildMicrocycle(input({ history, daysPerWeek: 7 }));
+    expect(cycle.fingerDaysInARow).toBe(0);
+    expect(cycle.offFingers).toBe(false);
   });
 
   it('does not rest a full-time climber just because the weekly count is met', () => {
+    // Spaced so this is the weekly budget, not the three-day finger cap.
     const history = loadHistory(
-      [-1, -2, -3].map((o) => day(o, ['skill'], 'moderate')),
+      [-1, -3, -5].map((o) => day(o, ['skill'], 'moderate')),
       [],
     );
     const cycle = buildMicrocycle(input({ history, daysPerWeek: 3 }));
     expect(cycle.trainingDaysThisWeek).toBe(3);
+    expect(cycle.offFingers).toBe(false);
     expect(cycle.restDay).toBe(false);
   });
 
   it("rests a steady climber once the week's planned training days are used up", () => {
     const history = loadHistory(
-      [-1, -2, -3].map((o) => day(o, ['skill'], 'moderate')),
+      [-1, -3, -5].map((o) => day(o, ['skill'], 'moderate')),
       [],
     );
     const cycle = buildMicrocycle(input({ history, daysPerWeek: 3, trainingPush: 'steady' }));
+    expect(cycle.offFingers).toBe(false);
     expect(cycle.restDay).toBe(true);
     expect(cycle.trainingDaysThisWeek).toBe(3);
     // A budget call, not a physiological one — so it offers a way to still train.
     expect(cycle.restKind).toBe('budget');
     expect(cycle.lightAlternative).not.toBeNull();
+  });
+
+  it('still takes a steady climber off the wall after three finger days', () => {
+    const history = loadHistory(
+      [-1, -2, -3].map((o) => day(o, ['skill'], 'moderate')),
+      [],
+    );
+    const cycle = buildMicrocycle(input({ history, daysPerWeek: 3, trainingPush: 'steady' }));
+    expect(cycle.restDay).toBe(false);
+    expect(cycle.offFingers).toBe(true);
+    expect(cycle.primary).toBe('conditioning');
+  });
+
+  it('takes the hands off after four finger days in the week, even with a gap', () => {
+    const history = loadHistory(
+      [-1, -3, -5, -6].map((o) => day(o, ['skill'], 'moderate')),
+      [],
+    );
+    const cycle = buildMicrocycle(input({ history, daysPerWeek: 7 }));
+    expect(cycle.fingerDaysInARow).toBe(1);
+    expect(cycle.fingerDaysThisWeek).toBe(4);
+    expect(cycle.offFingers).toBe(true);
+    expect(cycle.restDay).toBe(false);
+    expect(cycle.primary).toBe('conditioning');
+    expect(verdictFor(cycle, 'skill').status).toBe('blocked');
+    expect(cycle.recentLoadSummary).toMatch(/last 7/i);
   });
 
   it('offers no light alternative on a recovery rest day', () => {

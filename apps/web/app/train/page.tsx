@@ -132,7 +132,7 @@ export default function TrainHome() {
           journalStamp,
           state.checkinStamp,
           effectiveProfile(state.profile).trainingPush,
-          'logic3',
+          'logic4',
         ].join('|')
       : undefined;
   const coach = useCoach(repo, useDebouncedValue(contextKey, COACH_SETTLE_MS));
@@ -165,15 +165,28 @@ export default function TrainHome() {
             ? 'easy'
             : 'moderate'
         : 'easy';
+    // A conditioning day used to be stamped "climbing", which counted as another
+    // day on the fingers and the off-finger day never broke the streak.
+    const hands = focus.some((f) => f !== 'conditioning' && f !== 'rest');
+    const activities = rest
+      ? (['rest'] as const)
+      : hands
+        ? (['climbing'] as const)
+        : (['strength', 'cardio', 'mobility'] as const);
     setMarking(true);
     try {
       let journalId = todayJournalId;
       if (journalId) {
-        await repo.updateJournal(journalId, { focus, intensity, skipped: skippedSteps });
+        await repo.updateJournal(journalId, {
+          focus,
+          intensity,
+          activities: [...activities],
+          skipped: skippedSteps,
+        });
       } else {
         const saved = await repo.saveJournal({
           date: now(),
-          activities: rest ? ['rest'] : ['climbing'],
+          activities: [...activities],
           focus,
           intensity,
           skipped: skippedSteps.length > 0 ? skippedSteps : undefined,
