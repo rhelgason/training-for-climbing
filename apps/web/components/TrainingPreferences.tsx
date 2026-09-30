@@ -130,9 +130,8 @@ export function TrainingPreferences() {
         <Card>
           <p className="mb-1 font-semibold">What the app worked out</p>
           <p className="mb-3 text-sm leading-5 text-muted">
-            Things you confirmed when the app asked. Your coach reads these alongside what you wrote
-            above. Remove any that no longer apply — a healed finger it keeps training around is
-            worse than one it never knew about.
+            Saved earlier, when the app kept its own injury list. Today&apos;s plan follows your
+            recent journal entries instead, not these. Remove any you don&apos;t want kept.
           </p>
           {profile!.derivedContext!.map((note) => (
             <div

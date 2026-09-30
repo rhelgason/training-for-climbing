@@ -5,7 +5,6 @@
  */
 import {
   buildCoachContext,
-  notesFromCoachInjuries,
   now,
   requestCoachSuggestion,
   type CoachSuggestion,
@@ -58,11 +57,7 @@ export async function refreshCoachSuggestion(
   const suggestion = await requestCoachSuggestion(config, context);
   saveCachedSuggestion({ suggestion, generatedAt: nowMs, contextKey });
 
-  // The coach read the journals; if it found an injury the keyword detector
-  // missed, store it so tomorrow's scheduler is bound by it too. No-op when
-  // the note is already there or was declined.
-  const patch = notesFromCoachInjuries(suggestion.injuries ?? [], profile, nowMs);
-  if (patch) await repo.saveProfile(patch);
-
+  // Don't write the model's injury list onto the profile. Tomorrow's plan
+  // re-reads the journals. A saved note would outlive the entries that produced it.
   return suggestion;
 }

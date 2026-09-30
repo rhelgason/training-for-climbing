@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
-  DISCIPLINES,
   DISCIPLINE_LABELS,
   OUTCOME_LABELS,
   TRIAD_LABELS,
@@ -16,13 +15,11 @@ import {
   trendForTest,
   countInLastDays,
   firstTryRate,
-  hardestSend,
   monthlyCounts,
   sendPyramid,
   sendRate,
   triadSeries,
   weeklyCounts,
-  type ClimbDiscipline,
   type AssessmentRecord,
   type BenchmarkRecord,
   type ClimbRecord,
@@ -32,6 +29,7 @@ import {
 } from '@tfc/core';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
+import { PersonalBests } from '../../components/PersonalBests';
 import { LineChart } from '../../components/LineChart';
 import { Screen } from '../../components/Screen';
 import { useRepository, useSync } from '../../lib/db/RepositoryProvider';
@@ -120,10 +118,6 @@ export default function DashboardScreen() {
     }))
     .filter((x) => x.trend !== null);
 
-  const bests = DISCIPLINES.map((d) => ({ discipline: d, climb: hardestSend(climbs, d) })).filter(
-    (b): b is { discipline: ClimbDiscipline; climb: ClimbRecord } => b.climb !== null,
-  );
-
   const triad = triadSeries(assessments);
   const latestTriad = triad[triad.length - 1];
   const prevTriad = triad[triad.length - 2];
@@ -161,21 +155,7 @@ export default function DashboardScreen() {
       )}
 
       <h2 className="mt-2 text-lg font-bold">Personal bests</h2>
-      {bests.length === 0 ? (
-        <p className="text-muted">Log a send to see your hardest grades here.</p>
-      ) : (
-        <div className="flex flex-row flex-wrap gap-2">
-          {bests.map(({ discipline, climb }) => (
-            <Card key={discipline} className="flex min-w-[100px] grow flex-col items-center">
-              <span className="text-2xl font-bold text-primary">{climb.grade}</span>
-              <span className="mt-1 text-sm font-semibold">{DISCIPLINE_LABELS[discipline]}</span>
-              <span className="mt-1 text-sm text-muted">
-                {OUTCOME_LABELS[climb.outcome]} · {formatDate(climb.date)}
-              </span>
-            </Card>
-          ))}
-        </div>
-      )}
+      <PersonalBests climbs={climbs} />
 
       <h2 className="mt-2 text-lg font-bold">Last 30 days</h2>
       <Card className="flex flex-row justify-between">

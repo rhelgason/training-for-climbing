@@ -4,6 +4,7 @@ import {
   countInLastDays,
   firstTryRate,
   hardestSend,
+  personalBests,
   monthlyCounts,
   sendPyramid,
   sendRate,
@@ -47,6 +48,43 @@ describe('hardestSend', () => {
       hardestSend([climb({ discipline: 'boulder', grade: 'V5', outcome: 'attempt' })], 'boulder'),
     ).toBeNull();
     expect(hardestSend([], 'lead')).toBeNull();
+  });
+
+  it('keeps indoor and outdoor bests separate, and prefers the later send on a tie', () => {
+    const climbs = [
+      climb({
+        id: 'old',
+        discipline: 'boulder',
+        grade: 'V4',
+        outcome: 'send',
+        environment: 'outdoor',
+        date: NOW - DAY,
+      }),
+      climb({
+        id: 'new',
+        discipline: 'boulder',
+        grade: 'V4',
+        outcome: 'flash',
+        environment: 'outdoor',
+        date: NOW,
+      }),
+      climb({
+        id: 'gym',
+        discipline: 'boulder',
+        grade: 'V8',
+        outcome: 'send',
+        environment: 'indoor',
+      }),
+    ];
+    expect(hardestSend(climbs, 'boulder', 'indoor')?.grade).toBe('V8');
+    expect(hardestSend(climbs, 'boulder', 'outdoor')?.id).toBe('new');
+    expect(personalBests(climbs)).toEqual([
+      {
+        discipline: 'boulder',
+        indoor: expect.objectContaining({ id: 'gym', grade: 'V8' }),
+        outdoor: expect.objectContaining({ id: 'new', grade: 'V4' }),
+      },
+    ]);
   });
 });
 

@@ -1,23 +1,24 @@
 /**
  * Reading recent logs for an unresolved injury — in code, not in a prompt.
  *
- * Journal free text is the highest-signal thing the climber records, but the
- * scheduler used to ignore it. A language model asked to "take injuries into
- * account" will still prescribe a performance day; a counting problem over the
- * last few entries will not. This module only *detects*. What to do about a
- * finding is the scheduler's job.
+ * The journal is the only injury record. There is no saved injury list to
+ * clear: a note accepted last month must not keep scheduling rest after the
+ * writing has moved on. This reads the last few entries and today's note, and
+ * that is the whole input. The scheduler decides what a finding is allowed to
+ * block. Nothing here writes to the profile or the journal.
  *
- * Nothing here writes to the profile or the journal. Existing records are the
- * input, never rewritten.
+ * A model asked to "remember their injuries" will keep resting them. A count
+ * over the newest entries will not.
  */
 import type { JournalEntry } from '../../db/types';
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
-/** Older than this is history, not today's constraint. */
-const WINDOW_DAYS = 21;
+/** Newest entries only. Older prose is history, even inside a long week. */
+const JOURNAL_LIMIT = 10;
 /**
  * If they have not mentioned the problem in this many days, treat it as settled.
- * Healing language cancels sooner; this is the silence rule.
+ * Healing language, and a later training session that never brings a niggle
+ * back up, cancel sooner.
  */
 const SILENCE_DAYS = 7;
 
@@ -56,7 +57,10 @@ export interface InjuryInput {
   dailyNote?: string;
   /** The climber's own profile blurb — often historical, so scored more strictly. */
   climberContext?: string;
-  /** Notes they accepted from an insight card. Dated so silence can expire them. */
+  /**
+   * Unused. Kept so existing callers still compile. Saved injury notes are
+   * not read — the journals are the record.
+   */
   derivedNotes?: Array<{ text: string; addedAt?: number } | string>;
 }
 
@@ -128,6 +132,19 @@ const RESOLVED = new RegExp(
   'i',
 );
 
+/**
+ * Recovery said in so many words. Narrower than `RESOLVED`: bare "cleared"
+ * also matches "cleared the crux", which must not retire a finger.
+ */
+const RECOVERY = new RegExp(
+  [
+    '\\b(healed|healing|cleared up|recovered|recovery complete)',
+    '(feeling better|feels better|getting better|got better|no longer|not sore anymore|pain.?free|no pain)',
+    "(doesn'?t hurt|not hurting|on the mend|back to normal|all better)",
+  ].join('|'),
+  'i',
+);
+
 function regionOf(text: string): InjuryRegion {
   for (const { region, pattern } of REGION_PATTERNS) {
     if (pattern.test(text)) return region;
@@ -170,6 +187,43 @@ function classify(text: string, source: Finding['source']): Finding | null {
   return null;
 }
 
+function journalText(journal: JournalEntry): string {
+  return [journal.summary, journal.wins, journal.struggles].filter(Boolean).join(' ');
+}
+
+function mentionsRegion(text: string, region: InjuryRegion): boolean {
+  if (region === 'other') return false;
+  const pattern = REGION_PATTERNS.find((p) => p.region === region)?.pattern;
+  return pattern ? pattern.test(text) : false;
+}
+
+function namesSomeRegion(text: string): boolean {
+  return REGION_PATTERNS.some((p) => p.pattern.test(text));
+}
+
+/** Climbing, hangboard, or lifting — a session where a niggle would come back up. */
+function loadedTissue(journal: JournalEntry): boolean {
+  return journal.activities.some(
+    (a) => a === 'climbing' || a === 'fingerboard' || a === 'strength',
+  );
+}
+
+/**
+ * True when this prose retires the finding. A severe problem only yields when
+ * the entry names that body part. A niggle also yields to a general "feeling
+ * better" that names nobody else.
+ */
+function wordsSettle(text: string, finding: Finding): boolean {
+  if (SEVERE.test(text)) return false;
+  const strong = RECOVERY.test(text);
+  const legacy = RESOLVED.test(text);
+  if (!strong && !legacy) return false;
+  if (finding.region !== 'other' && mentionsRegion(text, finding.region)) return true;
+  if (finding.region !== 'other' && namesSomeRegion(text)) return false;
+  if (finding.region === 'other') return true;
+  return finding.severity === 'moderate' && strong;
+}
+
 function summarise(finding: Finding): string {
   const where = finding.region === 'other' ? 'an unresolved issue' : `a ${finding.region} issue`;
   if (finding.severity === 'severe') {
@@ -179,17 +233,21 @@ function summarise(finding: Finding): string {
 }
 
 /**
- * Scan recent prose for an unresolved physical problem. Returns the most
- * serious current finding, or null when nothing qualifies.
+ * Scan the newest journals and today's note for an unresolved physical problem.
+ * Returns the most serious current finding, or null when nothing qualifies.
+ *
+ * Saved injury notes and the profile blurb are not inputs. How the climber
+ * feels is whatever they wrote last.
  */
 export function detectInjury(input: InjuryInput): DetectedInjury | null {
-  const cutoff = input.nowMs - WINDOW_DAYS * MS_PER_DAY;
+  const considered = [...input.journals]
+    .filter((j) => j.date <= input.nowMs)
+    .sort((a, b) => b.date - a.date)
+    .slice(0, JOURNAL_LIMIT);
   const findings: Finding[] = [];
 
-  for (const journal of input.journals) {
-    if (journal.date < cutoff || journal.date > input.nowMs) continue;
-    const text = [journal.summary, journal.wins, journal.struggles].filter(Boolean).join(' ');
-    const found = classify(text, 'journal');
+  for (const journal of considered) {
+    const found = classify(journalText(journal), 'journal');
     if (found) findings.push({ ...found, date: journal.date });
   }
 
@@ -198,32 +256,31 @@ export function detectInjury(input: InjuryInput): DetectedInjury | null {
     if (found) findings.push({ ...found, date: input.nowMs });
   }
 
-  for (const note of input.derivedNotes ?? []) {
-    const text = typeof note === 'string' ? note : note.text;
-    const date = typeof note === 'string' ? input.nowMs : (note.addedAt ?? input.nowMs);
-    const found = classify(text, 'derived');
-    if (found) findings.push({ ...found, date });
-  }
-
-  // Profile blurbs stay in the coach prompt as lifetime context. They are not
-  // a hard scheduler constraint — recent journals (or silence in them) decide.
-
   if (findings.length === 0) return null;
 
-  // A newer "it cleared up" journal should cancel an older finding in the same
-  // region. Walk newest-first and skip a region once it has been resolved.
+  // Newest first. A later entry can retire a region: it says the problem
+  // eased, or — for a niggle, not a tear — they trained again and didn't
+  // mention it. Climbers rarely write "it's fine now". They log the next session.
   const resolved = new Set<InjuryRegion>();
   const current: Finding[] = [];
   for (const finding of [...findings].sort((a, b) => b.date - a.date)) {
     if (resolved.has(finding.region)) continue;
-    const sourceText =
-      finding.source === 'journal'
-        ? input.journals.find((j) => j.date === finding.date)
-        : undefined;
-    const blob = sourceText
-      ? [sourceText.summary, sourceText.wins, sourceText.struggles].filter(Boolean).join(' ')
-      : finding.evidence;
-    if (RESOLVED.test(blob) && !SEVERE.test(blob)) {
+    const newer = considered.filter((j) => j.date > finding.date);
+    const matched = considered.find((j) => j.date === finding.date);
+    const own =
+      finding.source === 'today'
+        ? (input.dailyNote ?? finding.evidence)
+        : matched
+          ? journalText(matched)
+          : finding.evidence;
+    const newerNote = input.dailyNote && input.nowMs > finding.date ? input.dailyNote : null;
+    const prose = [own, ...newer.map(journalText), ...(newerNote ? [newerNote] : [])];
+    const settledByWords = prose.some((text) => wordsSettle(text, finding));
+    const settledByLaterSession =
+      finding.severity === 'moderate' &&
+      finding.region !== 'other' &&
+      newer.some((j) => loadedTissue(j) && !mentionsRegion(journalText(j), finding.region));
+    if (settledByWords || settledByLaterSession) {
       resolved.add(finding.region);
       continue;
     }

@@ -8,13 +8,14 @@ function journal(
   daysAgo: number,
   text: string,
   field: 'summary' | 'struggles' = 'struggles',
+  activities: JournalEntry['activities'] = ['climbing'],
 ): JournalEntry {
   return {
-    id: `j-${daysAgo}`,
+    id: `j-${daysAgo}-${text.slice(0, 12)}`,
     createdAt: NOW - daysAgo * DAY,
     updatedAt: NOW - daysAgo * DAY,
     date: NOW - daysAgo * DAY,
-    activities: ['climbing'],
+    activities,
     [field]: text,
   };
 }
@@ -63,14 +64,17 @@ describe('detectInjury', () => {
     ).toBeNull();
   });
 
-  it('honours an accepted derived note as current', () => {
-    const found = detectInjury({
-      journals: [],
-      nowMs: NOW,
-      derivedNotes: [{ text: 'Right ring finger has been sore on crimps since early August.' }],
-    });
-    expect(found?.region).toBe('finger');
-    expect(found?.noHighIntensity).toBe(true);
+  it('ignores a saved injury note — the journals are the record', () => {
+    expect(
+      detectInjury({
+        journals: [],
+        nowMs: NOW,
+        derivedNotes: [
+          { text: 'Right ring finger has been sore on crimps since early August.' },
+          'Right ring finger has been sore on crimps since early August.',
+        ],
+      }),
+    ).toBeNull();
   });
 
   it("reads today's check-in note", () => {
@@ -83,13 +87,17 @@ describe('detectInjury', () => {
     expect(found?.region).toBe('knee');
   });
 
-  it('ignores entries outside the recent window', () => {
-    expect(
-      detectInjury({
-        journals: [journal(40, 'Tore a pulley, getting an MRI')],
-        nowMs: NOW,
-      }),
-    ).toBeNull();
+  it('ignores an injury that has fallen out of the last 10 entries', () => {
+    const newer = Array.from({ length: 10 }, (_, i) => journal(0, `Easy mileage ${i}.`, 'summary'));
+    // Same calendar day would tie; stamp these just after the injury so the
+    // cap, not the 7-day silence rule, is what drops it.
+    const injury = journal(3, 'Tore a pulley, getting an MRI');
+    const recent = newer.map((j, i) => ({
+      ...j,
+      date: injury.date + (i + 1) * 1000,
+      id: `n-${i}`,
+    }));
+    expect(detectInjury({ journals: [injury, ...recent], nowMs: NOW })).toBeNull();
   });
 
   it('does not treat a profile blurb as a hard constraint — journals decide', () => {
@@ -123,17 +131,52 @@ describe('detectInjury', () => {
     expect(found?.noClimbing).toBe(true);
   });
 
-  it('expires a derived note whose addedAt is older than a week', () => {
+  it('drops a niggle once a later training session never mentions it', () => {
     expect(
       detectInjury({
-        journals: [],
-        nowMs: NOW,
-        derivedNotes: [
-          {
-            text: 'Right ring finger has been sore on crimps since early August.',
-            addedAt: NOW - 10 * DAY,
-          },
+        journals: [
+          journal(4, 'Right ring finger tweaked on a crimp.'),
+          journal(1, 'Good bouldering session, felt strong.'),
         ],
+        nowMs: NOW,
+      }),
+    ).toBeNull();
+  });
+
+  it('does not treat a rest-day log as proof a niggle is gone', () => {
+    const found = detectInjury({
+      journals: [
+        journal(3, 'Right ring finger tweaked on a crimp.'),
+        journal(1, 'Took the day off.', 'summary', ['rest']),
+      ],
+      nowMs: NOW,
+    });
+    expect(found?.region).toBe('finger');
+    expect(found?.noHighIntensity).toBe(true);
+    expect(found?.noClimbing).toBe(false);
+  });
+
+  it('keeps a severe injury when later sessions do not mention it', () => {
+    const found = detectInjury({
+      journals: [
+        journal(3, 'Potentially severe leg injury — planning to get an MRI.'),
+        journal(1, 'Easy mileage, nothing hard.'),
+      ],
+      nowMs: NOW,
+    });
+    expect(found?.region).toBe('leg');
+    expect(found?.severity).toBe('severe');
+    expect(found?.noClimbing).toBe(true);
+  });
+
+  it('clears a region when a later entry says it is healing', () => {
+    expect(
+      detectInjury({
+        journals: [
+          journal(4, 'Right ring finger tweaked on a crimp.'),
+          journal(1, 'Finger is healing. Climbed fine, no pain.'),
+        ],
+        nowMs: NOW,
       }),
     ).toBeNull();
   });
@@ -162,12 +205,12 @@ describe('detectInjury', () => {
     expect(found?.severity).toBe('severe');
   });
 
-  it('reads a derived note stored as a plain string', () => {
-    const found = detectInjury({
-      journals: [],
-      nowMs: NOW,
-      derivedNotes: ['Right ring finger has been sore on crimps since early August.'],
-    });
-    expect(found?.region).toBe('finger');
+  it('still reads a 40-day-old note as history, not a constraint', () => {
+    expect(
+      detectInjury({
+        journals: [journal(40, 'Tore a pulley, getting an MRI')],
+        nowMs: NOW,
+      }),
+    ).toBeNull();
   });
 });

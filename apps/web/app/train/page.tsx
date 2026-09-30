@@ -45,8 +45,6 @@ import { GettingStarted, type OnboardingStep } from '../../components/GettingSta
 import { BackupBanner } from '../../components/BackupBanner';
 import { TodayContext } from '../../components/TodayContext';
 import { InsightCard } from '../../components/InsightCard';
-import { maybeScanJournals } from '../../lib/insights/journalInsights';
-import { getSyncConfig } from '../../lib/auth/session';
 import { ProtocolMetric } from '../../components/ProtocolMetric';
 import { WhyThisPlan } from '../../components/WhyThisPlan';
 import { useRepository, useSync } from '../../lib/db/RepositoryProvider';
@@ -314,26 +312,6 @@ export default function TrainHome() {
       on = false;
     };
   }, [repo, dataVersion, router, today]);
-
-  // After the daily coach call, not beside it — two Gemini requests at once
-  // is how a 429/503 spike knocks the plan over.
-  useEffect(() => {
-    if (!state) return;
-    if (!effectiveProfile(state.profile).aiCoachEnabled) return;
-    if (coach.status === 'loading' || coach.status === 'idle') return;
-    let on = true;
-    void maybeScanJournals(getSyncConfig(), state.journals, now()).then((found) => {
-      if (!on || found.length === 0) return;
-      setState((prev) =>
-        prev
-          ? { ...prev, insights: [...prev.insights, ...pendingInsights(found, prev.profile)] }
-          : prev,
-      );
-    });
-    return () => {
-      on = false;
-    };
-  }, [state, coach.status]);
 
   if (state === null || today === null) return <Screen />;
   const { journals, recommendation: rec, todayJournalId, hasAssessment, hasGoal } = state;

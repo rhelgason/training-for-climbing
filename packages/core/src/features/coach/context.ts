@@ -239,10 +239,8 @@ export function buildCoachContext(input: CoachContextInput): CoachContext {
       sessionLength: profile.sessionLength,
       equipment: profile.equipment,
       climberContext: profile.climberContext,
-      derivedContext: (input.profile?.derivedContext ?? []).map((n) => ({
-        text: n.text,
-        addedAt: n.addedAt,
-      })),
+      // Saved injury notes are not sent. The last journals are how they feel;
+      // a note kept on the profile was keeping rest days alive after they healed.
     },
     today: {
       environment: ENVIRONMENT_LABELS[daily?.environment ?? 'indoor'],

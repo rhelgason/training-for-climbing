@@ -3,7 +3,12 @@
  * Surfaces what a climber tends to care about: hardest sends, the send
  * pyramid, send/onsight rates, recent volume, and triad progression.
  */
-import { isSend, type ClimbDiscipline } from '../../content/climbing';
+import {
+  DISCIPLINES,
+  isSend,
+  type ClimbDiscipline,
+  type ClimbEnvironment,
+} from '../../content/climbing';
 import { gradeRank } from '../../content/grades';
 import type { AssessmentRecord, ClimbRecord } from '../../db/types';
 
@@ -13,18 +18,45 @@ export function sends(climbs: ClimbRecord[]): ClimbRecord[] {
   return climbs.filter((c) => isSend(c.outcome));
 }
 
-/** Hardest sent climb of a discipline (by grade rank), or null. */
+/**
+ * Hardest sent climb of a discipline, or null.
+ * Pass `environment` to keep indoor and outdoor bests apart — a gym V8 is not
+ * an outdoor V8. Equal grades keep the more recent send.
+ */
 export function hardestSend(
   climbs: ClimbRecord[],
   discipline: ClimbDiscipline,
+  environment?: ClimbEnvironment,
 ): ClimbRecord | null {
   const eligible = climbs.filter(
-    (c) => c.discipline === discipline && isSend(c.outcome) && gradeRank(discipline, c.grade) >= 0,
+    (c) =>
+      c.discipline === discipline &&
+      (environment === undefined || c.environment === environment) &&
+      isSend(c.outcome) &&
+      gradeRank(discipline, c.grade) >= 0,
   );
   if (eligible.length === 0) return null;
-  return eligible.reduce((best, c) =>
-    gradeRank(discipline, c.grade) > gradeRank(discipline, best.grade) ? c : best,
-  );
+  return eligible.reduce((best, c) => {
+    const rank = gradeRank(discipline, c.grade);
+    const bestRank = gradeRank(discipline, best.grade);
+    if (rank !== bestRank) return rank > bestRank ? c : best;
+    return c.date >= best.date ? c : best;
+  });
+}
+
+export interface DisciplineBests {
+  discipline: ClimbDiscipline;
+  indoor: ClimbRecord | null;
+  outdoor: ClimbRecord | null;
+}
+
+/** One row per discipline that has a send indoors, outdoors, or both. */
+export function personalBests(climbs: ClimbRecord[]): DisciplineBests[] {
+  return DISCIPLINES.map((discipline) => ({
+    discipline,
+    indoor: hardestSend(climbs, discipline, 'indoor'),
+    outdoor: hardestSend(climbs, discipline, 'outdoor'),
+  })).filter((row) => row.indoor !== null || row.outdoor !== null);
 }
 
 export interface PyramidRow {
