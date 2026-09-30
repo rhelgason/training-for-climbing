@@ -4,16 +4,13 @@
  * Ported verbatim in behaviour from the standalone Express server
  * (`server/llm.js`) when the backend moved into Next route handlers.
  *
- * Default provider is Google **Gemini 3.6 Flash**. Groq (Llama-3.3-70B) is a
- * drop-in alternative. Both are called over plain REST so the app needs no extra
- * npm dependency.
- *
- * Swapping to a paid / no-train provider later is a one-module change: add a
- * branch here keyed off `LLM_PROVIDER`; the app and the `/api/coach` route are
- * unchanged.
+ * Default provider is Google **Gemini 3.6 Flash**. Groq (Llama-3.3-70B) is the
+ * fallback when Gemini answers with a usage limit or a capacity error, as long
+ * as `GROQ_API_KEY` is set. The phone never chooses. Both are called over plain
+ * REST so the app needs no extra npm dependency.
  *
  * Env:
- *   LLM_PROVIDER     – 'gemini' (default) | 'groq'
+ *   LLM_PROVIDER     – 'gemini' (default) | 'groq'. Which one is tried first.
  *   GEMINI_API_KEY   – free key from https://aistudio.google.com/apikey
  *   GROQ_API_KEY     – free key from https://console.groq.com/keys
  *   LLM_MODEL        – Groq override only. Gemini always uses gemini-3.6-flash
@@ -21,25 +18,56 @@
  */
 import type { CoachContext, CoachInjuryFinding, CoachSuggestion } from '@tfc/core';
 import { TRAINING_REFERENCE } from './coachKnowledge';
-import { fetchWithLlmRetries } from './llmRetry';
+import { fetchWithLlmRetries, isUsageLimit, LlmHttpError } from './llmRetry';
 
-const DEFAULT_MODELS: Record<string, string> = {
+type ProviderId = 'gemini' | 'groq';
+
+const DEFAULT_MODELS: Record<ProviderId, string> = {
   gemini: 'gemini-3.6-flash',
   groq: 'llama-3.3-70b-versatile',
 };
 
+function preferredProvider(): ProviderId {
+  return (process.env.LLM_PROVIDER || 'gemini').toLowerCase() === 'groq' ? 'groq' : 'gemini';
+}
+
+function modelFor(id: ProviderId): string {
+  if (id === 'groq') return (process.env.LLM_MODEL || DEFAULT_MODELS.groq).trim();
+  // Gemini ignores LLM_MODEL. Production still has that env var set to the
+  // retired gemini-2.5-flash, and Next inlines process.env.LLM_MODEL at build
+  // time, so reading it here is how the 404 keeps coming back.
+  return DEFAULT_MODELS.gemini;
+}
+
 /**
- * Model id the server will actually call.
+ * Providers that can actually be called, preferred first. A key that is not
+ * set is skipped, so Gemini-as-default still falls through to Groq when only
+ * the Groq key is present, and the reverse.
+ */
+export function providerChain(): ProviderId[] {
+  const have: ProviderId[] = [];
+  if (process.env.GEMINI_API_KEY) have.push('gemini');
+  if (process.env.GROQ_API_KEY) have.push('groq');
+  const preferred = preferredProvider();
+  const primary = have.includes(preferred) ? preferred : have[0];
+  if (!primary) return [];
+  return [primary, ...have.filter((id) => id !== primary)];
+}
+
+/**
+ * Model id of the provider that will be tried first.
  *
- * Gemini ignores `LLM_MODEL`. Production still has that env var set to the
- * retired `gemini-2.5-flash`, and Next inlines `process.env.LLM_MODEL` at
- * build time, so reading it at all is how the 404 keeps coming back.
+ * Gemini ignores `LLM_MODEL`. See `modelFor`.
  */
 export function currentLlmModel(): string {
-  if (provider() === 'groq') {
-    return (process.env.LLM_MODEL || DEFAULT_MODELS.groq).trim();
-  }
-  return DEFAULT_MODELS.gemini;
+  const [primary] = providerChain();
+  return modelFor(primary ?? preferredProvider());
+}
+
+/** Model id of the next provider, or null when there is nowhere to fall back. */
+export function fallbackLlmModel(): string | null {
+  const chain = providerChain();
+  return chain.length > 1 ? modelFor(chain[1]) : null;
 }
 
 /** The static coaching brief sent on every call. */
@@ -52,19 +80,26 @@ external sources.
 
 HARD CONSTRAINTS. These are computed from the climber's actual logged history and are not
 suggestions. Violating one produces a plan that will injure or overtrain them:
-- READ THE JOURNALS AND TODAY'S NOTE FOR INJURIES YOURSELF. Keyword detection on
-  \`schedule.injury\` is a backup, not the last word. If recent free text describes an
-  unresolved physical problem (MRI, tear, sprain, "can't climb", a body part that hurts
-  in a way that is more than ordinary pump), treat it as real even if \`schedule.injury\`
-  is null. Report every such problem in \`injuries\`. If they should not climb or load
-  that tissue today, prescribe REST / rehab, set \`restDay\` true, and say why.
-- If \`schedule.injury\` is set, that is also a HARD CONSTRAINT. Name it in the rationale.
-  If \`noClimbing\` is true, prescribe REST / rehab only — no performance climbing, hangboard,
-  campus, or limit boulders. If \`noHighIntensity\` is true, do not prescribe max strength,
-  power, or power-endurance.
+- How their body feels is \`journals\` (newest first, at most the last 10) and \`today.note\`.
+  There is no injury list. Do not rest or deload because of \`profile.climberContext\` or any
+  note saved on an earlier day. If it is not in the newest entries, it has settled.
+- Weight the newest entries over the older ones in that list. If a problem shows up in an
+  older entry and the later ones do not mention it, or they say it is healing, getting better,
+  pain-free, or they trained on it, do not set \`restDay\` for it, do not avoid loading it,
+  and do not include it in \`injuries\`. Ordinary pump and next-day soreness are not injuries.
+- Set \`restDay\` true for a physical problem only when a newest entry or today's note still
+  describes something unresolved (a fresh tear, MRI, "can't climb", a body part that still
+  hurts in a way that is more than ordinary pump) and they should not load that tissue today.
+  Report only that current problem in \`injuries\`. Otherwise \`injuries\` is [].
+- \`schedule.injury\` is a keyword backup over those same recent entries, not a record that
+  outlives them. If it is set, honour it. If \`noClimbing\` is true, prescribe REST / rehab
+  only — no performance climbing, hangboard, campus, or limit boulders. If \`noHighIntensity\`
+  is true, do not prescribe max strength, power, or power-endurance. If it is null, do not
+  invent a rest day from an older story.
 - If \`schedule.restDay\` is true, prescribe a REST day. Do not find a workout that "still
   counts". Say why, using \`schedule.restReason\`, and give recovery guidance only.
-  You MAY also rest when the scheduler did not, if you found an injury it missed.
+  You MAY also rest when the scheduler did not, but only for a problem that is still
+  unresolved in the newest entries, as above.
 - Prescribe ONLY focuses listed in \`schedule.allowed\`. Never prescribe anything in
   \`schedule.blocked\` — each carries the reason it is out (too soon since the last one, weekly
   ceiling reached, equipment missing, injury, or they reported feeling beaten up).
@@ -96,13 +131,9 @@ Coaching rules:
 - Within the allowed focuses, favour the weakest triad area; that is where training pays best.
 - Train in the within-session hierarchy: skill (fresh) → max strength/power →
   anaerobic endurance → conditioning. Always warm up first.
-- Read \`profile.climberContext\` — the climber's own description of themselves — and honour
-  what it says about injuries, their gym, and what they are training for.
-- \`profile.derivedContext\` is things the app noticed and the climber confirmed, most often a
-  niggle they mentioned repeatedly. Treat it as true and work around it: if it names a sore
-  tendon, do not prescribe maximal loading of it, and say why you changed the session. It is
-  kept separate from their own words because it was inferred — do not quote it back as
-  something they told you.
+- Read \`profile.climberContext\` for their gym, what they train for, and their history.
+  It is background, not today's body. Do not rest or change the session because of an
+  injury that appears only there.
 - Be specific and encouraging, never generic.
 - Keep the plan concrete and doable in one day (5–10 ordered steps). Every non-lifting
   step must be executable without guessing: exercise name, grip/hold, sets, work/rest,
@@ -216,19 +247,15 @@ export function assertRespectsSchedule(
   }
 }
 
-/** Read env at call time so route handlers see request-time configuration. */
-function provider(): string {
-  return (process.env.LLM_PROVIDER || 'gemini').toLowerCase();
-}
-
-function modelName(): string {
-  return currentLlmModel();
-}
-
-/** Whether a usable provider key is configured. */
+/** Whether at least one provider key is configured. */
 export function isLlmConfigured(): boolean {
-  if (provider() === 'groq') return Boolean(process.env.GROQ_API_KEY);
-  return Boolean(process.env.GEMINI_API_KEY);
+  return providerChain().length > 0;
+}
+
+/** Usage limits and capacity errors are worth another provider. A 404 is not. */
+function shouldFailover(err: unknown): boolean {
+  if (!(err instanceof LlmHttpError)) return false;
+  return isUsageLimit(err.status, err.detail) || err.status === 503;
 }
 
 function coerceInjuries(raw: unknown): CoachInjuryFinding[] {
@@ -262,9 +289,13 @@ function coerceSuggestion(
   };
 }
 
-async function callGemini(context: CoachContext): Promise<CoachSuggestion & { restDay?: boolean }> {
+async function callGemini(
+  context: CoachContext,
+  retryUnavailable: boolean,
+): Promise<CoachSuggestion & { restDay?: boolean }> {
+  const model = modelFor('gemini');
   const key = process.env.GEMINI_API_KEY;
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName()}:generateContent?key=${key}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
   const res = await fetchWithLlmRetries(
     url,
     {
@@ -281,7 +312,12 @@ async function callGemini(context: CoachContext): Promise<CoachSuggestion & { re
       }),
     },
     (status, detail) =>
-      new Error(`Gemini error ${status} (model ${modelName()}): ${detail.slice(0, 300)}`),
+      new LlmHttpError(
+        status,
+        detail,
+        `Gemini error ${status} (model ${model}): ${detail.slice(0, 300)}`,
+      ),
+    { retryUnavailable },
   );
   const body = await res.json();
   const text = body?.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -289,7 +325,11 @@ async function callGemini(context: CoachContext): Promise<CoachSuggestion & { re
   return coerceSuggestion(text);
 }
 
-async function callGroq(context: CoachContext): Promise<CoachSuggestion & { restDay?: boolean }> {
+async function callGroq(
+  context: CoachContext,
+  retryUnavailable: boolean,
+): Promise<CoachSuggestion & { restDay?: boolean }> {
+  const model = modelFor('groq');
   const key = process.env.GROQ_API_KEY;
   const res = await fetchWithLlmRetries(
     'https://api.groq.com/openai/v1/chat/completions',
@@ -300,7 +340,7 @@ async function callGroq(context: CoachContext): Promise<CoachSuggestion & { rest
         Authorization: `Bearer ${key}`,
       },
       body: JSON.stringify({
-        model: modelName(),
+        model,
         response_format: { type: 'json_object' },
         temperature: 0.6,
         messages: [
@@ -309,7 +349,9 @@ async function callGroq(context: CoachContext): Promise<CoachSuggestion & { rest
         ],
       }),
     },
-    (status, detail) => new Error(`Groq error ${status}: ${detail.slice(0, 300)}`),
+    (status, detail) =>
+      new LlmHttpError(status, detail, `Groq error ${status}: ${detail.slice(0, 300)}`),
+    { retryUnavailable },
   );
   const body = await res.json();
   const text = body?.choices?.[0]?.message?.content;
@@ -317,10 +359,38 @@ async function callGroq(context: CoachContext): Promise<CoachSuggestion & { rest
   return coerceSuggestion(text);
 }
 
+async function callProvider(
+  id: ProviderId,
+  context: CoachContext,
+  retryUnavailable: boolean,
+): Promise<CoachSuggestion & { restDay?: boolean }> {
+  return id === 'groq'
+    ? callGroq(context, retryUnavailable)
+    : callGemini(context, retryUnavailable);
+}
+
 /** Generate a structured coaching suggestion from the app context. */
 export async function generateCoachSuggestion(context: CoachContext): Promise<CoachSuggestion> {
-  const raw = provider() === 'groq' ? await callGroq(context) : await callGemini(context);
-  assertRespectsSchedule(raw, context);
-  assertRespectsPrescriptions(raw, context);
-  return raw;
+  const chain = providerChain();
+  if (chain.length === 0) throw new Error('AI coach not configured');
+  let prior: Error | null = null;
+  for (let i = 0; i < chain.length; i++) {
+    const id = chain[i];
+    const hasNext = i < chain.length - 1;
+    try {
+      const raw = await callProvider(id, context, !hasNext);
+      assertRespectsSchedule(raw, context);
+      assertRespectsPrescriptions(raw, context);
+      return raw;
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      if (!hasNext || !shouldFailover(err)) {
+        if (prior) throw new Error(`${prior.message} | ${error.message}`);
+        throw error;
+      }
+      console.error(`coach: ${id} unavailable (${error.message}); trying ${chain[i + 1]}`);
+      prior = error;
+    }
+  }
+  throw prior ?? new Error('LLM request failed');
 }

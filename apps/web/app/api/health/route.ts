@@ -8,7 +8,7 @@
  */
 import { NextResponse } from 'next/server';
 import { isAuthConfigured } from '../../../lib/server/auth';
-import { currentLlmModel, isLlmConfigured } from '../../../lib/server/llm';
+import { currentLlmModel, fallbackLlmModel, isLlmConfigured } from '../../../lib/server/llm';
 import { getPool } from '../../../lib/server/db';
 
 export const runtime = 'nodejs';
@@ -28,5 +28,6 @@ export async function GET() {
     auth: isAuthConfigured(),
     db,
     model: currentLlmModel(),
+    fallback: fallbackLlmModel(),
   });
 }

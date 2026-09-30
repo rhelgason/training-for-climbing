@@ -14,8 +14,7 @@
  * missed injury that keeps loading a hurt tendon is not.
  */
 import type { JournalEntry } from '@tfc/core';
-import { currentLlmModel } from './llm';
-import { fetchWithLlmRetries } from './llmRetry';
+import { fetchWithLlmRetries, LlmHttpError } from './llmRetry';
 
 /** Entries older than this say little about how the climber feels now. */
 const WINDOW_DAYS = 45;
@@ -117,13 +116,16 @@ function coerceFindings(text: string): JournalFinding[] {
 /**
  * Scan recent journal prose for unresolved physical problems.
  *
- * Gemini only: this is a cheap, occasional call and the coach's provider
- * switch exists for the session prompt, not for this.
+ * Gemini only, and always gemini-3.6-flash. currentLlmModel() can be the
+ * Groq id once that key is set; this call must not follow it. The coach's
+ * provider switch is for the session prompt, not this occasional scan.
  */
+const JOURNAL_SCAN_MODEL = 'gemini-3.6-flash';
+
 export async function scanJournals(text: string): Promise<JournalFinding[]> {
   const key = process.env.GEMINI_API_KEY;
   if (!key) throw new Error('journal scan needs GEMINI_API_KEY');
-  const model = currentLlmModel();
+  const model = JOURNAL_SCAN_MODEL;
   const res = await fetchWithLlmRetries(
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
     {
@@ -141,7 +143,11 @@ export async function scanJournals(text: string): Promise<JournalFinding[]> {
       }),
     },
     (status, detail) =>
-      new Error(`journal scan error ${status} (model ${model}): ${detail.slice(0, 300)}`),
+      new LlmHttpError(
+        status,
+        detail,
+        `journal scan error ${status} (model ${model}): ${detail.slice(0, 300)}`,
+      ),
   );
   const body = await res.json();
   const out = body?.candidates?.[0]?.content?.parts?.[0]?.text;

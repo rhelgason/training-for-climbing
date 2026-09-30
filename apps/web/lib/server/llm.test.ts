@@ -90,14 +90,18 @@ describe('currentLlmModel', () => {
 });
 
 describe('isLlmConfigured', () => {
-  it('checks the key belonging to the selected provider', () => {
+  it('is on when either provider key is set', () => {
     expect(isLlmConfigured()).toBe(false);
 
     process.env.GEMINI_API_KEY = 'k';
     expect(isLlmConfigured()).toBe(true);
 
-    // Switching provider without its key means the coach is off again.
+    // Preferring Groq without its key does not turn the coach off while
+    // Gemini can still answer.
     process.env.LLM_PROVIDER = 'groq';
+    expect(isLlmConfigured()).toBe(true);
+
+    delete process.env.GEMINI_API_KEY;
     expect(isLlmConfigured()).toBe(false);
 
     process.env.GROQ_API_KEY = 'k';
@@ -251,6 +255,79 @@ describe('generateCoachSuggestion', () => {
     );
 
     await expect(generateCoachSuggestion(context)).rejects.toThrow(/no content/);
+  });
+
+  function httpError(status: number, body: string) {
+    return { ok: false, status, text: async () => body } as Response;
+  }
+
+  function groqReply(payload: unknown) {
+    return {
+      ok: true,
+      json: async () => ({
+        choices: [{ message: { content: JSON.stringify(payload) } }],
+      }),
+    } as Response;
+  }
+
+  it('calls Groq once when Gemini returns a usage limit, without retrying Gemini', async () => {
+    process.env.GEMINI_API_KEY = 'gemini-key';
+    process.env.GROQ_API_KEY = 'groq-key';
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(httpError(429, 'You exceeded your current quota. RESOURCE_EXHAUSTED'))
+      .mockResolvedValueOnce(groqReply({ headline: 'From Groq' }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const suggestion = await generateCoachSuggestion(context);
+
+    expect(suggestion.headline).toBe('From Groq');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[0][0]).toContain('generativelanguage.googleapis.com');
+    expect(fetchMock.mock.calls[1][0]).toContain('api.groq.com');
+    const groqBody = JSON.parse(fetchMock.mock.calls[1][1].body as string);
+    expect(groqBody.model).toBe('llama-3.3-70b-versatile');
+    expect(llmRetry.sleepMs).not.toHaveBeenCalled();
+  });
+
+  it('falls back to Groq on a Gemini capacity error without burning the retry budget', async () => {
+    process.env.GEMINI_API_KEY = 'gemini-key';
+    process.env.GROQ_API_KEY = 'groq-key';
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(httpError(503, 'high demand'))
+      .mockResolvedValueOnce(groqReply({ headline: 'From Groq' }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const suggestion = await generateCoachSuggestion(context);
+
+    expect(suggestion.headline).toBe('From Groq');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[1][0]).toContain('api.groq.com');
+  });
+
+  it('does not fall back to Groq on a Gemini 404', async () => {
+    process.env.GEMINI_API_KEY = 'gemini-key';
+    process.env.GROQ_API_KEY = 'groq-key';
+    const fetchMock = vi.fn().mockResolvedValue(httpError(404, 'no such model'));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(generateCoachSuggestion(context)).rejects.toThrow(/404/);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports both providers when the fallback also fails', async () => {
+    process.env.GEMINI_API_KEY = 'gemini-key';
+    process.env.GROQ_API_KEY = 'groq-key';
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(httpError(429, 'quota'))
+      .mockResolvedValueOnce(httpError(429, 'rate limit'));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(generateCoachSuggestion(context)).rejects.toThrow(
+      /Gemini error 429[\s\S]*Groq error 429/,
+    );
   });
 
   it('calls Groq when selected', async () => {
