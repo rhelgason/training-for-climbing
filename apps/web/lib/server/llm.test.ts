@@ -8,7 +8,7 @@ import {
 } from './llm';
 import { llmRetry } from './llmRetry';
 
-function makeContext(restDay = false) {
+function makeContext(restDay = false): CoachContext {
   return {
     generatedAt: 0,
     profile: {
