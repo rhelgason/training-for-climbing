@@ -5,6 +5,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextResponse } from 'next/server';
+import { log } from '@tfc/core';
 import { signToken } from './auth';
 import { readJson, withUser } from './handler';
 
@@ -103,7 +104,9 @@ describe('withUser', () => {
   });
 
   it('logs the failure with its route label, so 500s are traceable', async () => {
-    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    // The shared logger is a no-op while NODE_ENV=test, so console.error never
+    // fires here. Production wires log.error straight to console.error.
+    const spy = vi.spyOn(log, 'error').mockImplementation(() => {});
     await withUser(
       request(bearer(signToken({ id: 'user-1', username: 'ryan' }))),
       'GET /api/thing',
