@@ -4,17 +4,20 @@
  * Ported verbatim in behaviour from the standalone Express server
  * (`server/llm.js`) when the backend moved into Next route handlers.
  *
- * Default provider is Google **Gemini 3.6 Flash**. Groq (Llama-3.3-70B) is the
+ * Default provider is Google **Gemini 3.6 Flash**. Groq (GPT-OSS 120B) is the
  * fallback when Gemini answers with a usage limit or a capacity error, as long
  * as `GROQ_API_KEY` is set. The phone never chooses. Both are called over plain
  * REST so the app needs no extra npm dependency.
+ *
+ * `llama-3.3-70b-versatile` was shut off for developer keys on 2026-08-16.
+ * A Groq 404 for a missing model tries the other GPT-OSS id before giving up.
  *
  * Env:
  *   LLM_PROVIDER     – 'gemini' (default) | 'groq'. Which one is tried first.
  *   GEMINI_API_KEY   – free key from https://aistudio.google.com/apikey
  *   GROQ_API_KEY     – free key from https://console.groq.com/keys
- *   LLM_MODEL        – Groq override only. Gemini always uses gemini-3.6-flash
- *                      (a leftover Vercel LLM_MODEL=gemini-2.5-flash 404s).
+ *   LLM_MODEL        – Groq override only. Gemini always uses gemini-3.6-flash.
+ *                      Retired Groq ids and leftover Gemini ids are ignored.
  */
 import type { CoachContext, CoachInjuryFinding, CoachSuggestion } from '@tfc/core';
 import { TRAINING_REFERENCE } from './coachKnowledge';
@@ -24,19 +27,47 @@ type ProviderId = 'gemini' | 'groq';
 
 const DEFAULT_MODELS: Record<ProviderId, string> = {
   gemini: 'gemini-3.6-flash',
-  groq: 'llama-3.3-70b-versatile',
+  groq: 'openai/gpt-oss-120b',
 };
+
+/** Developer-tier ids Groq has shut off. A leftover LLM_MODEL must not 404. */
+const RETIRED_GROQ_MODELS = new Set([
+  'llama-3.3-70b-versatile',
+  'llama-3.1-8b-instant',
+  'llama-3.1-70b-versatile',
+  'llama-3.1-70b-specdec',
+  'llama3-70b-8192',
+  'llama3-8b-8192',
+  'qwen/qwen3-32b',
+  'qwen/qwen3.6-27b',
+]);
+
+/** Tried, in order, when the chosen Groq id itself 404s. */
+const GROQ_MODEL_FALLBACKS = ['openai/gpt-oss-120b', 'openai/gpt-oss-20b'];
 
 function preferredProvider(): ProviderId {
   return (process.env.LLM_PROVIDER || 'gemini').toLowerCase() === 'groq' ? 'groq' : 'gemini';
 }
 
 function modelFor(id: ProviderId): string {
-  if (id === 'groq') return (process.env.LLM_MODEL || DEFAULT_MODELS.groq).trim();
-  // Gemini ignores LLM_MODEL. Production still has that env var set to the
-  // retired gemini-2.5-flash, and Next inlines process.env.LLM_MODEL at build
-  // time, so reading it here is how the 404 keeps coming back.
+  if (id === 'groq') {
+    const requested = (process.env.LLM_MODEL || '').trim();
+    // Gemini ignores LLM_MODEL, and Groq must ignore it too when the value is
+    // a Gemini id or a model Groq has retired. Next inlines process.env.LLM_MODEL
+    // at build time, so a leftover gemini-2.5-flash or llama-3.3-70b-versatile
+    // is how the 404 keeps coming back.
+    const unusable =
+      !requested ||
+      /^models\/gemini|^gemini/i.test(requested) ||
+      RETIRED_GROQ_MODELS.has(requested);
+    return unusable ? DEFAULT_MODELS.groq : requested;
+  }
   return DEFAULT_MODELS.gemini;
+}
+
+function groqModelChain(): string[] {
+  const primary = modelFor('groq');
+  return [primary, ...GROQ_MODEL_FALLBACKS.filter((id) => id !== primary)];
 }
 
 /**
@@ -325,12 +356,16 @@ async function callGemini(
   return coerceSuggestion(text);
 }
 
-async function callGroq(
+async function callGroqModel(
+  model: string,
   context: CoachContext,
   retryUnavailable: boolean,
 ): Promise<CoachSuggestion & { restDay?: boolean }> {
-  const model = modelFor('groq');
   const key = process.env.GROQ_API_KEY;
+  // GPT-OSS reasons by default. Low effort, and don't ask for the reasoning
+  // text: JSON mode needs the answer in message.content, and a long trace
+  // blows the route budget. reasoning_format is not valid on these ids.
+  const gptOss = model.startsWith('openai/gpt-oss');
   const res = await fetchWithLlmRetries(
     'https://api.groq.com/openai/v1/chat/completions',
     {
@@ -343,6 +378,9 @@ async function callGroq(
         model,
         response_format: { type: 'json_object' },
         temperature: 0.6,
+        ...(gptOss
+          ? { reasoning_effort: 'low', include_reasoning: false, max_completion_tokens: 4096 }
+          : {}),
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
           { role: 'user', content: JSON.stringify(context) },
@@ -350,13 +388,43 @@ async function callGroq(
       }),
     },
     (status, detail) =>
-      new LlmHttpError(status, detail, `Groq error ${status}: ${detail.slice(0, 300)}`),
+      new LlmHttpError(
+        status,
+        detail,
+        `Groq error ${status} (model ${model}): ${detail.slice(0, 300)}`,
+      ),
     { retryUnavailable },
   );
   const body = await res.json();
   const text = body?.choices?.[0]?.message?.content;
-  if (!text) throw new Error('Groq returned no content');
+  if (!text) throw new Error(`Groq returned no content (model ${model})`);
   return coerceSuggestion(text);
+}
+
+async function callGroq(
+  context: CoachContext,
+  retryUnavailable: boolean,
+): Promise<CoachSuggestion & { restDay?: boolean }> {
+  const models = groqModelChain();
+  let prior: Error | null = null;
+  for (let i = 0; i < models.length; i++) {
+    const hasNext = i < models.length - 1;
+    try {
+      return await callGroqModel(models[i], context, hasNext ? false : retryUnavailable);
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      const missing = err instanceof LlmHttpError && err.status === 404;
+      if (!hasNext || !missing) {
+        if (prior) throw new Error(`${prior.message} | ${error.message}`);
+        throw error;
+      }
+      console.error(
+        `coach: groq model ${models[i]} unavailable (${error.message}); trying ${models[i + 1]}`,
+      );
+      prior = error;
+    }
+  }
+  throw prior ?? new Error('Groq request failed');
 }
 
 async function callProvider(

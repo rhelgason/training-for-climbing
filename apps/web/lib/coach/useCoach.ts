@@ -81,9 +81,15 @@ export function useCoach(repo: Repository, contextKey?: string): CoachState {
       if (!on) return;
       const cached = getCachedSuggestion();
       const config = getSyncConfig();
-      if (cached) {
+      // A suggestion from a different day or check-in is not this plan. Showing
+      // it while the new call is in flight is how yesterday's rest day stays on
+      // screen after they say they feel fine.
+      if (cached && cached.contextKey === contextKey) {
         setSuggestion(cached.suggestion);
         setGeneratedAt(cached.generatedAt);
+      } else {
+        setSuggestion(null);
+        setGeneratedAt(null);
       }
       const isEnabled = Boolean(profile?.aiCoachEnabled) && isSyncConfigured(config);
       setEnabled(isEnabled);

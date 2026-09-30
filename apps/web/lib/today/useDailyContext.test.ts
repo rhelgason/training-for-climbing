@@ -77,4 +77,29 @@ describe('useDailyContext', () => {
     expect(result.current.confirmed).toBe(true);
     expect(result.current.value?.readiness).toBe('fresh');
   });
+
+  it('confirm saves the assumed row without an edit', async () => {
+    const repo = new InMemoryRepository();
+    await repo.saveDailyContext({
+      date: now() - DAY,
+      environment: 'outdoor',
+      equipment: ['outdoor-rock'],
+      sessionLength: 'long',
+      readiness: 'tired',
+    });
+
+    const { result } = renderHook(() => useDailyContext(repo, 0));
+    await waitFor(() => expect(result.current.value).not.toBeNull());
+    expect(result.current.confirmed).toBe(false);
+
+    act(() => {
+      result.current.confirm();
+    });
+
+    expect(result.current.confirmed).toBe(true);
+    await waitFor(() => expect(result.current.record?.readiness).toBe('ok'));
+    const saved = await repo.getDailyContext(now());
+    expect(saved?.environment).toBe('outdoor');
+    expect(saved?.readiness).toBe('ok');
+  });
 });

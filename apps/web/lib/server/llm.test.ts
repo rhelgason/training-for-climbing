@@ -82,10 +82,15 @@ describe('currentLlmModel', () => {
     expect(currentLlmModel()).toBe('gemini-3.6-flash');
   });
 
-  it('honours LLM_MODEL only for Groq', () => {
+  it('uses GPT-OSS 120B for Groq and ignores retired or Gemini ids', () => {
     process.env.LLM_PROVIDER = 'groq';
+    expect(currentLlmModel()).toBe('openai/gpt-oss-120b');
     process.env.LLM_MODEL = 'llama-3.3-70b-versatile';
-    expect(currentLlmModel()).toBe('llama-3.3-70b-versatile');
+    expect(currentLlmModel()).toBe('openai/gpt-oss-120b');
+    process.env.LLM_MODEL = 'gemini-2.5-flash';
+    expect(currentLlmModel()).toBe('openai/gpt-oss-120b');
+    process.env.LLM_MODEL = 'openai/gpt-oss-20b';
+    expect(currentLlmModel()).toBe('openai/gpt-oss-20b');
   });
 });
 
@@ -286,7 +291,32 @@ describe('generateCoachSuggestion', () => {
     expect(fetchMock.mock.calls[0][0]).toContain('generativelanguage.googleapis.com');
     expect(fetchMock.mock.calls[1][0]).toContain('api.groq.com');
     const groqBody = JSON.parse(fetchMock.mock.calls[1][1].body as string);
-    expect(groqBody.model).toBe('llama-3.3-70b-versatile');
+    expect(groqBody.model).toBe('openai/gpt-oss-120b');
+    expect(groqBody.reasoning_effort).toBe('low');
+    expect(groqBody.include_reasoning).toBe(false);
+    expect(llmRetry.sleepMs).not.toHaveBeenCalled();
+  });
+
+  it('tries the other Groq model when the first id does not exist', async () => {
+    process.env.GEMINI_API_KEY = 'gemini-key';
+    process.env.GROQ_API_KEY = 'groq-key';
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(httpError(503, 'high demand'))
+      .mockResolvedValueOnce(
+        httpError(404, 'The model `openai/gpt-oss-120b` does not exist or you do not have access'),
+      )
+      .mockResolvedValueOnce(groqReply({ headline: 'From the other Groq model' }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const suggestion = await generateCoachSuggestion(context);
+
+    expect(suggestion.headline).toBe('From the other Groq model');
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    const firstGroq = JSON.parse(fetchMock.mock.calls[1][1].body as string);
+    const secondGroq = JSON.parse(fetchMock.mock.calls[2][1].body as string);
+    expect(firstGroq.model).toBe('openai/gpt-oss-120b');
+    expect(secondGroq.model).toBe('openai/gpt-oss-20b');
     expect(llmRetry.sleepMs).not.toHaveBeenCalled();
   });
 

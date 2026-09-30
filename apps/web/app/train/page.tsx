@@ -80,6 +80,8 @@ interface LoadState {
   hasGoal: boolean;
   benchmarks: BenchmarkRecord[];
   profile: ProfileRecord | null;
+  /** Today's latest energy/emotion reading, so a new check-in asks the coach again. */
+  checkinStamp: string;
   /** Profile updates the app is proposing, already filtered to undecided ones. */
   insights: Insight[];
   blockLabel: string;
@@ -111,20 +113,24 @@ export default function TrainHome() {
   // Fingerprints the picture the coach was generated for. A new calendar day,
   // a changed check-in, or new journal text each forces a fresh AI call.
   // Debounced because toggling four equipment chips is one decision, not four.
+  // Nothing is asked until today's row is confirmed — an assumed OK is not
+  // "I feel good", and the call must not go out before they say so.
   const journalStamp = (state?.journals ?? [])
     .map((j) => `${j.id}:${j.updatedAt}`)
     .sort()
     .join(',');
-  const contextKey = today
-    ? [
-        dayIndex(now()),
-        today.environment,
-        today.sessionLength,
-        today.readiness,
-        [...today.equipment].sort().join(','),
-        journalStamp,
-      ].join('|')
-    : undefined;
+  const contextKey =
+    today && daily.confirmed && state
+      ? [
+          dayIndex(now()),
+          today.environment,
+          today.sessionLength,
+          today.readiness,
+          [...today.equipment].sort().join(','),
+          journalStamp,
+          state.checkinStamp,
+        ].join('|')
+      : undefined;
   const coach = useCoach(repo, useDebouncedValue(contextKey, COACH_SETTLE_MS));
 
   const sendFeedback = (rating: 'up' | 'down') => {
@@ -300,6 +306,7 @@ export default function TrainHome() {
           block.source === 'auto' ? `${block.label} (4-3-2-1)` : `${block.label} — ${block.focus}`,
         // Deterministic and on-device: whether someone is climbing a grade is a
         // query over their own sends, not something worth asking a model.
+        checkinStamp: energy ? `${energy.id}:${energy.time}` : '',
         insights: pendingInsights(
           [detectAbilityDrift(climbs, profile, settings.defaultDiscipline, nowMs)].filter(
             (i): i is Insight => i !== null,
@@ -384,7 +391,12 @@ export default function TrainHome() {
 
       {backup.visible && <BackupBanner onDismiss={backup.dismiss} />}
 
-      <TodayContext value={today} onChange={daily.update} confirmed={daily.confirmed} />
+      <TodayContext
+        value={today}
+        onChange={daily.update}
+        onConfirm={daily.confirm}
+        confirmed={daily.confirmed}
+      />
 
       <Card className={cardBorder}>
         <div className="flex items-center justify-between">
@@ -394,7 +406,10 @@ export default function TrainHome() {
             {ai ? 'AI coach' : 'Today'}
           </span>
           {coach.status === 'loading' ? (
-            <span className="h-4 w-4 animate-spin rounded-full border-2 border-border border-t-success" />
+            <span className="flex items-center gap-2 text-sm text-muted">
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-border border-t-success" />
+              Asking the coach…
+            </span>
           ) : ai && coach.generatedAt ? (
             <span className="text-sm text-muted">
               updated {relativeTime(coach.generatedAt, now())}

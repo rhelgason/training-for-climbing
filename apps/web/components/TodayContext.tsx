@@ -3,12 +3,10 @@
 /**
  * The one-tap daily check-in that sits above today's plan.
  *
- * Collapsed by default and pre-filled from yesterday's answers (falling back to
- * the profile), so the common case — same gym, feeling normal — costs zero
- * taps. Opening it and changing anything regenerates the plan immediately.
- *
- * This is deliberately not a gate. A climber who ignores it still gets a plan
- * built from sensible defaults; the check-in only makes it sharper.
+ * Collapsed by default and pre-filled from yesterday's gym and time. Feeling
+ * starts at OK and is not carried over. The built-in plan uses those values
+ * immediately. The coach does not run until the climber confirms the row, so
+ * a rest-day call cannot go out before they say how today actually feels.
  */
 import { useState } from 'react';
 import {
@@ -55,6 +53,8 @@ const inputClass =
 interface Props {
   value: TodayContextValue;
   onChange: (value: TodayContextValue) => void;
+  /** Save the values already on screen, including an unchanged assumed row. */
+  onConfirm: () => void;
   /** True once the climber has actually confirmed today (vs. inherited defaults). */
   confirmed: boolean;
 }
@@ -73,29 +73,67 @@ function summarise(value: TodayContextValue): string {
   ].join(' · ');
 }
 
-export function TodayContext({ value, onChange, confirmed }: Props) {
+export function TodayContext({ value, onChange, onConfirm, confirmed }: Props) {
   const [open, setOpen] = useState(false);
   const [note, setNote] = useState(value.note ?? '');
   const set = <K extends keyof TodayContextValue>(key: K, next: TodayContextValue[K]) =>
     onChange({ ...value, [key]: next });
 
+  const finish = () => {
+    const trimmed = note.trim();
+    if (trimmed !== (value.note ?? '').trim()) {
+      onChange({ ...value, note: trimmed || undefined });
+    } else if (!confirmed) {
+      onConfirm();
+    }
+    setOpen(false);
+  };
+
   if (!open) {
     return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="w-full rounded-xl border border-border/80 bg-surface/70 px-4 py-3 text-left shadow-sm backdrop-blur-sm transition hover:border-muted/40"
-      >
+      <div className="w-full rounded-xl border border-border/80 bg-surface/70 px-4 py-3 text-left shadow-sm backdrop-blur-sm">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="text-sm font-bold uppercase tracking-wide text-muted">
-              Today {confirmed ? '' : '· assumed'}
+              Today {confirmed ? '' : '· not confirmed'}
             </p>
             <p className="truncate text-sm">{summarise(value)}</p>
           </div>
-          <span className="shrink-0 text-sm font-semibold text-primary">Change</span>
+          {confirmed ? (
+            <button
+              type="button"
+              onClick={() => setOpen(true)}
+              className="shrink-0 text-sm font-semibold text-primary"
+            >
+              Change
+            </button>
+          ) : null}
         </div>
-      </button>
+        {!confirmed && (
+          <>
+            <p className="mt-2 text-sm leading-5 text-muted">
+              Gym and time are from last time. Feeling starts at OK, not yesterday&apos;s. The coach
+              does not run until you confirm this.
+            </p>
+            <div className="mt-3 flex gap-2">
+              <button
+                type="button"
+                onClick={onConfirm}
+                className="rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-primary-text"
+              >
+                This is right
+              </button>
+              <button
+                type="button"
+                onClick={() => setOpen(true)}
+                className="rounded-xl border border-border px-4 py-2 text-sm font-semibold text-primary"
+              >
+                Change
+              </button>
+            </div>
+          </>
+        )}
+      </div>
     );
   }
 
@@ -103,11 +141,7 @@ export function TodayContext({ value, onChange, confirmed }: Props) {
     <Card className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <p className="text-sm font-bold uppercase tracking-wide text-muted">Today</p>
-        <button
-          type="button"
-          onClick={() => setOpen(false)}
-          className="text-sm font-semibold text-primary"
-        >
+        <button type="button" onClick={finish} className="text-sm font-semibold text-primary">
           Done
         </button>
       </div>

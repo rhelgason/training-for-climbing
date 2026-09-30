@@ -30,6 +30,8 @@ export interface DailyContextState {
   /** Today's persisted record, for the coach context. Null until confirmed. */
   record: DailyContextRecord | null;
   update: (next: TodayContextValue) => void;
+  /** Save the values already on screen. Used when nothing needs changing. */
+  confirm: () => void;
 }
 
 export function useDailyContext(repo: Repository, dataVersion: number): DailyContextState {
@@ -85,5 +87,9 @@ export function useDailyContext(repo: Repository, dataVersion: number): DailyCon
     [repo],
   );
 
-  return { value, confirmed, record, update };
+  const confirm = useCallback(() => {
+    if (value) update(value);
+  }, [update, value]);
+
+  return { value, confirmed, record, update, confirm };
 }
