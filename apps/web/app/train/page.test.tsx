@@ -132,7 +132,8 @@ describe('TrainHome — logging the day', () => {
 describe('TrainHome — the daily check-in', () => {
   it('assumes a context until the climber confirms one', async () => {
     await renderScreen();
-    expect(screen.getByText(/assumed/)).toBeInTheDocument();
+    expect(screen.getByText(/not confirmed/)).toBeInTheDocument();
+    expect(screen.getByText(/coach does not run until you confirm/i)).toBeInTheDocument();
   });
 
   it('rebuilds the plan when readiness changes, and persists the answer', async () => {
