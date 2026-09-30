@@ -412,6 +412,27 @@ describe('generateCoachSuggestion', () => {
     expect(suggestion.headline).toBe('Rest today');
     expect(suggestion.restDay).toBe(true);
   });
+
+  it('drops a rest day the scheduler did not call and no injury requires', async () => {
+    process.env.GEMINI_API_KEY = 'test-key';
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        geminiReply({
+          headline: 'Rest today',
+          plan: ['Full rest', 'No climbing'],
+          rationale: 'You said you were resting tomorrow.',
+          restDay: true,
+          injuries: [],
+        }),
+      ),
+    );
+
+    const suggestion = await generateCoachSuggestion(makeContext(false));
+    expect(suggestion.restDay).toBe(false);
+    expect(suggestion.headline).toBe('Training day');
+    expect(suggestion.plan).toEqual(['Warm up']);
+  });
 });
 
 describe('assertRespectsPrescriptions', () => {

@@ -368,6 +368,45 @@ describe('explaining itself', () => {
     expect(buildMicrocycle(input()).recentLoadSummary).toContain('No training logged');
   });
 
+  it('does not rest again after an announced rest has already been taken', () => {
+    const written = journal(-2, {
+      activities: ['climbing'],
+      intensity: 'moderate',
+      summary: "I'm fully resting tomorrow",
+    });
+    const cycle = buildMicrocycle(
+      input({ history: loadHistory([written], []), journals: [written] }),
+    );
+    expect(cycle.restDay).toBe(false);
+    expect(cycle.recentLoadSummary).toMatch(/already taken/i);
+    expect(cycle.recentLoadSummary).toMatch(/yesterday/i);
+  });
+
+  it('rests today when yesterday wrote that tomorrow is the rest day', () => {
+    const written = journal(-1, {
+      activities: ['climbing'],
+      intensity: 'moderate',
+      summary: "I'm fully resting tomorrow",
+    });
+    const cycle = buildMicrocycle(
+      input({ history: loadHistory([written], []), journals: [written] }),
+    );
+    expect(cycle.restDay).toBe(true);
+    expect(cycle.restReason).toMatch(/that rest is today/i);
+  });
+
+  it('does not treat "not resting tomorrow" as an announced rest', () => {
+    const written = journal(-2, {
+      activities: ['climbing'],
+      summary: "I'm not resting tomorrow",
+    });
+    const cycle = buildMicrocycle(
+      input({ history: loadHistory([written], []), journals: [written] }),
+    );
+    expect(cycle.restDay).toBe(false);
+    expect(cycle.recentLoadSummary).not.toMatch(/already taken/i);
+  });
+
   it('lists blocked focuses with a reason for each', () => {
     const history = loadHistory([day(-1, ['maxStrength'])], []);
     const blocked = blockedFocuses(buildMicrocycle(input({ history })));

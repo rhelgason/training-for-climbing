@@ -207,8 +207,12 @@ describe('recentDays', () => {
     expect(days[0].daysAgo).toBe(1);
     expect(days[0].focusLabels).toContain('Max strength');
     expect(days[0].struggles).toBe('Left ring finger a bit sore');
-    expect(days[1].daysAgo).toBe(3);
-    expect(days[1].climbs).toEqual(['V4 flash']);
+    // The day between the two sessions was not logged, so it is rest already taken.
+    expect(days[1].daysAgo).toBe(2);
+    expect(days[1].focusLabels).toEqual(['Rest']);
+    expect(days[1].summary).toMatch(/already taken/);
+    expect(days[2].daysAgo).toBe(3);
+    expect(days[2].climbs).toEqual(['V4 flash']);
   });
 
   it('limits to the requested count', () => {

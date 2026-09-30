@@ -19,7 +19,7 @@ import type { ActivityTag, JournalIntensity } from '../../content/journal';
 import type { SessionFocusId } from '../../content/trainingContext';
 import { sessionFocus } from '../../content/trainingContext';
 import type { ClimbRecord, JournalEntry } from '../../db/types';
-import { dayIndex } from './log';
+import { addDays, dayIndex } from '../../lib/day';
 
 /** One day's worth of applied training stress. */
 export interface LoadEvent {
@@ -257,10 +257,37 @@ export function recentDays(
     climbsByDay.set(day, [...(climbsByDay.get(day) ?? []), climb]);
   }
 
-  return history
-    .filter((e) => e.day <= today)
-    .slice(0, count)
-    .map((event) => {
+  const logged = history.filter((e) => e.day <= today).slice(0, count);
+  if (logged.length === 0) return [];
+
+  // Unlogged days inside this window are rest already taken. Yesterday has to
+  // appear even when the newest entry is older, or "resting tomorrow" written
+  // two days ago keeps looking like an open instruction.
+  const oldest = Math.max(logged[logged.length - 1].day, today - 14);
+  const days = new Set(logged.map((e) => e.day));
+  for (let day = today; day >= oldest; day--) {
+    if (day === today && !days.has(day)) continue;
+    days.add(day);
+  }
+
+  const byDay = new Map(history.map((e) => [e.day, e]));
+  return [...days]
+    .sort((a, b) => b - a)
+    .map((day) => {
+      const event = byDay.get(day);
+      if (!event) {
+        return {
+          date: addDays(nowMs, day - today),
+          daysAgo: today - day,
+          focuses: ['rest' as const],
+          focusLabels: ['Rest'],
+          intensity: 'easy' as const,
+          activities: ['rest' as const],
+          summary: 'No session logged. An unlogged day counts as rest already taken.',
+          skipped: [],
+          climbs: [],
+        };
+      }
       const journal = journalByDay.get(event.day);
       return {
         date: event.date,

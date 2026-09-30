@@ -130,7 +130,13 @@ suggestions. Violating one produces a plan that will injure or overtrain them:
 - If \`schedule.restDay\` is true, prescribe a REST day. Do not find a workout that "still
   counts". Say why, using \`schedule.restReason\`, and give recovery guidance only.
   You MAY also rest when the scheduler did not, but only for a problem that is still
-  unresolved in the newest entries, as above.
+  unresolved in the newest entries, as above. Do not set \`restDay\` for any other reason.
+- \`schedule.fulfilledRests\` are rests they already announced. "Tomorrow" and "today"
+  inside a journal are relative to that entry's \`daysAgo\`, not to now. An entry with
+  \`daysAgo: 2\` that says "I'm fully resting tomorrow" is about yesterday. If that day
+  is in \`fulfilledRests\` with \`taken: true\`, or \`recentDays\` shows it as Rest with
+  no session logged, the rest already happened. Do not set \`restDay\`, and do not
+  write a rest plan, to honour it again.
 - Prescribe ONLY focuses listed in \`schedule.allowed\`. Never prescribe anything in
   \`schedule.blocked\` — each carries the reason it is out (too soon since the last one, weekly
   ceiling reached, equipment missing, injury, or they reported feeling beaten up).
@@ -148,10 +154,12 @@ suggestions. Violating one produces a plan that will injure or overtrain them:
   own send pyramid. Use those grades; do not substitute your own estimate of their level.
 
 START FROM RECENT HISTORY. \`recentDays\` is ordered newest first with \`daysAgo\` on each entry;
-\`daysAgo: 1\` is yesterday. Before choosing anything, read the last three days: what they
-trained, how hard it was, and what their free text says about how their body felt. Today's
-session must make sense as the *next* one after those. State the connection explicitly in your
-rationale — "your fingers took a hard max-hang session yesterday, so today is…". If they
+\`daysAgo: 1\` is yesterday. A day with no session logged is included as Rest — that silence
+is a rest day already taken, not a missing day. Before choosing anything, read the last three
+days: what they trained, how hard it was, and what their free text says about how their body
+felt. Today's session must make sense as the *next* one after those, including a rest they
+already took. State the connection explicitly in your rationale — "your fingers took a hard
+max-hang session yesterday, so today is…". If they
 mentioned soreness, a tweak, or fatigue in a recent entry, respond to it by name. Their free
 text is the highest-signal thing you have: grades attempted, where they pumped out, what felt
 off. Use the specifics rather than restating them. \`skipped\` lists steps they were prescribed
@@ -263,6 +271,27 @@ export function assertRespectsPrescriptions(
       );
     }
   }
+}
+
+/**
+ * A rest day the scheduler did not call, and that no current injury requires,
+ * is dropped. Otherwise "resting tomorrow" from two days ago becomes another
+ * rest day after the rest was already taken.
+ */
+export function dropInventedRestDay<T extends CoachSuggestion & { restDay?: boolean }>(
+  suggestion: T,
+  context: CoachContext,
+): T {
+  if (suggestion.restDay !== true) return suggestion;
+  if (context.schedule?.restDay === true) return suggestion;
+  const blocking = (suggestion.injuries ?? []).some((injury) => injury.noClimbing);
+  if (blocking) return suggestion;
+  return {
+    ...suggestion,
+    restDay: false,
+    plan: context.baselinePlan?.length ? context.baselinePlan : suggestion.plan,
+    headline: /rest/i.test(suggestion.headline) ? 'Training day' : suggestion.headline,
+  };
 }
 
 export function assertRespectsSchedule(
@@ -449,7 +478,7 @@ export async function generateCoachSuggestion(context: CoachContext): Promise<Co
       const raw = await callProvider(id, context, !hasNext);
       assertRespectsSchedule(raw, context);
       assertRespectsPrescriptions(raw, context);
-      return raw;
+      return dropInventedRestDay(raw, context);
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       if (!hasNext || !shouldFailover(err)) {

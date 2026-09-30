@@ -50,6 +50,17 @@ export interface CoachSchedule {
   /** One-line plain-English summary of the last few days. */
   recentLoadSummary: string;
   /**
+   * Rests announced in an older entry whose day has already passed.
+   * "Resting tomorrow" written two days ago is yesterday, and yesterday
+   * already counted. Not a reason to rest today.
+   */
+  fulfilledRests?: {
+    writtenDaysAgo: number;
+    targetDaysAgo: number;
+    quote: string;
+    taken: boolean;
+  }[];
+  /**
    * Unresolved injury from recent logs. When set this is a hard constraint:
    * do not load the injured area, and do not prescribe performance climbing
    * if `noClimbing` is true.
@@ -119,6 +130,8 @@ export interface CoachContext {
   /** Most recent journal entries (newest first), free text included. */
   journals: {
     date: number;
+    /** 0 = today, 1 = yesterday. "Tomorrow" inside the entry is relative to this. */
+    daysAgo: number;
     activities: string[];
     intensity?: string;
     summary?: string;

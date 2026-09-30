@@ -199,7 +199,34 @@ describe('buildCoachContext', () => {
       const ctx = buildCoachContext(
         input({ climbs: [climb(-2, { grade: 'V6', outcome: 'flash' })] }),
       );
-      expect(ctx.recentDays[0].climbs).toEqual(['V6 flash']);
+      expect(ctx.recentDays[0].daysAgo).toBe(1);
+      expect(ctx.recentDays[0].focus).toEqual(['Rest']);
+      expect(ctx.recentDays.find((d) => d.climbs.length > 0)?.climbs).toEqual(['V6 flash']);
+    });
+
+    it('treats "resting tomorrow" from two days ago as a rest already taken', () => {
+      const ctx = buildCoachContext(
+        input({
+          journals: [
+            journal(-2, {
+              activities: ['climbing'],
+              intensity: 'moderate',
+              summary: "I'm fully resting tomorrow",
+            }),
+          ],
+        }),
+      );
+      expect(ctx.schedule.restDay).toBe(false);
+      expect(ctx.schedule.fulfilledRests).toEqual([
+        expect.objectContaining({
+          writtenDaysAgo: 2,
+          targetDaysAgo: 1,
+          taken: true,
+        }),
+      ]);
+      expect(ctx.schedule.recentLoadSummary).toMatch(/already taken/i);
+      expect(ctx.recentDays[0]).toEqual(expect.objectContaining({ daysAgo: 1, focus: ['Rest'] }));
+      expect(ctx.journals[0].daysAgo).toBe(2);
     });
   });
 

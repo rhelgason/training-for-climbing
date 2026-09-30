@@ -48,7 +48,8 @@ import {
   latestReadingForDay,
   readinessFromEnergyEmotion,
 } from '../train/energyEmotion';
-import { currentStreak, trainingDates } from '../train/log';
+import { currentStreak, dayIndex, trainingDates } from '../train/log';
+import { resolveAnnouncedRests, type AnnouncedRest } from '../train/announcedRest';
 import type { CoachContext, CoachMacrocycleBlock, CoachSchedule } from './types';
 
 export interface CoachContextInput {
@@ -136,6 +137,7 @@ function scheduleFrom(
   suggestedFocus: SessionFocusId | null,
   plannedDaysPerWeek: number,
   injury: CoachSchedule['injury'] = null,
+  fulfilled: AnnouncedRest[] = [],
 ): CoachSchedule {
   return {
     restDay: cycle.restDay,
@@ -161,6 +163,14 @@ function scheduleFrom(
     hardDaysInARow: cycle.hardDaysInARow,
     recentLoadSummary: cycle.recentLoadSummary,
     injury,
+    fulfilledRests: fulfilled
+      .filter((r) => r.targetDaysAgo > 0)
+      .map((r) => ({
+        writtenDaysAgo: r.writtenDaysAgo,
+        targetDaysAgo: r.targetDaysAgo,
+        quote: r.quote,
+        taken: r.taken,
+      })),
   };
 }
 
@@ -228,6 +238,7 @@ export function buildCoachContext(input: CoachContextInput): CoachContext {
       readiness,
       sessionLength,
       blockFocuses,
+      journals: input.journals,
     });
 
   return {
@@ -263,6 +274,7 @@ export function buildCoachContext(input: CoachContextInput): CoachContext {
             noHighIntensity: recommendation.injury.noHighIntensity,
           }
         : null,
+      resolveAnnouncedRests(input.journals, history, input.nowMs),
     ),
     recentDays: recentDays(input.journals, input.climbs, input.nowMs, MAX_RECENT_DAYS).map((d) => ({
       date: d.date,
@@ -304,6 +316,7 @@ export function buildCoachContext(input: CoachContextInput): CoachContext {
       .slice(0, MAX_JOURNALS)
       .map((j) => ({
         date: j.date,
+        daysAgo: dayIndex(input.nowMs) - dayIndex(j.date),
         activities: j.activities,
         intensity: j.intensity,
         summary: j.summary,

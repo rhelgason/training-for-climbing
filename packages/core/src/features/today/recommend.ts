@@ -221,6 +221,19 @@ export function buildDailyRecommendation(input: DailyInput): DailyRecommendation
         sessionLength: input.sessionLength ?? 'standard',
         blockFocuses: input.blockFocuses,
         injury,
+        journals: input.dailyNote?.trim()
+          ? [
+              ...(input.journals ?? []),
+              {
+                id: 'daily-note',
+                createdAt: input.nowMs,
+                updatedAt: input.nowMs,
+                date: input.nowMs,
+                activities: [],
+                summary: input.dailyNote,
+              },
+            ]
+          : input.journals,
       })
     : null;
 

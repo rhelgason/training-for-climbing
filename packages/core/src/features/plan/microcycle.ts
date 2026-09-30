@@ -40,6 +40,12 @@ import {
 } from '../train/load';
 import { dayIndex } from '../train/log';
 import type { DetectedInjury } from '../train/injury';
+import {
+  announcedRestDueToday,
+  announcedRestSummary,
+  resolveAnnouncedRests,
+} from '../train/announcedRest';
+import type { JournalEntry } from '../../db/types';
 
 export interface MicrocycleInput {
   /** Applied load, newest first (from `loadHistory`). */
@@ -65,6 +71,11 @@ export interface MicrocycleInput {
    * working; when set it is a hard constraint, not a suggestion.
    */
   injury?: DetectedInjury | null;
+  /**
+   * Raw entries, so "I'm fully resting tomorrow" can be pinned to the day
+   * after it was written. Optional: callers without prose keep the old rules.
+   */
+  journals?: JournalEntry[];
 }
 
 export type FocusStatus = 'due' | 'available' | 'blocked';
@@ -295,7 +306,11 @@ export function buildMicrocycle(input: MicrocycleInput): Microcycle {
   // the thing being decided and is usually not logged yet.
   const hardDaysInARow = priorHardDayRun(input.history, input.nowMs);
   const daysSinceTraining = daysSinceAnyLoad(input.history, input.nowMs);
-  const recentLoadSummary = summariseRecentLoad(input, daysSinceTraining);
+  const announced = resolveAnnouncedRests(input.journals ?? [], input.history, input.nowMs);
+  const announcedNote = announcedRestSummary(announced);
+  const recentLoadSummary = announcedNote
+    ? `${summariseRecentLoad(input, daysSinceTraining)} ${announcedNote}`
+    : summariseRecentLoad(input, daysSinceTraining);
 
   const rest = (restReason: string, restKind: RestKind): Microcycle => ({
     restDay: true,
@@ -327,6 +342,8 @@ export function buildMicrocycle(input: MicrocycleInput): Microcycle {
       'recovery',
     );
   }
+  const dueToday = announcedRestDueToday(announced);
+  if (dueToday) return rest(dueToday, 'budget');
   // Only a budget call, so it never fires on someone who has clearly recovered:
   // two rest days in means an extra session isn't overtraining, whatever the
   // rolling count says.
