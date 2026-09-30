@@ -228,6 +228,25 @@ describe('buildCoachContext', () => {
       expect(ctx.recentDays[0]).toEqual(expect.objectContaining({ daysAgo: 1, focus: ['Rest'] }));
       expect(ctx.journals[0].daysAgo).toBe(2);
     });
+
+    it('does not rest today when yesterday said tomorrow is the rest', () => {
+      const ctx = buildCoachContext(
+        input({
+          journals: [
+            journal(-1, {
+              activities: ['climbing'],
+              intensity: 'moderate',
+              summary: "I'm fully resting tomorrow",
+            }),
+          ],
+        }),
+      );
+      expect(ctx.schedule.restDay).toBe(false);
+      expect(ctx.schedule.fulfilledRests?.[0]).toEqual(
+        expect.objectContaining({ writtenDaysAgo: 1, targetDaysAgo: 0, taken: false }),
+      );
+      expect(ctx.schedule.recentLoadSummary).toMatch(/does not schedule/i);
+    });
   });
 
   describe('the binding schedule', () => {

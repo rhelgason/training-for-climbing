@@ -30,6 +30,21 @@ const note = (id: string, text: string) => ({
   addedAt: Date.UTC(2026, 7, 20),
 });
 
+describe('TrainingPreferences — how hard to push', () => {
+  it('defaults an existing profile to full-time and can switch to steady', async () => {
+    await repo.saveProfile({ daysPerWeek: 4 });
+    await renderPrefs();
+
+    expect(screen.getByRole('button', { name: 'Full-time', pressed: true })).toBeInTheDocument();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Steady' }));
+    });
+    await waitFor(async () => {
+      expect((await repo.getProfile())?.trainingPush).toBe('steady');
+    });
+  });
+});
+
 describe('TrainingPreferences — derived context', () => {
   it('shows nothing when the app has worked nothing out', async () => {
     await renderPrefs();

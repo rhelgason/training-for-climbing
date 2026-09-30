@@ -19,6 +19,7 @@ import {
   type ProfileSettings,
   type SessionLength,
   type StyleFocus,
+  type TrainingPush,
 } from '@tfc/core';
 import { Card } from './Card';
 import { EquipmentPicker } from './EquipmentPicker';
@@ -49,10 +50,14 @@ const LENGTH_OPTIONS: ChipOption<SessionLength>[] = SESSION_LENGTHS.map((s) => (
   label: SESSION_LENGTH_LABELS[s],
   value: s,
 }));
-const DAYS_OPTIONS: ChipOption<string>[] = ['1', '2', '3', '4', '5', '6'].map((d) => ({
+const DAYS_OPTIONS: ChipOption<string>[] = ['1', '2', '3', '4', '5', '6', '7'].map((d) => ({
   label: d,
   value: d,
 }));
+const PUSH_OPTIONS: ChipOption<TrainingPush>[] = [
+  { label: 'Full-time', value: 'full-time' },
+  { label: 'Steady', value: 'steady' },
+];
 
 const textareaClass =
   'w-full min-h-32 rounded-xl border border-border bg-surface-alt/60 px-4 py-2.5 text-base text-text placeholder:text-muted focus:border-primary focus:outline-none';
@@ -87,6 +92,19 @@ export function TrainingPreferences() {
       <p className="-mt-2 text-sm leading-6 text-muted">
         These tailor your daily suggestion, defaults, and reminders.
       </p>
+
+      <Card>
+        <p className="mb-1 font-semibold">How hard to push</p>
+        <p className="mb-2 text-sm leading-5 text-muted">
+          Full-time trains most days. It rests only for an injury, something that hurts, or three
+          hard days in a row. Steady rests once you hit the days-per-week number.
+        </p>
+        <OptionChips
+          options={PUSH_OPTIONS}
+          selected={settings.trainingPush}
+          onSelect={(trainingPush) => update({ trainingPush })}
+        />
+      </Card>
 
       <Card>
         <p className="mb-2 font-semibold">Ability tier</p>
@@ -159,7 +177,9 @@ export function TrainingPreferences() {
       <Card>
         <p className="mb-1 font-semibold">Training days per week</p>
         <p className="mb-2 text-sm leading-5 text-muted">
-          The budget your plan is built against — it decides when you&apos;re told to rest.
+          {settings.trainingPush === 'full-time'
+            ? 'A target, not a ceiling. Full-time does not rest you for hitting this number.'
+            : 'On Steady, hitting this number is when you are told to rest.'}
         </p>
         <OptionChips
           options={DAYS_OPTIONS}

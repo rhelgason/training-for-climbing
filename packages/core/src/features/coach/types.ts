@@ -9,6 +9,7 @@
  * reliably, and the app already has.
  */
 import type { TriadArea } from '../../content/types';
+import type { TrainingPush } from '../../db/types';
 import type {
   EquipmentId,
   Readiness,
@@ -50,9 +51,9 @@ export interface CoachSchedule {
   /** One-line plain-English summary of the last few days. */
   recentLoadSummary: string;
   /**
-   * Rests announced in an older entry whose day has already passed.
+   * Rests announced in a journal, including one whose sentence points at today.
    * "Resting tomorrow" written two days ago is yesterday, and yesterday
-   * already counted. Not a reason to rest today.
+   * already counted. Naming a rest never makes today a rest day.
    */
   fulfilledRests?: {
     writtenDaysAgo: number;
@@ -83,6 +84,8 @@ export interface CoachContext {
     abilityTier: string;
     styleFocus: StyleFocus;
     daysPerWeek: number;
+    /** `full-time` trains most days. `steady` rests once `daysPerWeek` is met. */
+    trainingPush?: TrainingPush;
     sessionLength: SessionLength;
     /** Equipment normally available. */
     equipment: EquipmentId[];

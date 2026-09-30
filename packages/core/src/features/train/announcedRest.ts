@@ -2,8 +2,9 @@
  * A journal sentence like "I'm fully resting tomorrow" is about one calendar
  * day — the day after that entry — not about every day that follows.
  *
- * Unlogged days are already rest. Once the day the sentence pointed at has
- * passed, the rest is taken and must not be prescribed again.
+ * It never schedules a rest. Unlogged days are already rest, and naming one
+ * (including "that rest is today") is not a reason to take another day off.
+ * The sentence is only here so the coach can be told not to honour it again.
  */
 import type { JournalEntry } from '../../db/types';
 import { dayIndex } from '../../lib/day';
@@ -86,29 +87,23 @@ export function resolveAnnouncedRests(
   return found.sort((a, b) => a.writtenDaysAgo - b.writtenDaysAgo);
 }
 
-/** Rest they said is today, if today is not already logged as training. */
-export function announcedRestDueToday(rests: AnnouncedRest[]): string | null {
-  const due = rests.find((r) => r.dueToday);
-  if (!due) return null;
-  return `${capitalise(when(due.writtenDaysAgo))} you wrote "${due.quote}". That rest is today.`;
-}
-
 /**
- * Rests whose day has already arrived. This is the sentence the coach and the
- * "why" line must see, so a finished rest is not prescribed again.
+ * What the coach and the "why" line must see, so a named rest is not prescribed
+ * again — including when the sentence is about today.
  */
 export function announcedRestSummary(rests: AnnouncedRest[]): string {
-  const lines = rests
-    .filter((r) => !r.dueToday)
-    .slice(0, 2)
-    .map((r) => {
-      if (r.targetDaysAgo > 0 && r.taken) {
-        return `${capitalise(when(r.writtenDaysAgo))} you wrote "${r.quote}", which was about ${when(r.targetDaysAgo)}. Nothing was logged that day, so that rest is already taken. Do not rest today because of it.`;
-      }
-      if (r.targetDaysAgo > 0) {
-        return `${capitalise(when(r.writtenDaysAgo))} you wrote "${r.quote}", which was about ${when(r.targetDaysAgo)}. You trained that day, so it is not an open rest.`;
-      }
-      return `${capitalise(when(r.writtenDaysAgo))} you wrote "${r.quote}", which is about ${when(r.targetDaysAgo)}, not today.`;
-    });
+  const lines = rests.slice(0, 2).map((r) => {
+    const wrote = `${capitalise(when(r.writtenDaysAgo))} you wrote "${r.quote}"`;
+    if (r.targetDaysAgo === 0) {
+      return `${wrote}, which is about today. Naming a rest does not schedule one. Do not take the day off because of that sentence.`;
+    }
+    if (r.targetDaysAgo > 0 && r.taken) {
+      return `${wrote}, which was about ${when(r.targetDaysAgo)}. Nothing was logged that day, so that rest is already taken. Do not rest today because of it.`;
+    }
+    if (r.targetDaysAgo > 0) {
+      return `${wrote}, which was about ${when(r.targetDaysAgo)}. You trained that day, so it is not an open rest.`;
+    }
+    return `${wrote}, which is about ${when(r.targetDaysAgo)}, not today.`;
+  });
   return lines.join(' ');
 }

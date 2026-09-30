@@ -40,12 +40,8 @@ import {
 } from '../train/load';
 import { dayIndex } from '../train/log';
 import type { DetectedInjury } from '../train/injury';
-import {
-  announcedRestDueToday,
-  announcedRestSummary,
-  resolveAnnouncedRests,
-} from '../train/announcedRest';
-import type { JournalEntry } from '../../db/types';
+import { announcedRestSummary, resolveAnnouncedRests } from '../train/announcedRest';
+import type { JournalEntry, TrainingPush } from '../../db/types';
 
 export interface MicrocycleInput {
   /** Applied load, newest first (from `loadHistory`). */
@@ -57,6 +53,11 @@ export interface MicrocycleInput {
   styleFocus: StyleFocus;
   /** How many days a week the climber can train. */
   daysPerWeek: number;
+  /**
+   * `full-time` (the default) does not rest for the weekly count. `steady`
+   * still does, once that count is met and they trained recently.
+   */
+  trainingPush?: TrainingPush;
   /** Equipment reachable today (today's check-in, else the profile's usual set). */
   equipment: EquipmentId[];
   readiness: Readiness;
@@ -73,7 +74,7 @@ export interface MicrocycleInput {
   injury?: DetectedInjury | null;
   /**
    * Raw entries, so "I'm fully resting tomorrow" can be pinned to the day
-   * after it was written. Optional: callers without prose keep the old rules.
+   * after it was written and then ignored as a rest trigger. Optional.
    */
   journals?: JournalEntry[];
 }
@@ -342,12 +343,17 @@ export function buildMicrocycle(input: MicrocycleInput): Microcycle {
       'recovery',
     );
   }
-  const dueToday = announcedRestDueToday(announced);
-  if (dueToday) return rest(dueToday, 'budget');
-  // Only a budget call, so it never fires on someone who has clearly recovered:
-  // two rest days in means an extra session isn't overtraining, whatever the
-  // rolling count says.
-  if (trainingDaysThisWeek >= input.daysPerWeek && (daysSinceTraining ?? 0) < 2) {
+  // A named rest ("I'm resting tomorrow") is context for the coach, not a
+  // day off. The summary above already says not to honour it again.
+  // Steady climbers still rest once the week they planned is done, and only
+  // when they have not already had a day off. Full-time skips that budget:
+  // the count is a target, not a ceiling.
+  const push = input.trainingPush ?? 'full-time';
+  if (
+    push === 'steady' &&
+    trainingDaysThisWeek >= input.daysPerWeek &&
+    (daysSinceTraining ?? 0) < 2
+  ) {
     return rest(
       `That's ${trainingDaysThisWeek} training days in the last 7, the ${input.daysPerWeek} you planned for. Resting is the plan working — but you know your week best.`,
       'budget',

@@ -119,6 +119,8 @@ export default function TrainHome() {
     .map((j) => `${j.id}:${j.updatedAt}`)
     .sort()
     .join(',');
+  // `logic` is part of the key so a cached rest plan from an older coach is
+  // thrown out after the rules change, without waiting on a new journal.
   const contextKey =
     today && daily.confirmed && state
       ? [
@@ -129,6 +131,8 @@ export default function TrainHome() {
           [...today.equipment].sort().join(','),
           journalStamp,
           state.checkinStamp,
+          effectiveProfile(state.profile).trainingPush,
+          'logic3',
         ].join('|')
       : undefined;
   const coach = useCoach(repo, useDebouncedValue(contextKey, COACH_SETTLE_MS));
@@ -256,6 +260,7 @@ export default function TrainHome() {
         abilityTier: settings.abilityTier,
         styleFocus: settings.styleFocus,
         daysPerWeek: settings.daysPerWeek,
+        trainingPush: settings.trainingPush,
         equipment: today.equipment,
         readiness: combineReadiness(
           today.readiness,

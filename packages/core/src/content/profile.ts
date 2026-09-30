@@ -1,5 +1,5 @@
 /** User profile defaults and resolution helpers. */
-import type { GradeSystem, ProfileRecord } from '../db/types';
+import type { GradeSystem, ProfileRecord, TrainingPush } from '../db/types';
 import type { ClimbDiscipline } from './climbing';
 import type { AbilityTier } from './planning';
 import {
@@ -23,6 +23,7 @@ export interface ProfileSettings {
   styleFocus: StyleFocus;
   equipment: EquipmentId[];
   daysPerWeek: number;
+  trainingPush: TrainingPush;
   sessionLength: SessionLength;
   onboardedAt?: number;
 }
@@ -45,6 +46,7 @@ export const PROFILE_DEFAULTS: ProfileSettings = {
   styleFocus: 'all-round',
   equipment: DEFAULT_EQUIPMENT,
   daysPerWeek: 3,
+  trainingPush: 'full-time',
   sessionLength: 'standard',
   onboardedAt: undefined,
 };
@@ -64,6 +66,7 @@ export function effectiveProfile(profile: ProfileRecord | null): ProfileSettings
     styleFocus: profile.styleFocus ?? PROFILE_DEFAULTS.styleFocus,
     equipment: profile.equipment ?? [...PROFILE_DEFAULTS.equipment],
     daysPerWeek: profile.daysPerWeek ?? PROFILE_DEFAULTS.daysPerWeek,
+    trainingPush: profile.trainingPush ?? PROFILE_DEFAULTS.trainingPush,
     sessionLength: profile.sessionLength ?? PROFILE_DEFAULTS.sessionLength,
     onboardedAt: profile.onboardedAt,
   };

@@ -14,6 +14,12 @@ import type {
 /** The grade scale a climber uses (only US YDS/V for now). */
 export type GradeSystem = 'yds-v';
 
+/**
+ * How hard the week pushes.
+ * `full-time` trains most days. `steady` rests once the days-per-week budget is met.
+ */
+export type TrainingPush = 'full-time' | 'steady';
+
 /** Single-row user profile / settings. */
 export interface ProfileRecord {
   /** Always PROFILE_ID — this is a singleton. */
@@ -42,6 +48,12 @@ export interface ProfileRecord {
   equipment: EquipmentId[];
   /** How many days a week they can realistically train. */
   daysPerWeek: number;
+  /**
+   * Full-time skips the weekly rest budget. Missing on older profiles; readers
+   * treat that as full-time so a climber who asked to be pushed is not waiting
+   * on a settings change.
+   */
+  trainingPush?: TrainingPush;
   /** Their typical session length. */
   sessionLength: SessionLength;
   /** Set when the guided sign-up flow was completed; drives the welcome redirect. */
@@ -84,6 +96,7 @@ export type ProfilePatch = Partial<
     | 'styleFocus'
     | 'equipment'
     | 'daysPerWeek'
+    | 'trainingPush'
     | 'sessionLength'
     | 'onboardedAt'
     | 'dismissedInsights'

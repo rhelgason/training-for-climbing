@@ -13,7 +13,8 @@
  * paths obey the same recovery rules.
  *
  * Rules, each grounded in the training literature:
- *  - Hard days in a row, or a full week's quota, means rest.
+ *  - Three hard days in a row means rest. A steady week also rests once its
+ *    day budget is met; a full-time week does not.
  *  - Otherwise target the weakest triad area; that's where training pays best.
  *  - Take the assessment first if none exists — it drives everything.
  *  - Train in hierarchy order within a session: skill → max strength/power →
@@ -32,7 +33,13 @@ import {
 } from '../../content/trainingContext';
 import { TRIAD_LABELS, type TriadArea } from '../../content/types';
 import type { AbilityTier } from '../../content/planning';
-import type { BenchmarkRecord, ClimbRecord, GoalRecord, JournalEntry } from '../../db/types';
+import type {
+  BenchmarkRecord,
+  ClimbRecord,
+  GoalRecord,
+  JournalEntry,
+  TrainingPush,
+} from '../../db/types';
 import { activeGoals } from '../plan/goals';
 import { buildMicrocycle, type Microcycle, type RestKind } from '../plan/microcycle';
 import { detectInjury, type DetectedInjury } from '../train/injury';
@@ -65,6 +72,8 @@ export interface DailyInput {
   abilityTier?: AbilityTier;
   styleFocus?: StyleFocus;
   daysPerWeek?: number;
+  /** Defaults to full-time: the weekly count does not force a rest day. */
+  trainingPush?: TrainingPush;
   /** Equipment available today. Defaults to a typical gym. */
   equipment?: EquipmentId[];
   readiness?: Readiness;
@@ -216,6 +225,7 @@ export function buildDailyRecommendation(input: DailyInput): DailyRecommendation
         weakestArea: input.weakestArea,
         styleFocus: input.styleFocus ?? 'all-round',
         daysPerWeek: input.daysPerWeek ?? 3,
+        trainingPush: input.trainingPush ?? 'full-time',
         equipment,
         readiness: input.readiness ?? 'ok',
         sessionLength: input.sessionLength ?? 'standard',

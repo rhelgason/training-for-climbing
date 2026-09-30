@@ -225,12 +225,22 @@ describe('whole-day rest rules', () => {
     expect(cycle.restReason).toContain('3 days running');
   });
 
-  it("rests once the week's planned training days are used up", () => {
+  it('does not rest a full-time climber just because the weekly count is met', () => {
     const history = loadHistory(
       [-1, -2, -3].map((o) => day(o, ['skill'], 'moderate')),
       [],
     );
     const cycle = buildMicrocycle(input({ history, daysPerWeek: 3 }));
+    expect(cycle.trainingDaysThisWeek).toBe(3);
+    expect(cycle.restDay).toBe(false);
+  });
+
+  it("rests a steady climber once the week's planned training days are used up", () => {
+    const history = loadHistory(
+      [-1, -2, -3].map((o) => day(o, ['skill'], 'moderate')),
+      [],
+    );
+    const cycle = buildMicrocycle(input({ history, daysPerWeek: 3, trainingPush: 'steady' }));
     expect(cycle.restDay).toBe(true);
     expect(cycle.trainingDaysThisWeek).toBe(3);
     // A budget call, not a physiological one — so it offers a way to still train.
@@ -251,7 +261,7 @@ describe('whole-day rest rules', () => {
       [-3, -4, -5].map((o) => day(o, ['skill'], 'moderate')),
       [],
     );
-    const cycle = buildMicrocycle(input({ history, daysPerWeek: 3 }));
+    const cycle = buildMicrocycle(input({ history, daysPerWeek: 3, trainingPush: 'steady' }));
     expect(cycle.trainingDaysThisWeek).toBe(3);
     expect(cycle.restDay).toBe(false);
   });
@@ -382,7 +392,7 @@ describe('explaining itself', () => {
     expect(cycle.recentLoadSummary).toMatch(/yesterday/i);
   });
 
-  it('rests today when yesterday wrote that tomorrow is the rest day', () => {
+  it('does not rest today just because yesterday said tomorrow is a rest day', () => {
     const written = journal(-1, {
       activities: ['climbing'],
       intensity: 'moderate',
@@ -391,8 +401,9 @@ describe('explaining itself', () => {
     const cycle = buildMicrocycle(
       input({ history: loadHistory([written], []), journals: [written] }),
     );
-    expect(cycle.restDay).toBe(true);
-    expect(cycle.restReason).toMatch(/that rest is today/i);
+    expect(cycle.restDay).toBe(false);
+    expect(cycle.recentLoadSummary).toMatch(/does not schedule/i);
+    expect(cycle.recentLoadSummary).toMatch(/today/i);
   });
 
   it('does not treat "not resting tomorrow" as an announced rest', () => {

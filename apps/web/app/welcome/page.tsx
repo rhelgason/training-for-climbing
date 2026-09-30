@@ -37,6 +37,7 @@ import {
   type GoalHorizon,
   type SessionLength,
   type StyleFocus,
+  type TrainingPush,
 } from '@tfc/core';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
@@ -64,10 +65,14 @@ const LENGTH_OPTIONS: ChipOption<SessionLength>[] = SESSION_LENGTHS.map((s) => (
   label: SESSION_LENGTH_LABELS[s],
   value: s,
 }));
-const DAYS_OPTIONS: ChipOption<string>[] = ['1', '2', '3', '4', '5', '6'].map((d) => ({
+const DAYS_OPTIONS: ChipOption<string>[] = ['1', '2', '3', '4', '5', '6', '7'].map((d) => ({
   label: `${d} day${d === '1' ? '' : 's'}`,
   value: d,
 }));
+const PUSH_OPTIONS: ChipOption<TrainingPush>[] = [
+  { label: 'Full-time', value: 'full-time' },
+  { label: 'Steady', value: 'steady' },
+];
 const HORIZON_OPTIONS: ChipOption<GoalHorizon>[] = GOAL_HORIZONS.map((h) => ({
   label: GOAL_HORIZON_LABELS[h.id],
   value: h.id,
@@ -105,6 +110,7 @@ export default function Welcome() {
 
   // Step 4 — your week
   const [daysPerWeek, setDaysPerWeek] = useState(3);
+  const [trainingPush, setTrainingPush] = useState<TrainingPush>('full-time');
   const [sessionLength, setSessionLength] = useState<SessionLength>('standard');
   const [equipment, setEquipment] = useState<EquipmentId[]>([...DEFAULT_EQUIPMENT]);
 
@@ -200,6 +206,7 @@ export default function Welcome() {
         styleFocus,
         climberContext: climberContext.trim() || undefined,
         daysPerWeek,
+        trainingPush,
         sessionLength,
         equipment,
         onboardedAt: now(),
@@ -420,10 +427,23 @@ export default function Welcome() {
         <>
           <h1 className="display text-3xl font-extrabold">Your week</h1>
           <Card>
+            <p className="mb-1 font-semibold">How hard to push</p>
+            <p className="mb-2 text-sm leading-5 text-muted">
+              Full-time trains most days and only rests for an injury, something that hurts, or
+              three hard days in a row. Steady rests once you hit the number below.
+            </p>
+            <OptionChips
+              options={PUSH_OPTIONS}
+              selected={trainingPush}
+              onSelect={setTrainingPush}
+            />
+          </Card>
+          <Card>
             <p className="mb-1 font-semibold">How many days a week can you train?</p>
             <p className="mb-2 text-sm leading-5 text-muted">
-              Be honest — this is the budget your plan is built against, and it decides when
-              you&apos;re told to rest.
+              {trainingPush === 'full-time'
+                ? 'A target, not a ceiling. Full-time does not rest you for hitting this number.'
+                : 'On Steady, hitting this number is when you are told to rest.'}
             </p>
             <OptionChips
               options={DAYS_OPTIONS}

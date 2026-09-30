@@ -37,6 +37,11 @@ describe('effectiveProfile', () => {
     expect(PROFILE_DEFAULTS.aiCoachEnabled).toBe(true);
   });
 
+  it('treats a profile that never chose a push as full-time', () => {
+    expect(effectiveProfile(profile()).trainingPush).toBe('full-time');
+    expect(effectiveProfile(profile({ trainingPush: 'steady' })).trainingPush).toBe('steady');
+  });
+
   it('passes through a fully-populated profile unchanged', () => {
     const record = profile({ styleFocus: 'sport-endurance', daysPerWeek: 5 });
     const settings = effectiveProfile(record);
@@ -70,7 +75,13 @@ describe('effectiveProfile', () => {
 
     it('never yields undefined for a field the scheduler depends on', () => {
       const settings = effectiveProfile(legacy);
-      for (const key of ['styleFocus', 'equipment', 'daysPerWeek', 'sessionLength'] as const) {
+      for (const key of [
+        'styleFocus',
+        'equipment',
+        'daysPerWeek',
+        'trainingPush',
+        'sessionLength',
+      ] as const) {
         expect(settings[key]).toBeDefined();
       }
     });

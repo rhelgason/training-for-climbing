@@ -116,27 +116,36 @@ suggestions. Violating one produces a plan that will injure or overtrain them:
   note saved on an earlier day. If it is not in the newest entries, it has settled.
 - Weight the newest entries over the older ones in that list. If a problem shows up in an
   older entry and the later ones do not mention it, or they say it is healing, getting better,
-  pain-free, or they trained on it, do not set \`restDay\` for it, do not avoid loading it,
-  and do not include it in \`injuries\`. Ordinary pump and next-day soreness are not injuries.
-- Set \`restDay\` true for a physical problem only when a newest entry or today's note still
-  describes something unresolved (a fresh tear, MRI, "can't climb", a body part that still
-  hurts in a way that is more than ordinary pump) and they should not load that tissue today.
-  Report only that current problem in \`injuries\`. Otherwise \`injuries\` is [].
-- \`schedule.injury\` is a keyword backup over those same recent entries, not a record that
-  outlives them. If it is set, honour it. If \`noClimbing\` is true, prescribe REST / rehab
-  only — no performance climbing, hangboard, campus, or limit boulders. If \`noHighIntensity\`
-  is true, do not prescribe max strength, power, or power-endurance. If it is null, do not
-  invent a rest day from an older story.
+  pain-free, or they trained on it, do not avoid loading it and do not include it in
+  \`injuries\`. Ordinary pump and next-day soreness are not injuries.
+- The scheduler is the only authority on whether today is a rest day. \`restDay\` MUST equal
+  \`schedule.restDay\`. You may not invent a rest, a day off, a deload, active recovery,
+  a mobility-only day, "take it easy", or "no climbing" when \`schedule.restDay\` is false.
+  Not for a journal sentence, not for soreness, not for a weekly count, and not because you
+  set \`injuries[].noClimbing\`. If \`schedule.injury\` is null, \`injuries\` is [].
+- If a newest entry describes a fresh tear, MRI, or not being able to climb and
+  \`schedule.injury\` is null, name it in \`watchOuts\` and keep today's work off that
+  tissue. Still do not set \`restDay\`. The scheduler already decided the day is for training.
+- \`schedule.injury\` is a keyword reading of those same recent entries, not a record that
+  outlives them. If \`schedule.restDay\` is true because of it, prescribe REST / rehab only —
+  no performance climbing, hangboard, campus, or limit boulders. If \`noHighIntensity\` is
+  true, do not prescribe max strength, power, or power-endurance, and still write a real
+  session from what \`schedule.allowed\` leaves.
 - If \`schedule.restDay\` is true, prescribe a REST day. Do not find a workout that "still
   counts". Say why, using \`schedule.restReason\`, and give recovery guidance only.
-  You MAY also rest when the scheduler did not, but only for a problem that is still
-  unresolved in the newest entries, as above. Do not set \`restDay\` for any other reason.
-- \`schedule.fulfilledRests\` are rests they already announced. "Tomorrow" and "today"
-  inside a journal are relative to that entry's \`daysAgo\`, not to now. An entry with
-  \`daysAgo: 2\` that says "I'm fully resting tomorrow" is about yesterday. If that day
-  is in \`fulfilledRests\` with \`taken: true\`, or \`recentDays\` shows it as Rest with
-  no session logged, the rest already happened. Do not set \`restDay\`, and do not
-  write a rest plan, to honour it again.
+- If \`schedule.restDay\` is false, write a real training session that fills
+  \`today.sessionLength\`. Prefer the hardest focus in \`schedule.allowed\` that serves
+  \`macrocycle.current\`. Do not shorten it, soften it, or turn it into an easy day.
+- \`profile.trainingPush\` is \`full-time\` unless it says \`steady\`. Full-time means this
+  climber is trying to improve quickly and trains most days. The weekly day-count is not a
+  reason to rest them or to write an easier session. Push the best work they are allowed to do.
+- \`schedule.fulfilledRests\` are rests they already announced, including one whose sentence
+  points at today. "Tomorrow" and "today" inside a journal are relative to that entry's
+  \`daysAgo\`, not to now. An entry with \`daysAgo: 2\` that says "I'm fully resting tomorrow"
+  is about yesterday. If that day is in \`fulfilledRests\`, or \`recentDays\` shows it as Rest
+  with no session logged, the rest already happened. Do not set \`restDay\`, and do not write
+  a rest plan, an easy day, or active recovery to honour it again. Naming a rest never makes
+  today a rest day.
 - Prescribe ONLY focuses listed in \`schedule.allowed\`. Never prescribe anything in
   \`schedule.blocked\` — each carries the reason it is out (too soon since the last one, weekly
   ceiling reached, equipment missing, injury, or they reported feeling beaten up).
@@ -203,7 +212,7 @@ Reply with ONLY a JSON object of this exact shape (no markdown, no prose outside
   "plan": string[],              // 3–6 ordered, concrete steps for today
   "rationale": string,           // 1–3 sentences citing their data, incl. their recent sessions
   "watchOuts": string[],         // 0–3 short cautions (injury, overtraining, technique)
-  "restDay": boolean,            // true if they should rest; MUST be true when schedule.restDay is
+  "restDay": boolean,            // MUST equal schedule.restDay. Never true when it is false.
   "injuries": [                  // unresolved physical problems you read in their prose; [] if none
     { "note": string, "evidence": string, "bodyPart": string, "noClimbing": boolean }
   ]
@@ -274,23 +283,34 @@ export function assertRespectsPrescriptions(
 }
 
 /**
- * A rest day the scheduler did not call, and that no current injury requires,
- * is dropped. Otherwise "resting tomorrow" from two days ago becomes another
- * rest day after the rest was already taken.
+ * A day off the scheduler did not call is dropped, including one written as an
+ * easy day, active recovery, or "no climbing" with `restDay` left false.
+ * A model injury does not get to overrule that. "Rest 3 minutes" inside a real
+ * session is not a rest day.
  */
+const REST_SHAPED =
+  /\b(rest day|full rest|complete rest|day off|off day|take it easy|taking it easy|take the day off|active recovery|mobility only|just mobility|just stretch|no climbing|deload|easy day|light day|recovery day|recovery only|recovery session|rest today)\b/i;
+
+function looksLikeRest(headline: string, plan: string[]): boolean {
+  if (/^\s*rest\b/i.test(headline)) return true;
+  return REST_SHAPED.test([headline, ...plan].join('\n'));
+}
+
 export function dropInventedRestDay<T extends CoachSuggestion & { restDay?: boolean }>(
   suggestion: T,
   context: CoachContext,
 ): T {
-  if (suggestion.restDay !== true) return suggestion;
   if (context.schedule?.restDay === true) return suggestion;
-  const blocking = (suggestion.injuries ?? []).some((injury) => injury.noClimbing);
-  if (blocking) return suggestion;
+  const inventedFlag = suggestion.restDay === true;
+  const shaped = looksLikeRest(suggestion.headline, suggestion.plan ?? []);
+  if (!inventedFlag && !shaped) return suggestion;
+  const baseline = (context.baselinePlan ?? []).map((step) => step.trim()).filter(Boolean);
+  const plan = baseline.length > 0 && !looksLikeRest('', baseline) ? baseline : suggestion.plan;
   return {
     ...suggestion,
     restDay: false,
-    plan: context.baselinePlan?.length ? context.baselinePlan : suggestion.plan,
-    headline: /rest/i.test(suggestion.headline) ? 'Training day' : suggestion.headline,
+    plan,
+    headline: looksLikeRest(suggestion.headline, []) ? 'Training day' : suggestion.headline,
   };
 }
 

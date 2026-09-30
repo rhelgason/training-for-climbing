@@ -192,6 +192,11 @@ describe('generateCoachSuggestion', () => {
         noClimbing: true,
       },
     ]);
+    // The injury note can survive. It does not get to turn the day into rest
+    // when the scheduler said train — including by writing "no climbing".
+    expect(suggestion.restDay).toBe(false);
+    expect(suggestion.headline).toBe('Training day');
+    expect(suggestion.plan).toEqual(['Warm up']);
   });
 
   it('never sends a retired Gemini id from LLM_MODEL', async () => {
@@ -432,6 +437,78 @@ describe('generateCoachSuggestion', () => {
     expect(suggestion.restDay).toBe(false);
     expect(suggestion.headline).toBe('Training day');
     expect(suggestion.plan).toEqual(['Warm up']);
+  });
+
+  it('drops a rest day the model hid behind an injury it invented', async () => {
+    process.env.GEMINI_API_KEY = 'test-key';
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        geminiReply({
+          headline: 'Rest — protect the fingers',
+          plan: ['No climbing', 'Light mobility'],
+          rationale: 'You said you were resting.',
+          restDay: true,
+          injuries: [
+            {
+              note: 'Fingers need a day off.',
+              evidence: 'fully resting',
+              bodyPart: 'finger',
+              noClimbing: true,
+            },
+          ],
+        }),
+      ),
+    );
+
+    const suggestion = await generateCoachSuggestion(makeContext(false));
+    expect(suggestion.restDay).toBe(false);
+    expect(suggestion.headline).toBe('Training day');
+    expect(suggestion.plan).toEqual(['Warm up']);
+  });
+
+  it('replaces a rest day written in other words when the scheduler said train', async () => {
+    process.env.GEMINI_API_KEY = 'test-key';
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        geminiReply({
+          headline: 'Active recovery',
+          plan: ['Take it easy', 'Mobility only', 'No climbing'],
+          rationale: 'You have done enough this week.',
+          restDay: false,
+          injuries: [],
+        }),
+      ),
+    );
+
+    const suggestion = await generateCoachSuggestion(makeContext(false));
+    expect(suggestion.restDay).toBe(false);
+    expect(suggestion.headline).toBe('Training day');
+    expect(suggestion.plan).toEqual(['Warm up']);
+  });
+
+  it('keeps a training plan that only mentions rest between efforts', async () => {
+    process.env.GEMINI_API_KEY = 'test-key';
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        geminiReply({
+          headline: 'Power day',
+          plan: ['Warm up on easy boulders', 'Limit boulders, 3 min rest between tries'],
+          rationale: 'Power is allowed today.',
+          restDay: false,
+          injuries: [],
+        }),
+      ),
+    );
+
+    const suggestion = await generateCoachSuggestion(makeContext(false));
+    expect(suggestion.headline).toBe('Power day');
+    expect(suggestion.plan).toEqual([
+      'Warm up on easy boulders',
+      'Limit boulders, 3 min rest between tries',
+    ]);
   });
 });
 

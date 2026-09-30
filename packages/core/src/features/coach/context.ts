@@ -164,7 +164,7 @@ function scheduleFrom(
     recentLoadSummary: cycle.recentLoadSummary,
     injury,
     fulfilledRests: fulfilled
-      .filter((r) => r.targetDaysAgo > 0)
+      .filter((r) => r.targetDaysAgo >= 0)
       .map((r) => ({
         writtenDaysAgo: r.writtenDaysAgo,
         targetDaysAgo: r.targetDaysAgo,
@@ -211,6 +211,7 @@ export function buildCoachContext(input: CoachContextInput): CoachContext {
     abilityTier: profile.abilityTier,
     styleFocus: profile.styleFocus,
     daysPerWeek: profile.daysPerWeek,
+    trainingPush: profile.trainingPush,
     equipment,
     readiness,
     sessionLength,
@@ -234,6 +235,7 @@ export function buildCoachContext(input: CoachContextInput): CoachContext {
       weakestArea: assessment?.weakestArea ?? null,
       styleFocus: profile.styleFocus,
       daysPerWeek: profile.daysPerWeek,
+      trainingPush: profile.trainingPush,
       equipment,
       readiness,
       sessionLength,
@@ -247,6 +249,7 @@ export function buildCoachContext(input: CoachContextInput): CoachContext {
       abilityTier: profile.abilityTier,
       styleFocus: profile.styleFocus,
       daysPerWeek: profile.daysPerWeek,
+      trainingPush: profile.trainingPush,
       sessionLength: profile.sessionLength,
       equipment: profile.equipment,
       climberContext: profile.climberContext,
