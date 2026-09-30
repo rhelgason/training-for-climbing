@@ -29,7 +29,9 @@ import {
   now,
   protocolById,
   relativeTime,
+  log,
   sessionFocus,
+  suggestionLooksLikeRest,
   trackEvent,
   trainingDates,
   type BenchmarkRecord,
@@ -115,8 +117,21 @@ export default function TrainHome() {
   // Debounced because toggling four equipment chips is one decision, not four.
   // Nothing is asked until today's row is confirmed — an assumed OK is not
   // "I feel good", and the call must not go out before they say so.
+  // Content, not updatedAt. A sync rewrites timestamps without changing the
+  // training picture, and that must not ask the coach for a new session.
   const journalStamp = (state?.journals ?? [])
-    .map((j) => `${j.id}:${j.updatedAt}`)
+    .map((j) =>
+      [
+        j.id,
+        j.date,
+        (j.activities ?? []).join('+'),
+        (j.focus ?? []).join('+'),
+        j.intensity ?? '',
+        j.summary ?? '',
+        j.struggles ?? '',
+        j.wins ?? '',
+      ].join(':'),
+    )
     .sort()
     .join(',');
   // `logic` is part of the key so a cached rest plan from an older coach is
@@ -152,7 +167,7 @@ export default function TrainHome() {
   const markDone = async () => {
     if (!state || marking) return;
     const { recommendation: plan, todayJournalId } = state;
-    const rest = Boolean(coach.suggestion?.restDay) || plan.kind === 'rest';
+    const rest = plan.kind === 'rest';
     const focus = rest
       ? (['rest'] as SessionFocusId[])
       : ([plan.focus, ...plan.supportingFocuses].filter(Boolean) as SessionFocusId[]);
@@ -198,7 +213,11 @@ export default function TrainHome() {
       // a step that was never on screen (because the AI rewrote the session)
       // was never confirmed — saving its seeded value would silently duplicate
       // last session's number as if it happened again.
-      const shownSteps = overlayAiPlan(plan.steps, coach.suggestion?.plan);
+      const suggestion = coach.suggestion;
+      const useAiPlan = Boolean(
+        suggestion && plan.kind !== 'rest' && !suggestionLooksLikeRest(suggestion),
+      );
+      const shownSteps = overlayAiPlan(plan.steps, useAiPlan ? suggestion?.plan : undefined);
       const shown = new Set(shownSteps.map((s) => s.text));
       for (const step of shownSteps) {
         if (!step.protocolId) continue;
@@ -207,6 +226,12 @@ export default function TrainHome() {
         if (typeof value !== 'number') continue;
         await repo.saveBenchmark({ testId: step.protocolId, value, date: now() });
       }
+      log.info('train: logged session', {
+        rest,
+        focus: rest ? 'rest' : (plan.focus ?? 'none'),
+        kind: plan.kind,
+        activities: [...activities],
+      });
       trackEvent('plan_completed', {
         focus: rest ? 'rest' : (plan.focus ?? 'rest'),
         kind: rest ? 'rest' : plan.kind,
@@ -312,6 +337,16 @@ export default function TrainHome() {
       }
       setMetrics(seeded);
 
+      log.info('train: built-in plan', {
+        kind: recommendation.kind,
+        focus: recommendation.focus,
+        headline: recommendation.headline,
+        restReason: recommendation.microcycle?.restReason,
+        offFingers: recommendation.microcycle?.offFingers ?? false,
+        fingerDaysInARow: recommendation.microcycle?.fingerDaysInARow,
+        fingerDaysThisWeek: recommendation.microcycle?.fingerDaysThisWeek,
+        readiness: today.readiness,
+      });
       setState({
         journals,
         recommendation,
@@ -338,6 +373,17 @@ export default function TrainHome() {
     };
   }, [repo, dataVersion, router, today]);
 
+  useEffect(() => {
+    const suggestion = coach.suggestion;
+    if (!state || !suggestion) return;
+    if (state.recommendation.kind === 'rest' || !suggestionLooksLikeRest(suggestion)) return;
+    log.warn('train: ignoring AI rest; the scheduler said train', {
+      headline: suggestion.headline,
+      restDay: suggestion.restDay ?? false,
+      focus: state.recommendation.focus,
+    });
+  }, [coach.suggestion, state]);
+
   if (state === null || today === null) return <Screen />;
   const { journals, recommendation: rec, todayJournalId, hasAssessment, hasGoal } = state;
 
@@ -360,6 +406,11 @@ export default function TrainHome() {
     }
   };
   const ai = coach.suggestion;
+  // The scheduler already rested yesterday, or it says today is for training.
+  // A cached or freshly written "rest day" does not get to overrule that, and
+  // it does not get logged as rest either.
+  const aiRestIgnored = Boolean(ai && rec.kind !== 'rest' && suggestionLooksLikeRest(ai));
+  const shownAi = aiRestIgnored ? null : ai;
 
   const onboardingSteps: OnboardingStep[] = [
     {
@@ -383,10 +434,10 @@ export default function TrainHome() {
   ];
   const showOnboarding = !onboarding.dismissed && onboardingSteps.some((s) => !s.done);
 
-  const displaySteps = overlayAiPlan(rec.steps, ai?.plan);
+  const displaySteps = overlayAiPlan(rec.steps, shownAi?.plan);
   const planSteps = displaySteps.map((s) => s.text);
-  const restToday = Boolean(ai?.restDay) || rec.kind === 'rest';
-  const cardBorder = restToday ? 'border-warning' : ai ? 'border-success' : 'border-primary';
+  const restToday = rec.kind === 'rest';
+  const cardBorder = restToday ? 'border-warning' : shownAi ? 'border-success' : 'border-primary';
 
   return (
     <Screen>
@@ -421,22 +472,22 @@ export default function TrainHome() {
           <span
             className={`text-sm font-bold uppercase tracking-wide ${ai ? 'text-success' : 'text-muted'}`}
           >
-            {ai ? 'AI coach' : 'Today'}
+            {shownAi ? 'AI coach' : 'Today'}
           </span>
           {coach.status === 'loading' ? (
             <span className="flex items-center gap-2 text-sm text-muted">
               <span className="h-4 w-4 animate-spin rounded-full border-2 border-border border-t-success" />
               Asking the coach…
             </span>
-          ) : ai && coach.generatedAt ? (
+          ) : shownAi && coach.generatedAt ? (
             <span className="text-sm text-muted">
               updated {relativeTime(coach.generatedAt, now())}
             </span>
           ) : null}
         </div>
-        <h2 className="mt-1 text-lg font-bold">{ai ? ai.headline : rec.headline}</h2>
+        <h2 className="mt-1 text-lg font-bold">{shownAi ? shownAi.headline : rec.headline}</h2>
         <p className="mt-2 text-sm leading-5 text-muted">
-          {ai ? ai.rationale || rec.detail : rec.detail}
+          {shownAi ? shownAi.rationale || rec.detail : rec.detail}
         </p>
 
         {state.insights.map((insight) => (
@@ -522,7 +573,7 @@ export default function TrainHome() {
           </div>
         )}
 
-        {!ai && rec.focusItems.length > 0 && (
+        {!shownAi && rec.focusItems.length > 0 && (
           <div className="mt-4">
             <p className="text-sm font-semibold text-muted">Target your weak spots</p>
             {rec.focusItems.map((item) => (
@@ -533,10 +584,10 @@ export default function TrainHome() {
           </div>
         )}
 
-        {ai && ai.watchOuts.length > 0 && (
+        {shownAi && shownAi.watchOuts.length > 0 && (
           <div className="mt-4">
             <p className="text-sm font-semibold text-muted">Watch out for</p>
-            {ai.watchOuts.map((w) => (
+            {shownAi.watchOuts.map((w) => (
               <p key={w} className="mt-1 text-sm">
                 • {w}
               </p>
@@ -555,7 +606,7 @@ export default function TrainHome() {
           </div>
         )}
 
-        {ai && (
+        {shownAi && (
           <div className="mt-4 flex items-center gap-4 border-t border-border pt-2">
             {feedback ? (
               <span className="text-sm italic text-muted">

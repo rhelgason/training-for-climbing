@@ -19,7 +19,13 @@
  *   LLM_MODEL        – Groq override only. Gemini always uses gemini-3.6-flash.
  *                      Retired Groq ids and leftover Gemini ids are ignored.
  */
-import type { CoachContext, CoachInjuryFinding, CoachSuggestion } from '@tfc/core';
+import {
+  log,
+  suggestionLooksLikeRest,
+  type CoachContext,
+  type CoachInjuryFinding,
+  type CoachSuggestion,
+} from '@tfc/core';
 import { TRAINING_REFERENCE } from './coachKnowledge';
 import { fetchWithLlmRetries, isUsageLimit, LlmHttpError } from './llmRetry';
 
@@ -150,9 +156,10 @@ suggestions. Violating one produces a plan that will injure or overtrain them:
   points at today. "Tomorrow" and "today" inside a journal are relative to that entry's
   \`daysAgo\`, not to now. An entry with \`daysAgo: 2\` that says "I'm fully resting tomorrow"
   is about yesterday. If that day is in \`fulfilledRests\`, or \`recentDays\` shows it as Rest
-  with no session logged, the rest already happened. Do not set \`restDay\`, and do not write
-  a rest plan, an easy day, or active recovery to honour it again. Naming a rest never makes
-  today a rest day.
+  with no session logged, the rest already happened. If \`daysAgo: 1\` is Rest, yesterday was
+  the rest day — today is not another one unless \`schedule.restDay\` is true. Do not set
+  \`restDay\`, and do not write a rest plan, an easy day, or active recovery to honour a rest
+  that already happened. Naming a rest never makes today a rest day.
 - Prescribe ONLY focuses listed in \`schedule.allowed\`. Never prescribe anything in
   \`schedule.blocked\` — each carries the reason it is out (too soon since the last one, weekly
   ceiling reached, equipment missing, injury, or they reported feeling beaten up).
@@ -295,16 +302,12 @@ export function assertRespectsPrescriptions(
  * A model injury does not get to overrule that. "Rest 3 minutes" inside a real
  * session is not a rest day.
  */
-const REST_SHAPED =
-  /\b(rest day|full rest|complete rest|day off|off day|take it easy|taking it easy|take the day off|active recovery|mobility only|just mobility|just stretch|no climbing|deload|easy day|light day|recovery day|recovery only|recovery session|rest today)\b/i;
-
 /** Work that grips a hold. The off-finger session must not contain these. */
 const FINGER_WORK =
   /\b(hangboard|fingerboard|campus|limit boulder|limit boulders|arc|repeater|half-crimp|open-hand|bouldering|boulder problem|climb|climbing|routes?|crimp)\b/i;
 
 function looksLikeRest(headline: string, plan: string[]): boolean {
-  if (/^\s*rest\b/i.test(headline)) return true;
-  return REST_SHAPED.test([headline, ...plan].join('\n'));
+  return suggestionLooksLikeRest({ headline, plan });
 }
 
 function looksLikeFingerWork(plan: string[]): boolean {
@@ -329,7 +332,17 @@ export function dropInventedRestDay<T extends CoachSuggestion & { restDay?: bool
       suggestion.restDay === true || looksLikeRest(suggestion.headline, suggestion.plan ?? []);
     const inventedClimbing = looksLikeFingerWork(suggestion.plan ?? []);
     if (usable && (inventedRest || inventedClimbing)) {
+      log.info('coach: replaced an off-finger suggestion', {
+        headline: suggestion.headline,
+        inventedRest,
+        inventedClimbing,
+      });
       return { ...suggestion, restDay: false, plan: baseline, headline: 'Off the fingers' };
+    }
+    if (suggestion.restDay) {
+      log.info('coach: cleared a rest flag on an off-finger day', {
+        headline: suggestion.headline,
+      });
     }
     return { ...suggestion, restDay: false };
   }
@@ -339,6 +352,12 @@ export function dropInventedRestDay<T extends CoachSuggestion & { restDay?: bool
   if (!inventedFlag && !shaped) return suggestion;
   const baseline = baselineSteps(context);
   const plan = baseline.length > 0 && !looksLikeRest('', baseline) ? baseline : suggestion.plan;
+  log.info('coach: dropped an invented rest day', {
+    headline: suggestion.headline,
+    inventedFlag,
+    shaped,
+    usedBaseline: plan === baseline,
+  });
   return {
     ...suggestion,
     restDay: false,
@@ -500,7 +519,7 @@ async function callGroq(
         if (prior) throw new Error(`${prior.message} | ${error.message}`);
         throw error;
       }
-      console.error(
+      log.error(
         `coach: groq model ${models[i]} unavailable (${error.message}); trying ${models[i + 1]}`,
       );
       prior = error;
@@ -538,7 +557,7 @@ export async function generateCoachSuggestion(context: CoachContext): Promise<Co
         if (prior) throw new Error(`${prior.message} | ${error.message}`);
         throw error;
       }
-      console.error(`coach: ${id} unavailable (${error.message}); trying ${chain[i + 1]}`);
+      log.error(`coach: ${id} unavailable (${error.message}); trying ${chain[i + 1]}`);
       prior = error;
     }
   }

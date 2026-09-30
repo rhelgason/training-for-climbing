@@ -16,6 +16,7 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   dayIndex,
   effectiveProfile,
+  log,
   now,
   trackEvent,
   type DailyContextRecord,
@@ -69,6 +70,12 @@ export function useDailyContext(repo: Repository, dataVersion: number): DailyCon
     (next: TodayContextValue) => {
       setValue(next);
       setConfirmed(true);
+      log.info('today: check-in saved', {
+        readiness: next.readiness,
+        environment: next.environment,
+        sessionLength: next.sessionLength,
+        equipment: [...next.equipment],
+      });
       trackEvent('daily_context_set', {
         readiness: next.readiness,
         environment: next.environment,

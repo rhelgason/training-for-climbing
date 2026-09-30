@@ -361,9 +361,15 @@ export function buildMicrocycle(input: MicrocycleInput): Microcycle {
   const fingerDaysInARow = priorFingerDayRun(input.history, input.nowMs);
   const week = recentLoad(input.history, input.nowMs, 7);
   const fingerDaysThisWeek = week.filter((e) => e.loadsFingers).length;
+  // A rest yesterday already broke the run. Do not spend today on another day
+  // off the wall just because earlier days in the week were on the hands.
+  const today = dayIndex(input.nowMs);
+  const yesterdayLoadedFingers = input.history.some(
+    (event) => event.day === today - 1 && event.loadsFingers,
+  );
   const offFingers =
     fingerDaysInARow >= MAX_CONSECUTIVE_FINGER_DAYS ||
-    fingerDaysThisWeek >= MAX_FINGER_DAYS_PER_WEEK;
+    (fingerDaysThisWeek >= MAX_FINGER_DAYS_PER_WEEK && yesterdayLoadedFingers);
   const verdicts = TRAINABLE_FOCUSES.map((focus) =>
     evaluate(focus, input, { hardDaysInARow, fingerDaysInARow, offFingers }),
   ).sort((a, b) => b.priority - a.priority);

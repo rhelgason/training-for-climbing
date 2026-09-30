@@ -225,9 +225,8 @@ export interface CoachSuggestion {
   /** Empty when nothing qualifies. */
   injuries?: CoachInjuryFinding[];
   /**
-   * True when the model prescribed rest. The scheduler rest-day is still a hard
-   * floor (training through it is rejected); this lets the client log an *extra*
-   * rest day the model called from injuries or fatigue.
+   * True when the model prescribed rest. Only honoured when the scheduler also
+   * called a rest day. A model rest on a training day is discarded.
    */
   restDay?: boolean;
 }

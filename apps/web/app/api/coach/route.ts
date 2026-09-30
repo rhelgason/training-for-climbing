@@ -6,7 +6,7 @@
  * and the app falls back to its deterministic baseline.
  */
 import { NextResponse } from 'next/server';
-import type { CoachContext } from '@tfc/core';
+import { log, type CoachContext } from '@tfc/core';
 import { generateCoachSuggestion, isLlmConfigured } from '../../../lib/server/llm';
 import { readJson, withUser } from '../../../lib/server/handler';
 
@@ -25,14 +25,32 @@ export function POST(req: Request) {
     if (!context || typeof context !== 'object') {
       return NextResponse.json({ error: 'missing context' }, { status: 400 });
     }
+    const started = Date.now();
+    log.info('POST /api/coach', {
+      restDay: context.schedule?.restDay,
+      restReason: context.schedule?.restReason,
+      offFingers: context.schedule?.offFingers ?? false,
+      fingerDaysInARow: context.schedule?.fingerDaysInARow,
+      fingerDaysThisWeek: context.schedule?.fingerDaysThisWeek,
+      suggestedFocus: context.schedule?.suggestedFocus,
+      readiness: context.today?.readiness,
+      trainingPush: context.profile?.trainingPush,
+      injury: context.schedule?.injury?.summary,
+    });
     try {
       const suggestion = await generateCoachSuggestion(context);
+      log.info('POST /api/coach done', {
+        ms: Date.now() - started,
+        restDay: suggestion.restDay ?? false,
+        headline: suggestion.headline,
+        steps: suggestion.plan.length,
+      });
       return NextResponse.json({ suggestion });
     } catch (err) {
       // Surface the real upstream reason — this app has two users, and a
       // generic "coach upstream error" made a broken key/model undiagnosable.
       const message = err instanceof Error ? err.message : 'coach upstream error';
-      console.error('POST /api/coach upstream failed', err);
+      log.error('POST /api/coach upstream failed', { message, ms: Date.now() - started });
       return NextResponse.json({ error: message }, { status: 502 });
     }
   });

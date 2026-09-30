@@ -3,6 +3,7 @@
  * Railway service and bearer token as cloud sync) and returns the structured
  * suggestion. The server calls the LLM; the app never holds an LLM key.
  */
+import { log } from '../../lib/logger';
 import type { SyncConfig } from '../sync/syncConfig';
 import type { CoachContext, CoachSuggestion } from './types';
 
@@ -36,6 +37,8 @@ export async function requestCoachSuggestion(
   config: SyncConfig,
   context: CoachContext,
 ): Promise<CoachSuggestion> {
+  const started = Date.now();
+  log.info('coach: POST /api/coach');
   let res: Response;
   try {
     res = await fetch(endpoint(config.url), {
@@ -47,7 +50,9 @@ export async function requestCoachSuggestion(
       body: JSON.stringify({ context }),
     });
   } catch (err) {
-    throw new CoachUnavailableError(`Coach request failed: ${(err as Error).message}`);
+    const message = (err as Error).message;
+    log.warn('coach: POST failed before a response', { message, ms: Date.now() - started });
+    throw new CoachUnavailableError(`Coach request failed: ${message}`);
   }
 
   if (!res.ok) {
@@ -59,6 +64,7 @@ export async function requestCoachSuggestion(
       detail = '';
     }
     const suffix = detail ? `: ${detail}` : '';
+    log.warn('coach: POST rejected', { status: res.status, detail, ms: Date.now() - started });
     throw new CoachUnavailableError(
       `Coach request failed (HTTP ${res.status})${suffix}`,
       res.status,
@@ -67,7 +73,13 @@ export async function requestCoachSuggestion(
 
   const body = (await res.json()) as { suggestion?: unknown };
   if (!isCoachSuggestion(body.suggestion)) {
+    log.warn('coach: POST returned an unexpected shape', { ms: Date.now() - started });
     throw new CoachUnavailableError('Coach returned an unexpected response shape');
   }
+  log.info('coach: POST ok', {
+    ms: Date.now() - started,
+    restDay: body.suggestion.restDay ?? false,
+    headline: body.suggestion.headline,
+  });
   return body.suggestion;
 }

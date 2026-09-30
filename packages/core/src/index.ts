@@ -58,6 +58,7 @@ export * from './features/coach/types';
 export * from './features/coach/context';
 export * from './features/coach/coachClient';
 export * from './features/coach/format';
+export * from './features/coach/restShape';
 
 // ── Auth ───────────────────────────────────────────────────────────────────
 export * from './features/auth/authClient';

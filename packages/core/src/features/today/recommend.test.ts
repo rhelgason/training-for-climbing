@@ -169,6 +169,21 @@ describe('buildDailyRecommendation with recent load', () => {
     expect(plan).not.toMatch(/hangboard|limit boulder|ARC/i);
   });
 
+  it('trains the day after a rest instead of calling another one', () => {
+    const rec = withHistory(
+      [
+        journal(-1, { activities: ['rest'], focus: ['rest'], intensity: 'easy' }),
+        journal(-2, { focus: ['skill'], intensity: 'moderate' }),
+        journal(-3, { focus: ['skill'], intensity: 'moderate' }),
+        journal(-5, { focus: ['skill'], intensity: 'moderate' }),
+        journal(-6, { focus: ['skill'], intensity: 'moderate' }),
+      ],
+      { daysPerWeek: 7 },
+    );
+    expect(rec.kind).toBe('train');
+    expect(rec.headline).not.toMatch(/rest day|off the fingers/i);
+  });
+
   it('never names equipment the climber does not have', () => {
     const rec = withHistory([], { equipment: ['bands'] });
     expect(rec.plan.join(' ')).not.toMatch(/campus|fingerboard|hangboard/i);

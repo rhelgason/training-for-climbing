@@ -317,6 +317,32 @@ describe('whole-day rest rules', () => {
     expect(cycle.recentLoadSummary).toMatch(/last 7/i);
   });
 
+  it('trains the day after a rest even when the week already has four finger days', () => {
+    const history = loadHistory(
+      [
+        journal(-1, { activities: ['rest'], focus: ['rest'], intensity: 'easy' }),
+        ...[-2, -3, -5, -6].map((o) => day(o, ['skill'], 'moderate')),
+      ],
+      [],
+    );
+    const cycle = buildMicrocycle(input({ history, daysPerWeek: 7 }));
+    expect(cycle.fingerDaysInARow).toBe(0);
+    expect(cycle.fingerDaysThisWeek).toBe(4);
+    expect(cycle.offFingers).toBe(false);
+    expect(cycle.restDay).toBe(false);
+    expect(verdictFor(cycle, 'skill').status).not.toBe('blocked');
+  });
+
+  it('trains today when yesterday was left blank after four finger days', () => {
+    const history = loadHistory(
+      [-2, -3, -4, -6].map((o) => day(o, ['skill'], 'moderate')),
+      [],
+    );
+    const cycle = buildMicrocycle(input({ history, daysPerWeek: 7 }));
+    expect(cycle.offFingers).toBe(false);
+    expect(cycle.restDay).toBe(false);
+  });
+
   it('offers no light alternative on a recovery rest day', () => {
     const cycle = buildMicrocycle(input({ readiness: 'tweaky' }));
     expect(cycle.restKind).toBe('recovery');

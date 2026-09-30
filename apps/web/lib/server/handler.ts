@@ -7,6 +7,7 @@
  * and each handler wraps its body in `withUser`.
  */
 import { NextResponse } from 'next/server';
+import { log } from '@tfc/core';
 import { isAuthConfigured, userIdFromRequest } from './auth';
 import { ensureSchema } from './db';
 
@@ -23,16 +24,20 @@ export async function withUser(
   fn: (userId: string) => Promise<Response>,
 ): Promise<Response> {
   if (!isAuthConfigured()) {
+    log.error(`${label} rejected: server is missing JWT_SECRET`);
     return NextResponse.json({ error: 'server is missing JWT_SECRET' }, { status: 500 });
   }
   const userId = userIdFromRequest(req);
-  if (!userId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  if (!userId) {
+    log.warn(`${label} unauthorized`);
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  }
 
   try {
     await ensureSchema();
     return await fn(userId);
   } catch (err) {
-    console.error(`${label} failed`, err);
+    log.error(`${label} failed`, err);
     return NextResponse.json({ error: 'internal error' }, { status: 500 });
   }
 }

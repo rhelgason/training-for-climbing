@@ -5,6 +5,7 @@
  */
 import {
   buildCoachContext,
+  log,
   now,
   requestCoachSuggestion,
   type CoachSuggestion,
@@ -54,8 +55,24 @@ export async function refreshCoachSuggestion(
     nowMs,
   });
 
+  log.info('coach: context', {
+    restDay: context.schedule.restDay,
+    restReason: context.schedule.restReason,
+    offFingers: context.schedule.offFingers ?? false,
+    fingerDaysInARow: context.schedule.fingerDaysInARow,
+    fingerDaysThisWeek: context.schedule.fingerDaysThisWeek,
+    suggestedFocus: context.schedule.suggestedFocus,
+    readiness: context.today.readiness,
+    trainingPush: context.profile.trainingPush,
+    injury: context.schedule.injury?.summary,
+  });
   const suggestion = await requestCoachSuggestion(config, context);
   saveCachedSuggestion({ suggestion, generatedAt: nowMs, contextKey });
+  log.info('coach: cached suggestion', {
+    restDay: suggestion.restDay ?? false,
+    headline: suggestion.headline,
+    steps: suggestion.plan.length,
+  });
 
   // Don't write the model's injury list onto the profile. Tomorrow's plan
   // re-reads the journals. A saved note would outlive the entries that produced it.

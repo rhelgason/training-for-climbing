@@ -11,7 +11,7 @@
  * journal-derived insights, which is a fine state to be in.
  */
 import { NextResponse } from 'next/server';
-import type { JournalEntry } from '@tfc/core';
+import { log, type JournalEntry } from '@tfc/core';
 import { scanJournals, scannableEntries } from '../../../lib/server/journalScan';
 import { isLlmConfigured } from '../../../lib/server/llm';
 import { readJson, withUser } from '../../../lib/server/handler';
@@ -23,6 +23,7 @@ export const maxDuration = 60;
 export function POST(req: Request) {
   return withUser(req, 'POST /api/insights', async () => {
     if (!isLlmConfigured()) {
+      log.warn('POST /api/insights skipped: AI is not configured');
       return NextResponse.json({ error: 'AI features not configured' }, { status: 503 });
     }
     const body = await readJson<{ journals?: JournalEntry[]; nowMs?: number }>(req);
@@ -37,9 +38,12 @@ export function POST(req: Request) {
     if (text === null) return NextResponse.json({ findings: [] });
 
     try {
-      return NextResponse.json({ findings: await scanJournals(text) });
+      log.info('POST /api/insights', { journals: journals.length });
+      const findings = await scanJournals(text);
+      log.info('POST /api/insights done', { findings: findings.length });
+      return NextResponse.json({ findings });
     } catch (err) {
-      console.error('POST /api/insights upstream failed', err);
+      log.error('POST /api/insights upstream failed', err);
       const message = err instanceof Error ? err.message : 'insight upstream error';
       return NextResponse.json({ error: message }, { status: 502 });
     }

@@ -69,21 +69,25 @@ export function RepositoryProvider({ children }: { children: ReactNode }) {
     let dirtyDuringSync = false;
     let pushTimer: ReturnType<typeof setTimeout> | null = null;
 
-    const runOnce = async (): Promise<void> => {
+    const runOnce = async (reason: string): Promise<void> => {
       const cfg = getSyncConfig();
       if (!cfg) {
+        log.info('sync: skipped', { reason, why: 'signed out' });
         if (!cancelled) setStatus('idle');
         return;
       }
       if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        log.info('sync: skipped', { reason, why: 'offline' });
         if (!cancelled) setStatus('offline');
         return;
       }
       if (syncing) {
+        log.info('sync: queued', { reason });
         dirtyDuringSync = true;
         return;
       }
       syncing = true;
+      log.info('sync: start', { reason });
       if (!cancelled) setStatus('syncing');
       try {
         await repo.flush();
@@ -96,6 +100,7 @@ export function RepositoryProvider({ children }: { children: ReactNode }) {
           setDataVersion((v) => v + 1);
           setStatus('idle');
         }
+        log.info('sync: done', { reason });
       } catch (err) {
         // An expired/invalidated token can't be retried into working, so drop
         // the session and ask for a fresh sign-in instead of looping on errors.
@@ -124,10 +129,10 @@ export function RepositoryProvider({ children }: { children: ReactNode }) {
     const scheduleSync = () => {
       if (!getSyncConfig()) return;
       if (pushTimer) clearTimeout(pushTimer);
-      pushTimer = setTimeout(() => void runOnce(), PUSH_DEBOUNCE_MS);
+      pushTimer = setTimeout(() => void runOnce('edit'), PUSH_DEBOUNCE_MS);
     };
 
-    refreshRef.current = () => void runOnce();
+    refreshRef.current = () => void runOnce('manual');
 
     (async () => {
       try {
@@ -137,7 +142,7 @@ export function RepositoryProvider({ children }: { children: ReactNode }) {
         });
         if (getSyncConfig()) {
           await Promise.race([
-            runOnce(),
+            runOnce('startup'),
             new Promise((resolve) => setTimeout(resolve, INITIAL_SYNC_TIMEOUT_MS)),
           ]);
         }
@@ -153,9 +158,9 @@ export function RepositoryProvider({ children }: { children: ReactNode }) {
 
     repo.setOnMutate(scheduleSync);
     const onVisible = () => {
-      if (document.visibilityState === 'visible') void runOnce();
+      if (document.visibilityState === 'visible') void runOnce('visible');
     };
-    const onOnline = () => void runOnce();
+    const onOnline = () => void runOnce('online');
     const onOffline = () => {
       if (getSyncConfig() && !cancelled) setStatus('offline');
     };
