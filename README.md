@@ -88,8 +88,9 @@ server without seeing each other's training. Sync uses a **snapshot + last-write
 (merged per record by `updatedAt`; deletes propagate via tombstones), talking to the **web
 app's own API routes** on Vercel, backed by Neon Postgres.
 
-1. Deploy the web app to Vercel with `DATABASE_URL`, `JWT_SECRET`, and (optionally)
-   `GEMINI_API_KEY` set — see [`apps/web/README.md`](apps/web/README.md). You get an HTTPS URL.
+1. Deploy the web app to Vercel with `DATABASE_URL`, `JWT_SECRET`, and at least
+   one LLM key (`GEMINI_API_KEY`, plus the backup keys in
+   [`apps/web/.env.example`](apps/web/.env.example)). You get an HTTPS URL.
 2. In the app: **More → Account**, create an account (or sign in) with a username + password — the
    first sync runs automatically, and the AI coach (if enabled) authenticates as the same user.
 

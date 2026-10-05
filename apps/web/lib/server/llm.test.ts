@@ -3,8 +3,10 @@ import type { CoachContext, CoachSuggestion } from '@tfc/core';
 import {
   assertRespectsPrescriptions,
   currentLlmModel,
+  fallbackLlmModel,
   generateCoachSuggestion,
   isLlmConfigured,
+  llmChain,
 } from './llm';
 import { llmRetry } from './llmRetry';
 
@@ -65,6 +67,11 @@ beforeEach(() => {
   delete process.env.LLM_PROVIDER;
   delete process.env.GEMINI_API_KEY;
   delete process.env.GROQ_API_KEY;
+  delete process.env.OPENROUTER_API_KEY;
+  delete process.env.CLOUDFLARE_ACCOUNT_ID;
+  delete process.env.CLOUDFLARE_API_TOKEN;
+  delete process.env.MISTRAL_API_KEY;
+  delete process.env.XAI_API_KEY;
   delete process.env.LLM_MODEL;
   vi.spyOn(llmRetry, 'sleepMs').mockResolvedValue(undefined);
 });
@@ -91,6 +98,34 @@ describe('currentLlmModel', () => {
     expect(currentLlmModel()).toBe('openai/gpt-oss-120b');
     process.env.LLM_MODEL = 'openai/gpt-oss-20b';
     expect(currentLlmModel()).toBe('openai/gpt-oss-20b');
+  });
+});
+
+describe('llmChain', () => {
+  it('lists every configured provider and skips a half-set Cloudflare pair', () => {
+    expect(llmChain()).toEqual([]);
+    expect(fallbackLlmModel()).toBeNull();
+
+    process.env.GEMINI_API_KEY = 'g';
+    process.env.GROQ_API_KEY = 'q';
+    process.env.OPENROUTER_API_KEY = 'o';
+    process.env.CLOUDFLARE_ACCOUNT_ID = 'acct';
+    expect(llmChain()).toEqual([
+      'gemini-3.6-flash',
+      'openai/gpt-oss-120b',
+      'google/gemma-4-31b-it:free',
+    ]);
+
+    process.env.CLOUDFLARE_API_TOKEN = 'cf';
+    process.env.XAI_API_KEY = 'x';
+    expect(llmChain()).toEqual([
+      'gemini-3.6-flash',
+      'openai/gpt-oss-120b',
+      'google/gemma-4-31b-it:free',
+      '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
+      'grok-4.7',
+    ]);
+    expect(fallbackLlmModel()).toBe('openai/gpt-oss-120b');
   });
 });
 
@@ -142,6 +177,8 @@ describe('generateCoachSuggestion', () => {
     const url = fetchMock.mock.calls[0][0] as string;
     expect(url).toContain('gemini-3.6-flash');
     expect(url).toContain('key=test-key');
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect(body.generationConfig.thinkingConfig.thinkingLevel).toBe('minimal');
   });
 
   it('fills in defaults when the model omits fields', async () => {
@@ -254,7 +291,9 @@ describe('generateCoachSuggestion', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     await expect(generateCoachSuggestion(context)).rejects.toThrow(/503/);
-    expect(fetchMock).toHaveBeenCalledTimes(4);
+    // One retry on the last provider, then stop. A second model id is for a
+    // 404, not a capacity error.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it('throws when the reply has no content', async () => {
@@ -341,14 +380,126 @@ describe('generateCoachSuggestion', () => {
     expect(fetchMock.mock.calls[1][0]).toContain('api.groq.com');
   });
 
-  it('does not fall back to Groq on a Gemini 404', async () => {
+  it('tries the other Gemini model on a 404, then Groq', async () => {
     process.env.GEMINI_API_KEY = 'gemini-key';
     process.env.GROQ_API_KEY = 'groq-key';
-    const fetchMock = vi.fn().mockResolvedValue(httpError(404, 'no such model'));
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(httpError(404, 'no such model'))
+      .mockResolvedValueOnce(httpError(404, 'no such model'))
+      .mockResolvedValueOnce(groqReply({ headline: 'From Groq after a dead Gemini id' }));
     vi.stubGlobal('fetch', fetchMock);
 
-    await expect(generateCoachSuggestion(context)).rejects.toThrow(/404/);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const suggestion = await generateCoachSuggestion(context);
+
+    expect(suggestion.headline).toBe('From Groq after a dead Gemini id');
+    expect(fetchMock.mock.calls[0][0]).toContain('gemini-3.6-flash');
+    expect(fetchMock.mock.calls[1][0]).toContain('gemini-3.5-flash');
+    expect(fetchMock.mock.calls[2][0]).toContain('api.groq.com');
+  });
+
+  it('tries Groq when Gemini returns no answer', async () => {
+    process.env.GEMINI_API_KEY = 'gemini-key';
+    process.env.GROQ_API_KEY = 'groq-key';
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ candidates: [{ content: { parts: [] } }] }),
+      } as Response)
+      .mockResolvedValueOnce(groqReply({ headline: 'From Groq after an empty Gemini' }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const suggestion = await generateCoachSuggestion(context);
+    expect(suggestion.headline).toBe('From Groq after an empty Gemini');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[1][0]).toContain('api.groq.com');
+  });
+
+  it('reads the JSON part and ignores a Gemini thought', async () => {
+    process.env.GEMINI_API_KEY = 'test-key';
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          candidates: [
+            {
+              content: {
+                parts: [
+                  { thought: true, text: 'planning the session' },
+                  { text: JSON.stringify({ headline: 'Power day', plan: ['Warm up'] }) },
+                ],
+              },
+            },
+          ],
+        }),
+      } as Response),
+    );
+
+    const suggestion = await generateCoachSuggestion(context);
+    expect(suggestion.headline).toBe('Power day');
+    expect(suggestion.plan).toEqual(['Warm up']);
+  });
+
+  it('accepts a fenced JSON answer from a backup provider', async () => {
+    process.env.GROQ_API_KEY = 'groq-key';
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          choices: [
+            {
+              message: {
+                content: '```json\n{"headline":"Endurance day","plan":["ARC"]}\n```',
+              },
+            },
+          ],
+        }),
+      } as Response),
+    );
+
+    const suggestion = await generateCoachSuggestion(context);
+    expect(suggestion.headline).toBe('Endurance day');
+    expect(suggestion.plan).toEqual(['ARC']);
+  });
+
+  it('asks OpenRouter for a free model and refuses a paid route', async () => {
+    process.env.OPENROUTER_API_KEY = 'or-key';
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        choices: [{ message: { content: JSON.stringify({ headline: 'From OpenRouter' }) } }],
+      }),
+    } as Response);
+    vi.stubGlobal('fetch', fetchMock);
+
+    const suggestion = await generateCoachSuggestion(context);
+    expect(suggestion.headline).toBe('From OpenRouter');
+    expect(fetchMock.mock.calls[0][0]).toBe('https://openrouter.ai/api/v1/chat/completions');
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect(body.model).toBe('google/gemma-4-31b-it:free');
+    expect(body.models[0]).toBe('google/gemma-4-31b-it:free');
+    expect(body.provider.max_price).toEqual({ prompt: 0, completion: 0 });
+    expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe('Bearer or-key');
+  });
+
+  it('tries the next provider when the model trains through a scheduled rest', async () => {
+    process.env.GEMINI_API_KEY = 'gemini-key';
+    process.env.GROQ_API_KEY = 'groq-key';
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        geminiReply({ headline: 'Light laps', plan: ['Climb easy'], restDay: false }),
+      )
+      .mockResolvedValueOnce(groqReply({ headline: 'Rest today', plan: ['Sleep'], restDay: true }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const suggestion = await generateCoachSuggestion(makeContext(true));
+    expect(suggestion.headline).toBe('Rest today');
+    expect(suggestion.restDay).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it('reports both providers when the fallback also fails', async () => {

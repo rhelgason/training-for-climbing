@@ -1,23 +1,28 @@
 /**
  * Provider-agnostic LLM adapter for the AI Coach.
  *
- * Ported verbatim in behaviour from the standalone Express server
- * (`server/llm.js`) when the backend moved into Next route handlers.
+ * Gemini is tried first. Any failure of a provider — a dead model, a usage
+ * limit, a 5xx, a timeout, an empty or unparseable reply, a plan that breaks
+ * the scheduler — moves to the next provider that has a key. A missing key is
+ * skipped. The phone never chooses. A 404 walks that provider's other model
+ * ids before leaving, because a retired id is not the same as an exhausted
+ * account. A 429 leaves immediately: another model on the same key usually
+ * shares the quota, and retrying it is how a few refreshes became "you have
+ * exceeded your quota".
  *
- * Default provider is Google **Gemini 3.6 Flash**. Groq (GPT-OSS 120B) is the
- * fallback when Gemini answers with a usage limit or a capacity error, as long
- * as `GROQ_API_KEY` is set. The phone never chooses. Both are called over plain
- * REST so the app needs no extra npm dependency.
+ * Keys are read with dynamic `process.env` access so Next does not inline a
+ * value from build time. A new key is picked up on the next Vercel deploy.
  *
- * `llama-3.3-70b-versatile` was shut off for developer keys on 2026-08-16.
- * A Groq 404 for a missing model tries the other GPT-OSS id before giving up.
- *
- * Env:
- *   LLM_PROVIDER     – 'gemini' (default) | 'groq'. Which one is tried first.
- *   GEMINI_API_KEY   – free key from https://aistudio.google.com/apikey
- *   GROQ_API_KEY     – free key from https://console.groq.com/keys
- *   LLM_MODEL        – Groq override only. Gemini always uses gemini-3.6-flash.
- *                      Retired Groq ids and leftover Gemini ids are ignored.
+ * Env (any one is enough; more are backups):
+ *   GEMINI_API_KEY         – https://aistudio.google.com/apikey
+ *   GROQ_API_KEY           – https://console.groq.com/keys
+ *   OPENROUTER_API_KEY     – https://openrouter.ai/keys  (free models only)
+ *   CLOUDFLARE_ACCOUNT_ID  – Workers AI, with CLOUDFLARE_API_TOKEN
+ *   CLOUDFLARE_API_TOKEN   – https://dash.cloudflare.com/profile/api-tokens
+ *   MISTRAL_API_KEY        – https://console.mistral.ai
+ *   XAI_API_KEY            – paid last resort, https://console.x.ai
+ *   LLM_PROVIDER           – which configured provider is tried first
+ *   LLM_MODEL              – Groq override only. Retired ids are ignored.
  */
 import {
   log,
@@ -27,14 +32,56 @@ import {
   type CoachSuggestion,
 } from '@tfc/core';
 import { TRAINING_REFERENCE } from './coachKnowledge';
-import { fetchWithLlmRetries, isUsageLimit, LlmHttpError } from './llmRetry';
+import { fetchWithLlmRetries, LlmHttpError } from './llmRetry';
 
-type ProviderId = 'gemini' | 'groq';
+type ProviderId = 'gemini' | 'groq' | 'openrouter' | 'cloudflare' | 'mistral' | 'xai';
+
+/** Tried in this order. `LLM_PROVIDER` moves one of them to the front. */
+const PROVIDER_ORDER: ProviderId[] = [
+  'gemini',
+  'groq',
+  'openrouter',
+  'cloudflare',
+  'mistral',
+  'xai',
+];
 
 const DEFAULT_MODELS: Record<ProviderId, string> = {
   gemini: 'gemini-3.6-flash',
   groq: 'openai/gpt-oss-120b',
+  openrouter: 'google/gemma-4-31b-it:free',
+  cloudflare: '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
+  mistral: 'mistral-small-latest',
+  xai: 'grok-4.7',
 };
+
+/**
+ * Same Gemini key, second id, only after a 404. 3.6 and 3.5 both accept
+ * thinkingLevel "minimal". A newer Flash that rejects "minimal" would 400
+ * and the chain would move on.
+ */
+const GEMINI_MODEL_FALLBACKS = ['gemini-3.6-flash', 'gemini-3.5-flash'];
+
+/** Free OpenRouter ids as of 2026-10-04. One request; OpenRouter walks the list. */
+const OPENROUTER_FREE_MODELS = [
+  'google/gemma-4-31b-it:free',
+  'qwen/qwen3.8-27b:free',
+  'google/gemma-4-26b-a4b-it:free',
+];
+
+const CLOUDFLARE_MODELS = [
+  '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
+  '@cf/meta/llama-3.1-8b-instruct',
+];
+
+/** Leave the route ~10s to answer after the last attempt starts. */
+const ROUTE_BUDGET_MS = 50_000;
+
+/** Dynamic lookup. Next inlines a literal `process.env.NAME` at build time. */
+function env(name: string): string {
+  const value = process.env[name];
+  return typeof value === 'string' ? value.trim() : '';
+}
 
 /** Developer-tier ids Groq has shut off. A leftover LLM_MODEL must not 404. */
 const RETIRED_GROQ_MODELS = new Set([
@@ -52,23 +99,40 @@ const RETIRED_GROQ_MODELS = new Set([
 const GROQ_MODEL_FALLBACKS = ['openai/gpt-oss-120b', 'openai/gpt-oss-20b'];
 
 function preferredProvider(): ProviderId {
-  return (process.env.LLM_PROVIDER || 'gemini').toLowerCase() === 'groq' ? 'groq' : 'gemini';
+  const requested = env('LLM_PROVIDER').toLowerCase();
+  return PROVIDER_ORDER.includes(requested as ProviderId) ? (requested as ProviderId) : 'gemini';
+}
+
+function hasKey(id: ProviderId): boolean {
+  switch (id) {
+    case 'gemini':
+      return env('GEMINI_API_KEY').length > 0;
+    case 'groq':
+      return env('GROQ_API_KEY').length > 0;
+    case 'openrouter':
+      return env('OPENROUTER_API_KEY').length > 0;
+    case 'cloudflare':
+      return env('CLOUDFLARE_API_TOKEN').length > 0 && env('CLOUDFLARE_ACCOUNT_ID').length > 0;
+    case 'mistral':
+      return env('MISTRAL_API_KEY').length > 0;
+    case 'xai':
+      return env('XAI_API_KEY').length > 0;
+  }
 }
 
 function modelFor(id: ProviderId): string {
   if (id === 'groq') {
-    const requested = (process.env.LLM_MODEL || '').trim();
+    const requested = env('LLM_MODEL');
     // Gemini ignores LLM_MODEL, and Groq must ignore it too when the value is
-    // a Gemini id or a model Groq has retired. Next inlines process.env.LLM_MODEL
-    // at build time, so a leftover gemini-2.5-flash or llama-3.3-70b-versatile
-    // is how the 404 keeps coming back.
+    // a Gemini id or a model Groq has retired. A leftover gemini-2.5-flash or
+    // llama-3.3-70b-versatile is how the 404 keeps coming back.
     const unusable =
       !requested ||
       /^models\/gemini|^gemini/i.test(requested) ||
       RETIRED_GROQ_MODELS.has(requested);
     return unusable ? DEFAULT_MODELS.groq : requested;
   }
-  return DEFAULT_MODELS.gemini;
+  return DEFAULT_MODELS[id];
 }
 
 function groqModelChain(): string[] {
@@ -78,17 +142,20 @@ function groqModelChain(): string[] {
 
 /**
  * Providers that can actually be called, preferred first. A key that is not
- * set is skipped, so Gemini-as-default still falls through to Groq when only
- * the Groq key is present, and the reverse.
+ * set is skipped, so Gemini-as-default still falls through when only a later
+ * key is present.
  */
 export function providerChain(): ProviderId[] {
-  const have: ProviderId[] = [];
-  if (process.env.GEMINI_API_KEY) have.push('gemini');
-  if (process.env.GROQ_API_KEY) have.push('groq');
+  const have = PROVIDER_ORDER.filter(hasKey);
   const preferred = preferredProvider();
   const primary = have.includes(preferred) ? preferred : have[0];
   if (!primary) return [];
   return [primary, ...have.filter((id) => id !== primary)];
+}
+
+/** Model id of every configured provider, in the order they will be tried. */
+export function llmChain(): string[] {
+  return providerChain().map(modelFor);
 }
 
 /**
@@ -384,12 +451,6 @@ export function isLlmConfigured(): boolean {
   return providerChain().length > 0;
 }
 
-/** Usage limits and capacity errors are worth another provider. A 404 is not. */
-function shouldFailover(err: unknown): boolean {
-  if (!(err instanceof LlmHttpError)) return false;
-  return isUsageLimit(err.status, err.detail) || err.status === 503;
-}
-
 function coerceInjuries(raw: unknown): CoachInjuryFinding[] {
   if (!Array.isArray(raw)) return [];
   return raw
@@ -406,10 +467,36 @@ function coerceInjuries(raw: unknown): CoachInjuryFinding[] {
     .filter((item) => item.note.length > 0 && item.bodyPart.length > 0);
 }
 
+/** Models wrap JSON in prose or a fence. Take the object either way. */
+function parseModelJson(text: string): Record<string, unknown> {
+  const trimmed = text
+    .trim()
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .trim();
+  const asObject = (value: unknown): Record<string, unknown> | null =>
+    value && typeof value === 'object' && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : null;
+  try {
+    const parsed = asObject(JSON.parse(trimmed));
+    if (parsed) return parsed;
+  } catch {
+    // The answer has text around the object. Slice to the outer braces.
+  }
+  const start = trimmed.indexOf('{');
+  const end = trimmed.lastIndexOf('}');
+  if (start >= 0 && end > start) {
+    const parsed = asObject(JSON.parse(trimmed.slice(start, end + 1)));
+    if (parsed) return parsed;
+  }
+  throw new Error('model returned text that is not JSON');
+}
+
 function coerceSuggestion(
   raw: string | Record<string, unknown>,
 ): CoachSuggestion & { restDay?: boolean } {
-  const obj = (typeof raw === 'string' ? JSON.parse(raw) : raw) as Record<string, unknown>;
+  const obj = typeof raw === 'string' ? parseModelJson(raw) : raw;
   return {
     focusArea: (obj.focusArea ?? null) as CoachSuggestion['focusArea'],
     headline: String(obj.headline || 'Train smart today'),
@@ -421,12 +508,69 @@ function coerceSuggestion(
   };
 }
 
-async function callGemini(
+type Suggestion = CoachSuggestion & { restDay?: boolean };
+
+interface GeminiPart {
+  text?: string;
+  thought?: boolean;
+}
+
+/** Skip a thought part. The JSON is the part that is not a thought. */
+function geminiAnswerText(body: {
+  candidates?: Array<{ content?: { parts?: GeminiPart[] } }>;
+}): string {
+  const parts = body?.candidates?.[0]?.content?.parts ?? [];
+  const answer = parts
+    .filter((part) => part.thought !== true && typeof part.text === 'string')
+    .map((part) => part.text)
+    .join('');
+  if (answer.trim()) return answer;
+  return parts
+    .filter((part) => typeof part.text === 'string')
+    .map((part) => part.text)
+    .join('');
+}
+
+/**
+ * A 404 means that model id is gone. Try the next id on the same key.
+ * Anything else — quota, 5xx, timeout, bad JSON — is the provider's problem,
+ * and the caller moves to the next provider.
+ */
+async function tryModels(
+  label: string,
+  models: string[],
+  retryLast: boolean,
+  call: (model: string, retryUnavailable: boolean) => Promise<Suggestion>,
+): Promise<Suggestion> {
+  let prior: Error | null = null;
+  for (let i = 0; i < models.length; i++) {
+    const hasNext = i < models.length - 1;
+    try {
+      // A 503 retry belongs on this model when the provider itself is last.
+      // The next model id is only for a 404, which is not retried.
+      return await call(models[i], retryLast);
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      const missing = err instanceof LlmHttpError && err.status === 404;
+      if (!hasNext || !missing) {
+        if (prior) throw new Error(`${prior.message} | ${error.message}`);
+        throw error;
+      }
+      log.error(
+        `coach: ${label} model ${models[i]} missing (${error.message}); trying ${models[i + 1]}`,
+      );
+      prior = error;
+    }
+  }
+  throw prior ?? new Error(`${label} request failed`);
+}
+
+async function callGeminiModel(
+  model: string,
   context: CoachContext,
   retryUnavailable: boolean,
-): Promise<CoachSuggestion & { restDay?: boolean }> {
-  const model = modelFor('gemini');
-  const key = process.env.GEMINI_API_KEY;
+): Promise<Suggestion> {
+  const key = env('GEMINI_API_KEY');
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
   const res = await fetchWithLlmRetries(
     url,
@@ -440,6 +584,9 @@ async function callGemini(
           responseMimeType: 'application/json',
           responseSchema: RESPONSE_SCHEMA,
           temperature: 0.6,
+          // 3.6 Flash thinks at medium by default. That spends the free quota
+          // and can return an empty answer when thinking uses the whole budget.
+          thinkingConfig: { thinkingLevel: 'minimal' },
         },
       }),
     },
@@ -451,101 +598,202 @@ async function callGemini(
       ),
     { retryUnavailable },
   );
-  const body = await res.json();
-  const text = body?.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) throw new Error('Gemini returned no content');
+  const body = (await res.json()) as Parameters<typeof geminiAnswerText>[0];
+  const text = geminiAnswerText(body);
+  if (!text.trim()) throw new Error(`Gemini returned no content (model ${model})`);
   return coerceSuggestion(text);
 }
 
-async function callGroqModel(
-  model: string,
-  context: CoachContext,
-  retryUnavailable: boolean,
-): Promise<CoachSuggestion & { restDay?: boolean }> {
-  const key = process.env.GROQ_API_KEY;
-  // GPT-OSS reasons by default. Low effort, and don't ask for the reasoning
-  // text: JSON mode needs the answer in message.content, and a long trace
-  // blows the route budget. reasoning_format is not valid on these ids.
-  const gptOss = model.startsWith('openai/gpt-oss');
+interface OpenAiCall {
+  label: string;
+  url: string;
+  key: string;
+  model: string;
+  context: CoachContext;
+  retryUnavailable: boolean;
+  extraHeaders?: Record<string, string>;
+  extraBody?: Record<string, unknown>;
+}
+
+async function callOpenAiCompatible(options: OpenAiCall, jsonMode: boolean): Promise<Suggestion> {
   const res = await fetchWithLlmRetries(
-    'https://api.groq.com/openai/v1/chat/completions',
+    options.url,
     {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${key}`,
+        Authorization: `Bearer ${options.key}`,
+        ...options.extraHeaders,
       },
       body: JSON.stringify({
-        model,
-        response_format: { type: 'json_object' },
+        model: options.model,
         temperature: 0.6,
-        ...(gptOss
-          ? { reasoning_effort: 'low', include_reasoning: false, max_completion_tokens: 4096 }
-          : {}),
+        ...(jsonMode ? { response_format: { type: 'json_object' } } : {}),
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: JSON.stringify(context) },
+          { role: 'user', content: JSON.stringify(options.context) },
         ],
+        ...options.extraBody,
       }),
     },
     (status, detail) =>
       new LlmHttpError(
         status,
         detail,
-        `Groq error ${status} (model ${model}): ${detail.slice(0, 300)}`,
+        `${options.label} error ${status} (model ${options.model}): ${detail.slice(0, 300)}`,
       ),
-    { retryUnavailable },
+    { retryUnavailable: options.retryUnavailable },
   );
-  const body = await res.json();
+  const body = (await res.json()) as {
+    choices?: Array<{ message?: { content?: string } }>;
+  };
   const text = body?.choices?.[0]?.message?.content;
-  if (!text) throw new Error(`Groq returned no content (model ${model})`);
+  if (!text) throw new Error(`${options.label} returned no content (model ${options.model})`);
   return coerceSuggestion(text);
 }
 
-async function callGroq(
+/** Some hosts reject JSON mode. One plain-text retry, then the caller moves on. */
+async function callOpenAi(options: OpenAiCall): Promise<Suggestion> {
+  try {
+    return await callOpenAiCompatible(options, true);
+  } catch (err) {
+    const rejected =
+      err instanceof LlmHttpError &&
+      err.status === 400 &&
+      /response_format|json_object|json mode/i.test(err.detail);
+    if (!rejected) throw err;
+    log.error(`coach: ${options.label} rejected JSON mode; retrying as plain text`);
+    return callOpenAiCompatible({ ...options, retryUnavailable: false }, false);
+  }
+}
+
+async function callGemini(context: CoachContext, retryUnavailable: boolean): Promise<Suggestion> {
+  return tryModels('gemini', GEMINI_MODEL_FALLBACKS, retryUnavailable, (model, retry) =>
+    callGeminiModel(model, context, retry),
+  );
+}
+
+async function callGroq(context: CoachContext, retryUnavailable: boolean): Promise<Suggestion> {
+  return tryModels('groq', groqModelChain(), retryUnavailable, (model, retry) =>
+    callOpenAi({
+      label: 'Groq',
+      url: 'https://api.groq.com/openai/v1/chat/completions',
+      key: env('GROQ_API_KEY'),
+      model,
+      context,
+      retryUnavailable: retry,
+      // GPT-OSS reasons by default. Low effort, and don't ask for the
+      // reasoning text: JSON mode needs the answer in message.content.
+      // reasoning_format is not valid on these ids.
+      extraBody: model.startsWith('openai/gpt-oss')
+        ? { reasoning_effort: 'low', include_reasoning: false, max_completion_tokens: 4096 }
+        : { max_tokens: 2048 },
+    }),
+  );
+}
+
+async function callOpenRouter(
   context: CoachContext,
   retryUnavailable: boolean,
-): Promise<CoachSuggestion & { restDay?: boolean }> {
-  const models = groqModelChain();
-  let prior: Error | null = null;
-  for (let i = 0; i < models.length; i++) {
-    const hasNext = i < models.length - 1;
-    try {
-      return await callGroqModel(models[i], context, hasNext ? false : retryUnavailable);
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      const missing = err instanceof LlmHttpError && err.status === 404;
-      if (!hasNext || !missing) {
-        if (prior) throw new Error(`${prior.message} | ${error.message}`);
-        throw error;
-      }
-      log.error(
-        `coach: groq model ${models[i]} unavailable (${error.message}); trying ${models[i + 1]}`,
-      );
-      prior = error;
-    }
-  }
-  throw prior ?? new Error('Groq request failed');
+): Promise<Suggestion> {
+  return callOpenAi({
+    label: 'OpenRouter',
+    url: 'https://openrouter.ai/api/v1/chat/completions',
+    key: env('OPENROUTER_API_KEY'),
+    model: OPENROUTER_FREE_MODELS[0],
+    context,
+    retryUnavailable,
+    extraHeaders: {
+      'HTTP-Referer': 'https://training-for-climbing-helgasonryan.vercel.app',
+      'X-Title': 'Training for Climbing',
+    },
+    // One HTTP call. OpenRouter walks the free ids. max_price 0 refuses a
+    // route that would bill the account if a :free id is dropped.
+    extraBody: {
+      models: OPENROUTER_FREE_MODELS,
+      max_tokens: 2048,
+      provider: { max_price: { prompt: 0, completion: 0 } },
+    },
+  });
+}
+
+async function callCloudflare(
+  context: CoachContext,
+  retryUnavailable: boolean,
+): Promise<Suggestion> {
+  const account = env('CLOUDFLARE_ACCOUNT_ID');
+  return tryModels('cloudflare', CLOUDFLARE_MODELS, retryUnavailable, (model, retry) =>
+    callOpenAi({
+      label: 'Cloudflare',
+      url: `https://api.cloudflare.com/client/v4/accounts/${account}/ai/v1/chat/completions`,
+      key: env('CLOUDFLARE_API_TOKEN'),
+      model,
+      context,
+      retryUnavailable: retry,
+      extraBody: { max_tokens: 2048 },
+    }),
+  );
+}
+
+async function callMistral(context: CoachContext, retryUnavailable: boolean): Promise<Suggestion> {
+  return callOpenAi({
+    label: 'Mistral',
+    url: 'https://api.mistral.ai/v1/chat/completions',
+    key: env('MISTRAL_API_KEY'),
+    model: DEFAULT_MODELS.mistral,
+    context,
+    retryUnavailable,
+    extraBody: { max_tokens: 2048 },
+  });
+}
+
+async function callXai(context: CoachContext, retryUnavailable: boolean): Promise<Suggestion> {
+  return callOpenAi({
+    label: 'xAI',
+    url: 'https://api.x.ai/v1/chat/completions',
+    key: env('XAI_API_KEY'),
+    model: DEFAULT_MODELS.xai,
+    context,
+    retryUnavailable,
+    extraBody: { reasoning_effort: 'low', max_tokens: 4096 },
+  });
 }
 
 async function callProvider(
   id: ProviderId,
   context: CoachContext,
   retryUnavailable: boolean,
-): Promise<CoachSuggestion & { restDay?: boolean }> {
-  return id === 'groq'
-    ? callGroq(context, retryUnavailable)
-    : callGemini(context, retryUnavailable);
+): Promise<Suggestion> {
+  switch (id) {
+    case 'gemini':
+      return callGemini(context, retryUnavailable);
+    case 'groq':
+      return callGroq(context, retryUnavailable);
+    case 'openrouter':
+      return callOpenRouter(context, retryUnavailable);
+    case 'cloudflare':
+      return callCloudflare(context, retryUnavailable);
+    case 'mistral':
+      return callMistral(context, retryUnavailable);
+    case 'xai':
+      return callXai(context, retryUnavailable);
+  }
 }
 
 /** Generate a structured coaching suggestion from the app context. */
 export async function generateCoachSuggestion(context: CoachContext): Promise<CoachSuggestion> {
   const chain = providerChain();
   if (chain.length === 0) throw new Error('AI coach not configured');
+  const started = Date.now();
   let prior: Error | null = null;
   for (let i = 0; i < chain.length; i++) {
     const id = chain[i];
     const hasNext = i < chain.length - 1;
+    // A hung chain must not start another attempt it cannot finish. The
+    // route budget is 60s; leave the last answer time to come back.
+    if (prior && Date.now() - started > ROUTE_BUDGET_MS - 8_000) {
+      throw new Error(`${prior.message} | stopped before ${id}: the route budget was almost gone`);
+    }
     try {
       const raw = await callProvider(id, context, !hasNext);
       assertRespectsSchedule(raw, context);
@@ -553,7 +801,7 @@ export async function generateCoachSuggestion(context: CoachContext): Promise<Co
       return dropInventedRestDay(raw, context);
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
-      if (!hasNext || !shouldFailover(err)) {
+      if (!hasNext) {
         if (prior) throw new Error(`${prior.message} | ${error.message}`);
         throw error;
       }

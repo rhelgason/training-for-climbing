@@ -134,8 +134,10 @@ export default function TrainHome() {
     )
     .sort()
     .join(',');
-  // `logic` is part of the key so a cached rest plan from an older coach is
+  // `logic` is part of the key so a cached plan from an older coach is
   // thrown out after the rules change, without waiting on a new journal.
+  // logic5 is the wider provider chain: a picture that failed on the old
+  // Gemini-or-Groq path is asked once more, then cached again.
   const contextKey =
     today && daily.confirmed && state
       ? [
@@ -147,7 +149,7 @@ export default function TrainHome() {
           journalStamp,
           state.checkinStamp,
           effectiveProfile(state.profile).trainingPush,
-          'logic4',
+          'logic5',
         ].join('|')
       : undefined;
   const coach = useCoach(repo, useDebouncedValue(contextKey, COACH_SETTLE_MS));

@@ -25,6 +25,8 @@ Create `apps/web/.env.local` — see `.env.example` for the full list:
 DATABASE_URL=postgresql://...neon.tech/neondb?sslmode=require
 JWT_SECRET=<a long random secret>
 GEMINI_API_KEY=<optional; enables the AI coach>
+GROQ_API_KEY=<optional backup>
+OPENROUTER_API_KEY=<optional backup, free models>
 ```
 
 All server-side only — none are `NEXT_PUBLIC_`, so none reach the browser. The
@@ -42,10 +44,12 @@ npm run build:web
 1. Import the repo into Vercel.
 2. Set **Root Directory** to `apps/web` (Vercel auto-detects Next.js; the monorepo
    `@tfc/core` is transpiled via `transpilePackages` in `next.config.ts`).
-3. Add `DATABASE_URL`, `JWT_SECRET`, and (optionally) `GEMINI_API_KEY` for
-   production **and** preview. Use Neon's **pooled** connection string — the host
-   containing `-pooler` — so many short-lived function instances don't exhaust
-   Neon's connection limit.
+3. Add `DATABASE_URL`, `JWT_SECRET`, and at least one LLM key for production
+   **and** preview. `GEMINI_API_KEY` is tried first. `GROQ_API_KEY`,
+   `OPENROUTER_API_KEY`, and `CLOUDFLARE_ACCOUNT_ID` + `CLOUDFLARE_API_TOKEN`
+   are backups. Use Neon's **pooled** connection string — the host containing
+   `-pooler` — so many short-lived function instances don't exhaust Neon's
+   connection limit. Redeploy after adding a key.
 4. Deploy, then check `https://<your-app>/api/health` — every field should be
    `true` (`coach` only once an LLM key is set).
 

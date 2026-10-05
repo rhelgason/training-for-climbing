@@ -1,12 +1,13 @@
 /**
- * A capacity spike (503) is worth one more try. A usage limit (429, quota)
- * is not: retrying spends the same exhausted quota and is how a few refreshes
- * became "you have exceeded your quota". Callers with another provider skip
- * the 503 retries and switch immediately.
+ * A capacity spike (503) on the last provider is worth one more try. A usage
+ * limit (429, quota) is not: retrying spends the same exhausted quota.
+ * Callers with another provider skip the retry and switch immediately.
  *
- * Delays total ~12s across three retries, well inside the 60s route budget.
+ * Each attempt also dies on its own timer so a hung provider cannot use the
+ * whole route budget and block the next one.
  */
-export const LLM_RETRY_DELAYS_MS = [1000, 3000, 8000];
+export const LLM_ATTEMPT_TIMEOUT_MS = 12_000;
+export const LLM_RETRY_DELAYS_MS = [1000];
 
 export const llmRetry = {
   sleepMs(ms: number): Promise<void> {
@@ -38,23 +39,40 @@ export function isTransientLlmStatus(status: number): boolean {
   return status === 503;
 }
 
+function isTimeout(err: unknown): boolean {
+  return err instanceof Error && (err.name === 'AbortError' || err.name === 'TimeoutError');
+}
+
 export async function fetchWithLlmRetries(
   url: string,
   init: RequestInit,
   toError: (status: number, detail: string) => LlmHttpError,
-  options?: { retryUnavailable?: boolean },
+  options?: { retryUnavailable?: boolean; timeoutMs?: number },
 ): Promise<Response> {
   const retryUnavailable = options?.retryUnavailable !== false;
+  const timeoutMs = options?.timeoutMs ?? LLM_ATTEMPT_TIMEOUT_MS;
   const delays = retryUnavailable ? LLM_RETRY_DELAYS_MS : [];
   let lastError: LlmHttpError | null = null;
   for (let attempt = 0; attempt <= delays.length; attempt++) {
     if (attempt > 0) await llmRetry.sleepMs(delays[attempt - 1]);
-    const res = await fetch(url, init);
-    if (res.ok) return res;
-    const detail = await res.text().catch(() => '');
-    lastError = toError(res.status, detail);
-    if (isUsageLimit(res.status, detail)) throw lastError;
-    if (!isTransientLlmStatus(res.status) || !retryUnavailable) throw lastError;
+    try {
+      const res = await fetch(url, {
+        ...init,
+        signal: init.signal ?? AbortSignal.timeout(timeoutMs),
+      });
+      if (res.ok) return res;
+      const detail = await res.text().catch(() => '');
+      lastError = toError(res.status, detail);
+      if (isUsageLimit(res.status, detail)) throw lastError;
+      if (!isTransientLlmStatus(res.status) || !retryUnavailable || attempt === delays.length) {
+        throw lastError;
+      }
+    } catch (err) {
+      if (err instanceof LlmHttpError) throw err;
+      if (!isTimeout(err)) throw err;
+      lastError = new LlmHttpError(0, 'timeout', `LLM request timed out after ${timeoutMs}ms`);
+      if (!retryUnavailable || attempt === delays.length) throw lastError;
+    }
   }
   throw lastError ?? new Error('LLM request failed');
 }
