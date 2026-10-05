@@ -7,7 +7,7 @@
  */
 import { NextResponse } from 'next/server';
 import { log, type CoachContext } from '@tfc/core';
-import { generateCoachSuggestion, isLlmConfigured } from '../../../lib/server/llm';
+import { generateCoachRun, isLlmConfigured, providerChain } from '../../../lib/server/llm';
 import { readJson, withUser } from '../../../lib/server/handler';
 
 export const runtime = 'nodejs';
@@ -27,6 +27,7 @@ export function POST(req: Request) {
     }
     const started = Date.now();
     log.info('POST /api/coach', {
+      providers: providerChain(),
       restDay: context.schedule?.restDay,
       restReason: context.schedule?.restReason,
       offFingers: context.schedule?.offFingers ?? false,
@@ -38,19 +39,25 @@ export function POST(req: Request) {
       injury: context.schedule?.injury?.summary,
     });
     try {
-      const suggestion = await generateCoachSuggestion(context);
+      const run = await generateCoachRun(context);
       log.info('POST /api/coach done', {
         ms: Date.now() - started,
-        restDay: suggestion.restDay ?? false,
-        headline: suggestion.headline,
-        steps: suggestion.plan.length,
+        provider: run.provider,
+        model: run.model,
+        restDay: run.suggestion.restDay ?? false,
+        headline: run.suggestion.headline,
+        steps: run.suggestion.plan.length,
       });
-      return NextResponse.json({ suggestion });
+      return NextResponse.json({ suggestion: run.suggestion });
     } catch (err) {
       // Surface the real upstream reason — this app has two users, and a
       // generic "coach upstream error" made a broken key/model undiagnosable.
       const message = err instanceof Error ? err.message : 'coach upstream error';
-      log.error('POST /api/coach upstream failed', { message, ms: Date.now() - started });
+      log.error('POST /api/coach upstream failed', {
+        message,
+        ms: Date.now() - started,
+        providers: providerChain(),
+      });
       return NextResponse.json({ error: message }, { status: 502 });
     }
   });

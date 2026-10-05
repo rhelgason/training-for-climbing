@@ -531,6 +531,27 @@ function geminiAnswerText(body: {
     .join('');
 }
 
+interface Served {
+  suggestion: Suggestion;
+  model: string;
+}
+
+/** Upstream bodies sometimes echo the request URL, which carries the Gemini key. */
+function scrub(message: string): string {
+  return message
+    .replace(/([?&]key=)[^&\s]+/gi, '$1***')
+    .replace(/Bearer\s+[A-Za-z0-9._\-]+/gi, 'Bearer ***')
+    .slice(0, 500);
+}
+
+function failureFields(err: unknown): { status: number | null; error: string } {
+  const error = err instanceof Error ? err : new Error(String(err));
+  return {
+    status: err instanceof LlmHttpError ? err.status : null,
+    error: scrub(error.message),
+  };
+}
+
 /**
  * A 404 means that model id is gone. Try the next id on the same key.
  * Anything else — quota, 5xx, timeout, bad JSON — is the provider's problem,
@@ -541,14 +562,15 @@ async function tryModels(
   models: string[],
   retryLast: boolean,
   call: (model: string, retryUnavailable: boolean) => Promise<Suggestion>,
-): Promise<Suggestion> {
+): Promise<Served> {
   let prior: Error | null = null;
   for (let i = 0; i < models.length; i++) {
     const hasNext = i < models.length - 1;
     try {
       // A 503 retry belongs on this model when the provider itself is last.
       // The next model id is only for a 404, which is not retried.
-      return await call(models[i], retryLast);
+      const suggestion = await call(models[i], retryLast);
+      return { suggestion, model: models[i] };
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       const missing = err instanceof LlmHttpError && err.status === 404;
@@ -556,9 +578,12 @@ async function tryModels(
         if (prior) throw new Error(`${prior.message} | ${error.message}`);
         throw error;
       }
-      log.error(
-        `coach: ${label} model ${models[i]} missing (${error.message}); trying ${models[i + 1]}`,
-      );
+      log.error('coach: model missing', {
+        provider: label,
+        model: models[i],
+        nextModel: models[i + 1],
+        ...failureFields(err),
+      });
       prior = error;
     }
   }
@@ -653,29 +678,32 @@ async function callOpenAiCompatible(options: OpenAiCall, jsonMode: boolean): Pro
 }
 
 /** Some hosts reject JSON mode. One plain-text retry, then the caller moves on. */
-async function callOpenAi(options: OpenAiCall): Promise<Suggestion> {
+async function callOpenAi(options: OpenAiCall): Promise<Served> {
   try {
-    return await callOpenAiCompatible(options, true);
+    return { suggestion: await callOpenAiCompatible(options, true), model: options.model };
   } catch (err) {
     const rejected =
       err instanceof LlmHttpError &&
       err.status === 400 &&
       /response_format|json_object|json mode/i.test(err.detail);
     if (!rejected) throw err;
-    log.error(`coach: ${options.label} rejected JSON mode; retrying as plain text`);
-    return callOpenAiCompatible({ ...options, retryUnavailable: false }, false);
+    log.error('coach: json mode rejected', { provider: options.label, model: options.model });
+    return {
+      suggestion: await callOpenAiCompatible({ ...options, retryUnavailable: false }, false),
+      model: options.model,
+    };
   }
 }
 
-async function callGemini(context: CoachContext, retryUnavailable: boolean): Promise<Suggestion> {
+async function callGemini(context: CoachContext, retryUnavailable: boolean): Promise<Served> {
   return tryModels('gemini', GEMINI_MODEL_FALLBACKS, retryUnavailable, (model, retry) =>
     callGeminiModel(model, context, retry),
   );
 }
 
-async function callGroq(context: CoachContext, retryUnavailable: boolean): Promise<Suggestion> {
-  return tryModels('groq', groqModelChain(), retryUnavailable, (model, retry) =>
-    callOpenAi({
+async function callGroq(context: CoachContext, retryUnavailable: boolean): Promise<Served> {
+  return tryModels('groq', groqModelChain(), retryUnavailable, async (model, retry) => {
+    const served = await callOpenAi({
       label: 'Groq',
       url: 'https://api.groq.com/openai/v1/chat/completions',
       key: env('GROQ_API_KEY'),
@@ -688,14 +716,12 @@ async function callGroq(context: CoachContext, retryUnavailable: boolean): Promi
       extraBody: model.startsWith('openai/gpt-oss')
         ? { reasoning_effort: 'low', include_reasoning: false, max_completion_tokens: 4096 }
         : { max_tokens: 2048 },
-    }),
-  );
+    });
+    return served.suggestion;
+  });
 }
 
-async function callOpenRouter(
-  context: CoachContext,
-  retryUnavailable: boolean,
-): Promise<Suggestion> {
+async function callOpenRouter(context: CoachContext, retryUnavailable: boolean): Promise<Served> {
   return callOpenAi({
     label: 'OpenRouter',
     url: 'https://openrouter.ai/api/v1/chat/completions',
@@ -717,13 +743,10 @@ async function callOpenRouter(
   });
 }
 
-async function callCloudflare(
-  context: CoachContext,
-  retryUnavailable: boolean,
-): Promise<Suggestion> {
+async function callCloudflare(context: CoachContext, retryUnavailable: boolean): Promise<Served> {
   const account = env('CLOUDFLARE_ACCOUNT_ID');
-  return tryModels('cloudflare', CLOUDFLARE_MODELS, retryUnavailable, (model, retry) =>
-    callOpenAi({
+  return tryModels('cloudflare', CLOUDFLARE_MODELS, retryUnavailable, async (model, retry) => {
+    const served = await callOpenAi({
       label: 'Cloudflare',
       url: `https://api.cloudflare.com/client/v4/accounts/${account}/ai/v1/chat/completions`,
       key: env('CLOUDFLARE_API_TOKEN'),
@@ -731,11 +754,12 @@ async function callCloudflare(
       context,
       retryUnavailable: retry,
       extraBody: { max_tokens: 2048 },
-    }),
-  );
+    });
+    return served.suggestion;
+  });
 }
 
-async function callMistral(context: CoachContext, retryUnavailable: boolean): Promise<Suggestion> {
+async function callMistral(context: CoachContext, retryUnavailable: boolean): Promise<Served> {
   return callOpenAi({
     label: 'Mistral',
     url: 'https://api.mistral.ai/v1/chat/completions',
@@ -747,7 +771,7 @@ async function callMistral(context: CoachContext, retryUnavailable: boolean): Pr
   });
 }
 
-async function callXai(context: CoachContext, retryUnavailable: boolean): Promise<Suggestion> {
+async function callXai(context: CoachContext, retryUnavailable: boolean): Promise<Served> {
   return callOpenAi({
     label: 'xAI',
     url: 'https://api.x.ai/v1/chat/completions',
@@ -763,7 +787,7 @@ async function callProvider(
   id: ProviderId,
   context: CoachContext,
   retryUnavailable: boolean,
-): Promise<Suggestion> {
+): Promise<Served> {
   switch (id) {
     case 'gemini':
       return callGemini(context, retryUnavailable);
@@ -780,10 +804,23 @@ async function callProvider(
   }
 }
 
-/** Generate a structured coaching suggestion from the app context. */
-export async function generateCoachSuggestion(context: CoachContext): Promise<CoachSuggestion> {
+export interface CoachRun {
+  suggestion: CoachSuggestion;
+  provider: ProviderId;
+  model: string;
+}
+
+/**
+ * Ask the configured providers, in order, and record which one answered.
+ *
+ * Each attempt logs `coach: provider failed` or the success logs `coach: served`.
+ * `coach: chain` is the list of providers this process can actually see, which
+ * is how a missing Vercel env var shows up without a successful call.
+ */
+export async function generateCoachRun(context: CoachContext): Promise<CoachRun> {
   const chain = providerChain();
   if (chain.length === 0) throw new Error('AI coach not configured');
+  log.info('coach: chain', { providers: chain });
   const started = Date.now();
   let prior: Error | null = null;
   for (let i = 0; i < chain.length; i++) {
@@ -794,20 +831,41 @@ export async function generateCoachSuggestion(context: CoachContext): Promise<Co
     if (prior && Date.now() - started > ROUTE_BUDGET_MS - 8_000) {
       throw new Error(`${prior.message} | stopped before ${id}: the route budget was almost gone`);
     }
+    const attemptStarted = Date.now();
     try {
-      const raw = await callProvider(id, context, !hasNext);
-      assertRespectsSchedule(raw, context);
-      assertRespectsPrescriptions(raw, context);
-      return dropInventedRestDay(raw, context);
+      const served = await callProvider(id, context, !hasNext);
+      assertRespectsSchedule(served.suggestion, context);
+      assertRespectsPrescriptions(served.suggestion, context);
+      const suggestion = dropInventedRestDay(served.suggestion, context);
+      log.info('coach: served', {
+        provider: id,
+        model: served.model,
+        ms: Date.now() - attemptStarted,
+        totalMs: Date.now() - started,
+        headline: suggestion.headline,
+        steps: suggestion.plan.length,
+        restDay: suggestion.restDay ?? false,
+      });
+      return { suggestion, provider: id, model: served.model };
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
+      log.error('coach: provider failed', {
+        provider: id,
+        ms: Date.now() - attemptStarted,
+        next: hasNext ? chain[i + 1] : null,
+        ...failureFields(err),
+      });
       if (!hasNext) {
-        if (prior) throw new Error(`${prior.message} | ${error.message}`);
+        if (prior) throw new Error(`${prior.message} | ${scrub(error.message)}`);
         throw error;
       }
-      log.error(`coach: ${id} unavailable (${error.message}); trying ${chain[i + 1]}`);
       prior = error;
     }
   }
   throw prior ?? new Error('LLM request failed');
+}
+
+/** Generate a structured coaching suggestion from the app context. */
+export async function generateCoachSuggestion(context: CoachContext): Promise<CoachSuggestion> {
+  return (await generateCoachRun(context)).suggestion;
 }

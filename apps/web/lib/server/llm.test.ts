@@ -4,6 +4,7 @@ import {
   assertRespectsPrescriptions,
   currentLlmModel,
   fallbackLlmModel,
+  generateCoachRun,
   generateCoachSuggestion,
   isLlmConfigured,
   llmChain,
@@ -353,9 +354,11 @@ describe('generateCoachSuggestion', () => {
       .mockResolvedValueOnce(groqReply({ headline: 'From the other Groq model' }));
     vi.stubGlobal('fetch', fetchMock);
 
-    const suggestion = await generateCoachSuggestion(context);
+    const run = await generateCoachRun(context);
 
-    expect(suggestion.headline).toBe('From the other Groq model');
+    expect(run.provider).toBe('groq');
+    expect(run.model).toBe('openai/gpt-oss-20b');
+    expect(run.suggestion.headline).toBe('From the other Groq model');
     expect(fetchMock).toHaveBeenCalledTimes(3);
     const firstGroq = JSON.parse(fetchMock.mock.calls[1][1].body as string);
     const secondGroq = JSON.parse(fetchMock.mock.calls[2][1].body as string);
@@ -390,9 +393,11 @@ describe('generateCoachSuggestion', () => {
       .mockResolvedValueOnce(groqReply({ headline: 'From Groq after a dead Gemini id' }));
     vi.stubGlobal('fetch', fetchMock);
 
-    const suggestion = await generateCoachSuggestion(context);
+    const run = await generateCoachRun(context);
 
-    expect(suggestion.headline).toBe('From Groq after a dead Gemini id');
+    expect(run.provider).toBe('groq');
+    expect(run.model).toBe('openai/gpt-oss-120b');
+    expect(run.suggestion.headline).toBe('From Groq after a dead Gemini id');
     expect(fetchMock.mock.calls[0][0]).toContain('gemini-3.6-flash');
     expect(fetchMock.mock.calls[1][0]).toContain('gemini-3.5-flash');
     expect(fetchMock.mock.calls[2][0]).toContain('api.groq.com');

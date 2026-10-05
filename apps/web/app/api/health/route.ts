@@ -8,11 +8,13 @@
  */
 import { NextResponse } from 'next/server';
 import { isAuthConfigured } from '../../../lib/server/auth';
+import { log } from '@tfc/core';
 import {
   currentLlmModel,
   fallbackLlmModel,
   isLlmConfigured,
   llmChain,
+  providerChain,
 } from '../../../lib/server/llm';
 import { getPool } from '../../../lib/server/db';
 
@@ -25,8 +27,11 @@ export async function GET() {
     await getPool().query('SELECT 1');
     db = true;
   } catch (err) {
-    console.error('GET /api/health: database unreachable', err);
+    log.error('GET /api/health: database unreachable', err);
   }
+  const providers = providerChain();
+  const chain = llmChain();
+  log.info('GET /api/health', { coach: providers.length > 0, db, providers, chain });
   return NextResponse.json({
     ok: true,
     coach: isLlmConfigured(),
@@ -34,6 +39,7 @@ export async function GET() {
     db,
     model: currentLlmModel(),
     fallback: fallbackLlmModel(),
-    chain: llmChain(),
+    providers,
+    chain,
   });
 }
