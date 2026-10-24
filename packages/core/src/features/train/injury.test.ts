@@ -64,19 +64,6 @@ describe('detectInjury', () => {
     ).toBeNull();
   });
 
-  it('ignores a saved injury note — the journals are the record', () => {
-    expect(
-      detectInjury({
-        journals: [],
-        nowMs: NOW,
-        derivedNotes: [
-          { text: 'Right ring finger has been sore on crimps since early August.' },
-          'Right ring finger has been sore on crimps since early August.',
-        ],
-      }),
-    ).toBeNull();
-  });
-
   it("reads today's check-in note", () => {
     const found = detectInjury({
       journals: [],

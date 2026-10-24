@@ -136,7 +136,7 @@ function scheduleFrom(
   cycle: Microcycle,
   suggestedFocus: SessionFocusId | null,
   plannedDaysPerWeek: number,
-  injury: CoachSchedule['injury'] = null,
+  injuryHint: CoachSchedule['injuryHint'] = null,
   fulfilled: AnnouncedRest[] = [],
 ): CoachSchedule {
   return {
@@ -165,7 +165,7 @@ function scheduleFrom(
     fingerDaysThisWeek: cycle.fingerDaysThisWeek,
     offFingers: cycle.offFingers,
     recentLoadSummary: cycle.recentLoadSummary,
-    injury,
+    injuryHint,
     fulfilledRests: fulfilled
       .filter((r) => r.targetDaysAgo >= 0)
       .map((r) => ({
@@ -224,8 +224,10 @@ export function buildCoachContext(input: CoachContextInput): CoachContext {
     journals: input.journals,
     dailyNote: daily?.note,
     climberContext: profile.climberContext,
-    derivedNotes: input.profile?.derivedContext,
     blockFocuses,
+    // The model reads the journals itself and judges any injury live. The
+    // keyword reading rides along as a hint it is free to overrule.
+    injuryPolicy: 'hint',
   });
 
   // `history` is always supplied above, so the scheduler always ran.
@@ -270,14 +272,12 @@ export function buildCoachContext(input: CoachContextInput): CoachContext {
       cycle,
       recommendation.focus,
       profile.daysPerWeek,
-      recommendation.injury
+      recommendation.injuryHint
         ? {
-            summary: recommendation.injury.summary,
-            evidence: recommendation.injury.evidence,
-            region: recommendation.injury.region,
-            severity: recommendation.injury.severity,
-            noClimbing: recommendation.injury.noClimbing,
-            noHighIntensity: recommendation.injury.noHighIntensity,
+            summary: recommendation.injuryHint.summary,
+            evidence: recommendation.injuryHint.evidence,
+            region: recommendation.injuryHint.region,
+            severity: recommendation.injuryHint.severity,
           }
         : null,
       resolveAnnouncedRests(input.journals, history, input.nowMs),

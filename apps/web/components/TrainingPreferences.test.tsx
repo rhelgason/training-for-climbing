@@ -45,60 +45,13 @@ describe('TrainingPreferences — how hard to push', () => {
   });
 });
 
-describe('TrainingPreferences — derived context', () => {
-  it('shows nothing when the app has worked nothing out', async () => {
-    await renderPrefs();
-    expect(screen.queryByText(/What the app worked out/i)).not.toBeInTheDocument();
-  });
-
-  it('lists confirmed notes separately from what the climber wrote', async () => {
+describe('TrainingPreferences — no injury list', () => {
+  it('never lists injury notes saved by older versions of the app', async () => {
     await repo.saveProfile({
-      climberContext: 'Ten years in, mostly outdoor granite.',
       derivedContext: [note('injury:finger:2026-08', 'Right ring finger sore on crimps.')],
     });
     await renderPrefs();
-
-    expect(await screen.findByText(/What the app worked out/i)).toBeInTheDocument();
-    expect(screen.getByText('Right ring finger sore on crimps.')).toBeInTheDocument();
-    // The climber's own words stay in their own field, untouched.
-    expect(screen.getByDisplayValue('Ten years in, mostly outdoor granite.')).toBeInTheDocument();
-  });
-
-  it('removes a note so the coach stops reading it', async () => {
-    await repo.saveProfile({
-      derivedContext: [
-        note('injury:finger:2026-08', 'Right ring finger sore on crimps.'),
-        note('injury:shoulder:2026-07', 'Left shoulder aches overhead.'),
-      ],
-    });
-    await renderPrefs();
-
-    const removes = await screen.findAllByRole('button', { name: /Remove/i });
-    await act(async () => {
-      fireEvent.click(removes[0]);
-    });
-
-    await waitFor(async () => {
-      const profile = await repo.getProfile();
-      expect(profile?.derivedContext).toHaveLength(1);
-      // The right one went, and the other survived.
-      expect(profile?.derivedContext?.[0].id).toBe('injury:shoulder:2026-07');
-    });
     expect(screen.queryByText('Right ring finger sore on crimps.')).not.toBeInTheDocument();
-  });
-
-  it('hides the section once the last note is removed', async () => {
-    await repo.saveProfile({
-      derivedContext: [note('injury:finger:2026-08', 'Right ring finger sore on crimps.')],
-    });
-    await renderPrefs();
-
-    await act(async () => {
-      fireEvent.click(await screen.findByRole('button', { name: /Remove/i }));
-    });
-
-    await waitFor(() =>
-      expect(screen.queryByText(/What the app worked out/i)).not.toBeInTheDocument(),
-    );
+    expect(screen.queryByRole('button', { name: /Remove/i })).not.toBeInTheDocument();
   });
 });

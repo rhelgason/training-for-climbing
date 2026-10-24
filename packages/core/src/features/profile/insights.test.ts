@@ -5,10 +5,7 @@ import {
   acceptInsight,
   detectAbilityDrift,
   dismissInsight,
-  injuryNoteId,
-  notesFromCoachInjuries,
   pendingInsights,
-  revokeDerivedNote,
   type Insight,
 } from './insights';
 
@@ -127,8 +124,11 @@ describe('pendingInsights', () => {
 
   it('hides what has already been decided', () => {
     const p = profile({ dismissedInsights: ['ability-tier:intermediate'] });
-    const out = pendingInsights([insight('ability-tier:intermediate'), insight('injury:a')], p);
-    expect(out.map((i) => i.id)).toEqual(['injury:a']);
+    const out = pendingInsights(
+      [insight('ability-tier:intermediate'), insight('ability-tier:elite')],
+      p,
+    );
+    expect(out.map((i) => i.id)).toEqual(['ability-tier:elite']);
   });
 
   it('still surfaces a different proposal after one was declined', () => {
@@ -149,43 +149,10 @@ describe('accept and dismiss', () => {
     proposedTier: 'intermediate',
   };
 
-  const injuryInsight: Insight = {
-    id: 'injury:finger-2026-08',
-    kind: 'injury',
-    title: 't',
-    detail: 'd',
-    source: 'journal-scan',
-    detectedAt: NOW,
-    proposedNote: 'Right ring finger has been sore on crimps since mid-August.',
-  };
-
   it('accepting a tier change moves the tier and retires the proposal', () => {
     const patch = acceptInsight(tierInsight, profile());
     expect(patch.abilityTier).toBe('intermediate');
     expect(patch.dismissedInsights).toContain('ability-tier:intermediate');
-  });
-
-  it('accepting an injury note writes to derived context, never climberContext', () => {
-    const p = profile({ climberContext: 'Ten years in, mostly outdoor granite.' });
-    const patch = acceptInsight(injuryInsight, p);
-    expect(patch.derivedContext).toEqual([
-      {
-        id: 'injury:finger-2026-08',
-        text: injuryInsight.proposedNote,
-        source: 'journal-scan',
-        addedAt: NOW,
-      },
-    ]);
-    // The climber's own words are untouched — the feedback loop this avoids is
-    // the model's inferences returning as fact on the next run.
-    expect(patch.climberContext).toBeUndefined();
-  });
-
-  it('accepting appends rather than replacing existing derived notes', () => {
-    const p = profile({
-      derivedContext: [{ id: 'old', text: 'Shoulder', source: 'journal-scan', addedAt: 1 }],
-    });
-    expect(acceptInsight(injuryInsight, p).derivedContext).toHaveLength(2);
   });
 
   it('dismissing records the decision and changes nothing else', () => {
@@ -200,60 +167,5 @@ describe('accept and dismiss', () => {
     dismissInsight(tierInsight, p);
     expect(p.abilityTier).toBe('beginner');
     expect(p.dismissedInsights).toBeUndefined();
-  });
-});
-
-describe('revokeDerivedNote', () => {
-  it('removes just that note, so the coach stops reading it', () => {
-    const p = profile({
-      derivedContext: [
-        { id: 'a', text: 'Finger', source: 'journal-scan', addedAt: 1 },
-        { id: 'b', text: 'Shoulder', source: 'journal-scan', addedAt: 2 },
-      ],
-    });
-    expect(revokeDerivedNote('a', p).derivedContext).toEqual([
-      { id: 'b', text: 'Shoulder', source: 'journal-scan', addedAt: 2 },
-    ]);
-  });
-});
-
-describe('notesFromCoachInjuries', () => {
-  it('writes a new derived note from the daily coach reading', () => {
-    const patch = notesFromCoachInjuries(
-      [{ note: 'Left calf is waiting on an MRI.', bodyPart: 'leg' }],
-      profile(),
-      NOW,
-    );
-    expect(patch?.derivedContext).toEqual([
-      {
-        id: injuryNoteId('leg', NOW),
-        text: 'Left calf is waiting on an MRI.',
-        source: 'coach',
-        addedAt: NOW,
-      },
-    ]);
-  });
-
-  it('does not duplicate a note already stored or declined', () => {
-    const id = injuryNoteId('leg', NOW);
-    expect(
-      notesFromCoachInjuries(
-        [{ note: 'Leg MRI', bodyPart: 'leg' }],
-        profile({ derivedContext: [{ id, text: 'already', source: 'coach', addedAt: 1 }] }),
-        NOW,
-      ),
-    ).toBeNull();
-    expect(
-      notesFromCoachInjuries(
-        [{ note: 'Leg MRI', bodyPart: 'leg' }],
-        profile({ dismissedInsights: [id] }),
-        NOW,
-      ),
-    ).toBeNull();
-  });
-
-  it('returns null when the coach found nothing, and slugs a blank body part', () => {
-    expect(notesFromCoachInjuries([], profile(), NOW)).toBeNull();
-    expect(injuryNoteId('  ', NOW)).toMatch(/^injury:other:/);
   });
 });

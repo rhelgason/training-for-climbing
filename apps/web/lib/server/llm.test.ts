@@ -198,40 +198,61 @@ describe('generateCoachSuggestion', () => {
     });
   });
 
-  it('passes through injuries the model read in the journal', async () => {
-    process.env.GEMINI_API_KEY = 'test-key';
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue(
-        geminiReply({
-          headline: 'Rest — injury first',
-          plan: ['No climbing'],
-          rationale: 'MRI pending.',
-          watchOuts: [],
-          restDay: false,
-          injuries: [
-            {
-              note: 'Severe leg injury, MRI pending.',
-              evidence: 'planning to get an MRI',
-              bodyPart: 'leg',
-              noClimbing: true,
-            },
-          ],
-        }),
-      ),
-    );
-
-    const suggestion = await generateCoachSuggestion(context);
-    expect(suggestion.injuries).toEqual([
+  const mriReply = {
+    headline: 'Rest — injury first',
+    plan: ['No climbing'],
+    rationale: 'MRI pending.',
+    watchOuts: [],
+    restDay: true,
+    injuries: [
       {
         note: 'Severe leg injury, MRI pending.',
         evidence: 'planning to get an MRI',
         bodyPart: 'leg',
         noClimbing: true,
       },
-    ]);
-    // The injury note can survive. It does not get to turn the day into rest
-    // when the scheduler said train — including by writing "no climbing".
+    ],
+  };
+
+  it('lets an injury quoted from a recent entry rest the day', async () => {
+    process.env.GEMINI_API_KEY = 'test-key';
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(geminiReply(mriReply)));
+    const withEntry: CoachContext = {
+      ...makeContext(false),
+      journals: [
+        {
+          date: 0,
+          daysAgo: 1,
+          activities: ['climbing'],
+          struggles: 'Severe leg pain after the fall, planning to get an MRI.',
+        },
+      ],
+    };
+
+    const suggestion = await generateCoachSuggestion(withEntry);
+    expect(suggestion.injuries).toEqual(mriReply.injuries);
+    // Judged live from their own words, so it may change the day.
+    expect(suggestion.restDay).toBe(true);
+    expect(suggestion.plan).toEqual(['No climbing']);
+  });
+
+  it('drops an injury whose evidence is not in a recent entry, and its rest with it', async () => {
+    process.env.GEMINI_API_KEY = 'test-key';
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(geminiReply(mriReply)));
+    const stale: CoachContext = {
+      ...makeContext(false),
+      journals: [
+        {
+          date: 0,
+          daysAgo: 20,
+          activities: ['climbing'],
+          struggles: 'Severe leg pain after the fall, planning to get an MRI.',
+        },
+      ],
+    };
+
+    const suggestion = await generateCoachSuggestion(stale);
+    expect(suggestion.injuries).toEqual([]);
     expect(suggestion.restDay).toBe(false);
     expect(suggestion.headline).toBe('Training day');
     expect(suggestion.plan).toEqual(['Warm up']);

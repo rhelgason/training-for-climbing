@@ -310,7 +310,7 @@ describe('buildCoachContext', () => {
       expect(ctx.macrocycle.current?.daysRemaining).toBeGreaterThan(0);
     });
 
-    it('binds a logged injury onto the schedule so the model cannot ignore it', () => {
+    it('hands a logged injury to the model as a hint it judges, not a forced rest', () => {
       const ctx = buildCoachContext(
         input({
           journals: [
@@ -321,9 +321,13 @@ describe('buildCoachContext', () => {
           ],
         }),
       );
-      expect(ctx.schedule.injury?.noClimbing).toBe(true);
-      expect(ctx.schedule.restDay).toBe(true);
-      expect(ctx.schedule.allowed).toEqual([]);
+      expect(ctx.schedule.injuryHint?.severity).toBe('severe');
+      expect(ctx.schedule.injuryHint?.evidence).toMatch(/MRI/);
+      // The model decides, live, from the same words. A keyword match alone
+      // does not empty the day.
+      expect(ctx.schedule.restDay).toBe(false);
+      expect(ctx.schedule.allowed.length).toBeGreaterThan(0);
+      expect(ctx.baselinePlan.join(' ')).not.toMatch(/^Rest from climbing/);
     });
   });
 

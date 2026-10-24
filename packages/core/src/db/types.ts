@@ -67,16 +67,14 @@ export interface ProfileRecord {
    */
   dismissedInsights?: string[];
   /**
-   * Facts the app inferred about the climber, kept deliberately apart from
-   * `climberContext`. That field is their own words, read by the coach
-   * verbatim; if the app wrote into it, the model's own inferences would come
-   * back as established fact on the next run and compound. These carry
-   * provenance and a timestamp so they can be shown and revoked.
+   * Legacy: injury notes older versions of the app saved. Nothing reads or
+   * writes them now — injuries are judged live from the newest journals each
+   * day. Kept on the type only so old snapshots still sync.
    */
   derivedContext?: DerivedNote[];
 }
 
-/** A fact the app inferred, with enough provenance to be audited or revoked. */
+/** Legacy: a fact an older version of the app inferred. See `derivedContext`. */
 export interface DerivedNote {
   id: string;
   text: string;

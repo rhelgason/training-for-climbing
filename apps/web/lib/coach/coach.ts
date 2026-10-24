@@ -64,7 +64,7 @@ export async function refreshCoachSuggestion(
     suggestedFocus: context.schedule.suggestedFocus,
     readiness: context.today.readiness,
     trainingPush: context.profile.trainingPush,
-    injury: context.schedule.injury?.summary,
+    injuryHint: context.schedule.injuryHint?.summary,
   });
   const suggestion = await requestCoachSuggestion(config, context);
   saveCachedSuggestion({ suggestion, generatedAt: nowMs, contextKey });

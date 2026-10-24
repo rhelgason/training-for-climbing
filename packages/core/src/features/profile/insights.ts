@@ -2,8 +2,7 @@
  * Noticing that the profile has gone stale, and proposing a fix.
  *
  * Nobody goes back and edits their training profile. They start climbing V5,
- * or tweak a finger, and the app carries on planning for the person they were
- * six months ago — which matters, because `abilityTier` drives how the whole
+ * and the app carries on planning for the person they were six months ago — which matters, because `abilityTier` drives how the whole
  * week is split between climbing and strength work.
  *
  * Three rules shape this module:
@@ -15,58 +14,20 @@
  *  - **Propose, never apply.** These change what the app tells someone to do
  *    with their body. A card they can accept in one tap is just as hands-off as
  *    a silent edit, and leaves them in charge.
- *  - **Derived context is kept apart from what the climber wrote.**
- *    `climberContext` is their own words and is fed to the coach verbatim. If
- *    the app wrote into it, the model's own inferences would come back as
- *    established fact on the next run and compound. Derived notes live in their
- *    own field, timestamped, with provenance, so they can be shown and revoked.
+ *
+ * Injuries are deliberately not an insight. How the body feels is judged live,
+ * each day, from the newest journal entries — never saved as a list that
+ * outlives the writing that produced it.
  */
 import { gradeRank } from '../../content/grades';
 import { ABILITY_TIERS, type AbilityTier } from '../../content/planning';
 import type { ClimbDiscipline } from '../../content/climbing';
-import type { ClimbRecord, DerivedNote, ProfileRecord } from '../../db/types';
+import type { ClimbRecord, ProfileRecord } from '../../db/types';
 import { consolidatedGrade, PYRAMID_WINDOW_DAYS } from '../today/climbingPrescription';
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
-export type InsightKind = 'ability-tier' | 'injury';
-
-/** One id per body part per month — same scheme the journal-scan cards use. */
-export function injuryNoteId(bodyPart: string, detectedAt: number): string {
-  const d = new Date(detectedAt);
-  const month = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-  const slug = bodyPart.trim().toLowerCase().replace(/\s+/g, '-') || 'other';
-  return `injury:${slug}:${month}`;
-}
-
-/**
- * Profile patch that records injuries the daily coach read in journal prose.
- * Returns null when there is nothing new (already stored or previously declined).
- */
-export function notesFromCoachInjuries(
-  injuries: { note: string; bodyPart: string }[],
-  profile: ProfileRecord | null,
-  nowMs: number,
-): Partial<ProfileRecord> | null {
-  if (injuries.length === 0) return null;
-  const dismissed = new Set(profile?.dismissedInsights ?? []);
-  const existing: DerivedNote[] = profile?.derivedContext ?? [];
-  const have = new Set(existing.map((n) => n.id));
-  const added: DerivedNote[] = [];
-  for (const injury of injuries) {
-    const id = injuryNoteId(injury.bodyPart, nowMs);
-    if (dismissed.has(id) || have.has(id)) continue;
-    have.add(id);
-    added.push({
-      id,
-      text: injury.note,
-      source: 'coach',
-      addedAt: nowMs,
-    });
-  }
-  if (added.length === 0) return null;
-  return { derivedContext: [...existing, ...added] };
-}
+export type InsightKind = 'ability-tier';
 
 export interface Insight {
   /**
@@ -81,12 +42,10 @@ export interface Insight {
   /** The evidence, in the climber's own numbers. */
   detail: string;
   /** Where it came from — shown, so nothing arrives unattributed. */
-  source: 'history' | 'journal-scan';
+  source: 'history';
   detectedAt: number;
   /** Set on `ability-tier`: the tier accepting would move them to. */
   proposedTier?: AbilityTier;
-  /** Set on `injury`: the note accepting would add to derived context. */
-  proposedNote?: string;
 }
 
 function tierFloor(tier: AbilityTier, discipline: ClimbDiscipline): string {
@@ -168,18 +127,6 @@ export function acceptInsight(
   if (insight.kind === 'ability-tier' && insight.proposedTier) {
     patch.abilityTier = insight.proposedTier;
   }
-  if (insight.kind === 'injury' && insight.proposedNote) {
-    const existing: DerivedNote[] = profile?.derivedContext ?? [];
-    patch.derivedContext = [
-      ...existing,
-      {
-        id: insight.id,
-        text: insight.proposedNote,
-        source: insight.source,
-        addedAt: insight.detectedAt,
-      },
-    ];
-  }
   return patch;
 }
 
@@ -189,12 +136,4 @@ export function dismissInsight(
   profile: ProfileRecord | null,
 ): Partial<ProfileRecord> {
   return { dismissedInsights: [...(profile?.dismissedInsights ?? []), insight.id] };
-}
-
-/** Remove a derived note the climber no longer wants the coach reading. */
-export function revokeDerivedNote(
-  noteId: string,
-  profile: ProfileRecord | null,
-): Partial<ProfileRecord> {
-  return { derivedContext: (profile?.derivedContext ?? []).filter((n) => n.id !== noteId) };
 }

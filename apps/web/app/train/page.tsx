@@ -76,7 +76,13 @@ function greeting(nowMs: number): string {
 
 interface LoadState {
   journals: JournalEntry[];
+  /** The offline floor: a keyword-read injury shapes the plan. */
   recommendation: DailyRecommendation;
+  /**
+   * The same day with injuries left to the coach, which judges them live from
+   * the journals. Shown whenever the coach is on and answering.
+   */
+  live: DailyRecommendation;
   todayJournalId: string | null;
   hasAssessment: boolean;
   hasGoal: boolean;
@@ -87,6 +93,40 @@ interface LoadState {
   /** Profile updates the app is proposing, already filtered to undecided ones. */
   insights: Insight[];
   blockLabel: string;
+}
+
+type CoachView = Pick<ReturnType<typeof useCoach>, 'enabled' | 'status' | 'suggestion'>;
+
+/**
+ * Which plan the screen stands on, and what the AI is allowed to change.
+ *
+ * With the coach on, injuries are its call: the plan is the `live` one and a
+ * rest only comes from the scheduler or from an injury the server checked
+ * against the climber's own words. With the coach off or failing, the
+ * keyword-read plan is the safety floor.
+ */
+function resolvePlan(state: LoadState, coach: CoachView) {
+  const coachLive = coach.enabled && coach.status !== 'error';
+  const rec = coachLive ? state.live : state.recommendation;
+  const ai = coach.suggestion;
+  const injuries = ai?.injuries ?? [];
+  const aiInjuryRest = Boolean(
+    coachLive && ai?.restDay && injuries.some((injury) => injury.noClimbing),
+  );
+  // The scheduler already rested yesterday, or it says today is for training.
+  // A cached or freshly written "rest day" does not get to overrule that, and
+  // it does not get logged as rest either — unless a verified injury says so.
+  const aiRestIgnored = Boolean(
+    ai && rec.kind !== 'rest' && suggestionLooksLikeRest(ai) && !aiInjuryRest,
+  );
+  return {
+    rec,
+    coachLive,
+    shownAi: aiRestIgnored ? null : ai,
+    aiRestIgnored,
+    restToday: rec.kind === 'rest' || aiInjuryRest,
+    injuries: coachLive ? injuries : [],
+  };
 }
 
 export default function TrainHome() {
@@ -168,8 +208,10 @@ export default function TrainHome() {
    */
   const markDone = async () => {
     if (!state || marking) return;
-    const { recommendation: plan, todayJournalId } = state;
-    const rest = plan.kind === 'rest';
+    const { todayJournalId } = state;
+    const resolved = resolvePlan(state, coach);
+    const plan = resolved.rec;
+    const rest = resolved.restToday;
     const focus = rest
       ? (['rest'] as SessionFocusId[])
       : ([plan.focus, ...plan.supportingFocuses].filter(Boolean) as SessionFocusId[]);
@@ -215,11 +257,7 @@ export default function TrainHome() {
       // a step that was never on screen (because the AI rewrote the session)
       // was never confirmed — saving its seeded value would silently duplicate
       // last session's number as if it happened again.
-      const suggestion = coach.suggestion;
-      const useAiPlan = Boolean(
-        suggestion && plan.kind !== 'rest' && !suggestionLooksLikeRest(suggestion),
-      );
-      const shownSteps = overlayAiPlan(plan.steps, useAiPlan ? suggestion?.plan : undefined);
+      const shownSteps = overlayAiPlan(plan.steps, resolved.shownAi?.plan);
       const shown = new Set(shownSteps.map((s) => s.text));
       for (const step of shownSteps) {
         if (!step.protocolId) continue;
@@ -289,7 +327,7 @@ export default function TrainHome() {
         mesocycleAnchor(profile, dates.length > 0 ? Math.min(...dates) : null, nowMs),
       );
       const energy = latestReadingForDay(checkins, nowMs);
-      const recommendation = buildDailyRecommendation({
+      const dailyInput: Parameters<typeof buildDailyRecommendation>[0] = {
         weakestArea,
         weakSpots:
           latest && weakestArea ? flaggedPromptsForArea(latest.responses, weakestArea) : [],
@@ -313,9 +351,10 @@ export default function TrainHome() {
         journals,
         dailyNote: today.note,
         climberContext: settings.climberContext,
-        derivedNotes: profile?.derivedContext,
         blockFocuses: block.focuses,
-      });
+      };
+      const recommendation = buildDailyRecommendation(dailyInput);
+      const live = buildDailyRecommendation({ ...dailyInput, injuryPolicy: 'hint' });
       // Newest-edit-wins rather than first match: sync can leave two entries
       // for one day, and editing an arbitrary one loses the other's text.
       const todayJournal = journals
@@ -328,8 +367,8 @@ export default function TrainHome() {
       // Pre-fill each protocol with what was done last time, so confirming is
       // the default and typing is the exception.
       const seeded: Record<string, number> = {};
-      for (const step of recommendation.steps) {
-        if (!step.protocolId) continue;
+      for (const step of [...live.steps, ...recommendation.steps]) {
+        if (!step.protocolId || step.protocolId in seeded) continue;
         const protocol = protocolById(step.protocolId);
         if (!protocol) continue;
         seeded[step.protocolId] =
@@ -352,6 +391,7 @@ export default function TrainHome() {
       setState({
         journals,
         recommendation,
+        live,
         todayJournalId: todayJournal?.id ?? null,
         hasAssessment: assessments.length > 0,
         hasGoal: goals.length > 0,
@@ -378,16 +418,18 @@ export default function TrainHome() {
   useEffect(() => {
     const suggestion = coach.suggestion;
     if (!state || !suggestion) return;
-    if (state.recommendation.kind === 'rest' || !suggestionLooksLikeRest(suggestion)) return;
+    const resolved = resolvePlan(state, coach);
+    if (!resolved.aiRestIgnored) return;
     log.warn('train: ignoring AI rest; the scheduler said train', {
       headline: suggestion.headline,
       restDay: suggestion.restDay ?? false,
-      focus: state.recommendation.focus,
+      focus: resolved.rec.focus,
     });
-  }, [coach.suggestion, state]);
+  }, [coach, state]);
 
   if (state === null || today === null) return <Screen />;
-  const { journals, recommendation: rec, todayJournalId, hasAssessment, hasGoal } = state;
+  const { journals, todayJournalId, hasAssessment, hasGoal } = state;
+  const { rec, shownAi, restToday, injuries, coachLive } = resolvePlan(state, coach);
 
   /** Apply the climber's decision, then drop the card whichever way it went. */
   const decideInsight = async (insight: Insight, accepted: boolean) => {
@@ -408,11 +450,7 @@ export default function TrainHome() {
     }
   };
   const ai = coach.suggestion;
-  // The scheduler already rested yesterday, or it says today is for training.
-  // A cached or freshly written "rest day" does not get to overrule that, and
-  // it does not get logged as rest either.
-  const aiRestIgnored = Boolean(ai && rec.kind !== 'rest' && suggestionLooksLikeRest(ai));
-  const shownAi = aiRestIgnored ? null : ai;
+  const hint = coachLive && !shownAi ? rec.injuryHint : null;
 
   const onboardingSteps: OnboardingStep[] = [
     {
@@ -438,7 +476,6 @@ export default function TrainHome() {
 
   const displaySteps = overlayAiPlan(rec.steps, shownAi?.plan);
   const planSteps = displaySteps.map((s) => s.text);
-  const restToday = rec.kind === 'rest';
   const cardBorder = restToday ? 'border-warning' : shownAi ? 'border-success' : 'border-primary';
 
   return (
@@ -491,6 +528,32 @@ export default function TrainHome() {
         <p className="mt-2 text-sm leading-5 text-muted">
           {shownAi ? shownAi.rationale || rec.detail : rec.detail}
         </p>
+
+        {/* Judged live from today's call and never saved, so nothing here
+            outlives the entries it came from. */}
+        {injuries.length > 0 && (
+          <div className="mt-4 rounded-xl border border-warning/40 bg-warning/10 px-3 py-2.5">
+            <p className="text-sm font-bold uppercase tracking-wide text-warning">Coach noticed</p>
+            {injuries.map((injury) => (
+              <div key={`${injury.bodyPart}:${injury.note}`} className="mt-1.5">
+                <p className="text-sm leading-5">{injury.note}</p>
+                {injury.evidence ? (
+                  <p className="mt-0.5 text-xs leading-4 text-muted">
+                    You wrote: “{injury.evidence}”
+                  </p>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        )}
+        {hint && (
+          <p className="mt-3 text-xs leading-4 text-muted">
+            You wrote “{hint.evidence}”.{' '}
+            {coach.status === 'loading'
+              ? 'Asking the coach whether to train around it…'
+              : 'Stop anything that hurts in that spot.'}
+          </p>
+        )}
 
         {state.insights.map((insight) => (
           <div key={insight.id} className="mt-4">

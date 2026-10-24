@@ -184,26 +184,25 @@ external sources.
 
 HARD CONSTRAINTS. These are computed from the climber's actual logged history and are not
 suggestions. Violating one produces a plan that will injure or overtrain them:
-- How their body feels is \`journals\` (newest first, at most the last 10) and \`today.note\`.
-  There is no injury list. Do not rest or deload because of \`profile.climberContext\` or any
-  note saved on an earlier day. If it is not in the newest entries, it has settled.
-- Weight the newest entries over the older ones in that list. If a problem shows up in an
-  older entry and the later ones do not mention it, or they say it is healing, getting better,
-  pain-free, or they trained on it, do not avoid loading it and do not include it in
-  \`injuries\`. Ordinary pump and next-day soreness are not injuries.
-- The scheduler is the only authority on whether today is a rest day. \`restDay\` MUST equal
-  \`schedule.restDay\`. You may not invent a rest, a day off, a deload, active recovery,
+- INJURIES ARE YOURS TO JUDGE, LIVE. There is no injury list and nothing is remembered between
+  days. How their body feels is the newest \`journals\` (daysAgo 0–7) and \`today.note\`, in their
+  own words. Do not rest or deload because of \`profile.climberContext\` or anything older.
+- \`schedule.injuryHint\` is a keyword scan of those same entries. It is often a false alarm —
+  skin, flappers, split tips, "broke through", "no injuries", "hurts my ego". Read the actual
+  words and decide yourself. Ordinary pump, DOMS, and tired forearms are not injuries.
+- Report an injury in \`injuries\` only when they describe pain, a tweak, or damage in a joint,
+  tendon, pulley, or muscle in an entry no newer entry says has eased, healed, or been trained on
+  without complaint. \`evidence\` MUST be copied word for word from that entry or \`today.note\`;
+  a finding whose evidence is not found there is discarded. Nothing real → \`injuries\` is [].
+- A real injury changes the session, not the day. Never load the painful tissue, and train
+  everything else hard: finger or elbow pain → no hangboard, campus, or crimping; antagonist,
+  core, legs, and aerobic work instead. Shoulder → no campus, dynos, or deep lock-offs. Tell them
+  to stop any exercise at the first sign of tendon or joint pain. Set \`restDay\` true only when
+  you report an injury with \`noClimbing: true\` and nothing useful can be trained without it.
+- Otherwise the scheduler is the only authority on whether today is a rest day. \`restDay\` MUST
+  equal \`schedule.restDay\`. You may not invent a rest, a day off, a deload, active recovery,
   a mobility-only day, "take it easy", or "no climbing" when \`schedule.restDay\` is false.
-  Not for a journal sentence, not for soreness, not for a weekly count, and not because you
-  set \`injuries[].noClimbing\`. If \`schedule.injury\` is null, \`injuries\` is [].
-- If a newest entry describes a fresh tear, MRI, or not being able to climb and
-  \`schedule.injury\` is null, name it in \`watchOuts\` and keep today's work off that
-  tissue. Still do not set \`restDay\`. The scheduler already decided the day is for training.
-- \`schedule.injury\` is a keyword reading of those same recent entries, not a record that
-  outlives them. If \`schedule.restDay\` is true because of it, prescribe REST / rehab only —
-  no performance climbing, hangboard, campus, or limit boulders. If \`noHighIntensity\` is
-  true, do not prescribe max strength, power, or power-endurance, and still write a real
-  session from what \`schedule.allowed\` leaves.
+  Not for a journal sentence, not for soreness, and not for a weekly count.
 - If \`schedule.restDay\` is true, prescribe a REST day. Do not find a workout that "still
   counts". Say why, using \`schedule.restReason\`, and give recovery guidance only.
 - If \`schedule.restDay\` is false and \`schedule.offFingers\` is not true, write a real
@@ -229,7 +228,7 @@ suggestions. Violating one produces a plan that will injure or overtrain them:
   that already happened. Naming a rest never makes today a rest day.
 - Prescribe ONLY focuses listed in \`schedule.allowed\`. Never prescribe anything in
   \`schedule.blocked\` — each carries the reason it is out (too soon since the last one, weekly
-  ceiling reached, equipment missing, injury, or they reported feeling beaten up).
+  ceiling reached, equipment missing, or they reported feeling beaten up).
 - Use ONLY equipment listed in \`today.equipment\`. If there is no hangboard today, do not
   prescribe hangboard work, however much you would like to.
 - Fit the session to \`today.sessionLength\`.
@@ -255,6 +254,12 @@ text is the highest-signal thing you have: grades attempted, where they pumped o
 off. Use the specifics rather than restating them. \`skipped\` lists steps they were prescribed
 but didn't get to — if the same block keeps getting dropped, either put it first today or
 prescribe a shorter session that actually fits their time.
+
+TONE. When \`profile.trainingPush\` is \`full-time\` this climber trains full time and asked to be
+pushed. Be direct and demanding, like a coach who expects the numbers to be hit. No hedging, no
+"if you feel up to it", no padding. Name the patterns in their logs — a block they keep skipping,
+a grade they keep falling on, a protocol stuck at the same number — and say what to do about it.
+Every step must be something they can check off.
 
 Coaching rules:
 - Within the allowed focuses, favour the weakest triad area; that is where training pays best.
@@ -290,11 +295,11 @@ Reply with ONLY a JSON object of this exact shape (no markdown, no prose outside
 {
   "focusArea": "mental" | "technical" | "physical" | null,
   "headline": string,            // one short line, e.g. "Power day: target finger strength"
-  "plan": string[],              // 3–6 ordered, concrete steps for today
+  "plan": string[],              // 5–10 ordered, concrete steps for today
   "rationale": string,           // 1–3 sentences citing their data, incl. their recent sessions
   "watchOuts": string[],         // 0–3 short cautions (injury, overtraining, technique)
-  "restDay": boolean,            // MUST equal schedule.restDay. Never true when it is false.
-  "injuries": [                  // unresolved physical problems you read in their prose; [] if none
+  "restDay": boolean,            // equals schedule.restDay, unless an injury below has noClimbing
+  "injuries": [                  // real, unresolved injuries in their newest entries; [] if none
     { "note": string, "evidence": string, "bodyPart": string, "noClimbing": boolean }
   ]
 }`;
@@ -366,7 +371,7 @@ export function assertRespectsPrescriptions(
 /**
  * A day off the scheduler did not call is dropped, including one written as an
  * easy day, active recovery, or "no climbing" with `restDay` left false.
- * A model injury does not get to overrule that. "Rest 3 minutes" inside a real
+ * Only a no-climbing injury verified against their own words overrules that. "Rest 3 minutes" inside a real
  * session is not a rest day.
  */
 /** Work that grips a hold. The off-finger session must not contain these. */
@@ -385,10 +390,68 @@ function baselineSteps(context: CoachContext): string[] {
   return (context.baselinePlan ?? []).map((step) => step.trim()).filter(Boolean);
 }
 
+/** Entries this old or newer are what an injury finding may quote. */
+const INJURY_EVIDENCE_DAYS = 7;
+
+function words(text: string): string[] {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .split(' ')
+    .filter((w) => w.length > 2);
+}
+
+/**
+ * Keep only injuries the climber actually wrote about recently.
+ *
+ * The model judges injuries live, and that judgement is allowed to change the
+ * session — even to call a rest. So it has to be anchored in their words: a
+ * finding whose evidence can't be found in the last week of entries or today's
+ * note is the model's invention, and it is dropped before it can act.
+ * "Found" is loose on purpose — most of the quote's words in one entry — since
+ * a model will fix a typo or trim a clause.
+ */
+export function verifyInjuries<T extends CoachSuggestion>(suggestion: T, context: CoachContext): T {
+  const injuries = suggestion.injuries ?? [];
+  if (injuries.length === 0) return suggestion;
+  const sources = [
+    context.today?.note ?? '',
+    ...(context.journals ?? [])
+      .filter((j) => j.daysAgo <= INJURY_EVIDENCE_DAYS)
+      .map((j) => [j.summary, j.wins, j.struggles].filter(Boolean).join(' ')),
+  ]
+    .filter(Boolean)
+    .map((text) => new Set(words(text)));
+  const kept = injuries.filter((injury) => {
+    const quote = words(injury.evidence);
+    if (quote.length < 2) return false;
+    return sources.some((source) => {
+      const hits = quote.filter((w) => source.has(w)).length;
+      return hits / quote.length >= 0.8;
+    });
+  });
+  if (kept.length !== injuries.length) {
+    log.info('coach: dropped injuries not found in recent entries', {
+      dropped: injuries.length - kept.length,
+      kept: kept.length,
+    });
+  }
+  return { ...suggestion, injuries: kept };
+}
+
+/** A verified injury that keeps them off the wall: the one model call allowed to rest. */
+function injuryRequiresRest(suggestion: CoachSuggestion): boolean {
+  return (suggestion.injuries ?? []).some((injury) => injury.noClimbing);
+}
+
 export function dropInventedRestDay<T extends CoachSuggestion & { restDay?: boolean }>(
   suggestion: T,
   context: CoachContext,
 ): T {
+  // Injuries are the model's call, made live from their words and already
+  // checked against those words. One that keeps them off the wall may rest
+  // the day; anything else is a plan that trains around it.
+  if (injuryRequiresRest(suggestion)) return suggestion;
   // Three finger days, or four in the week: the model does not get to climb
   // or to send them home. The built-in session is lifting, cardio, stretching.
   if (context.schedule?.offFingers === true) {
@@ -836,7 +899,7 @@ export async function generateCoachRun(context: CoachContext): Promise<CoachRun>
       const served = await callProvider(id, context, !hasNext);
       assertRespectsSchedule(served.suggestion, context);
       assertRespectsPrescriptions(served.suggestion, context);
-      const suggestion = dropInventedRestDay(served.suggestion, context);
+      const suggestion = dropInventedRestDay(verifyInjuries(served.suggestion, context), context);
       log.info('coach: served', {
         provider: id,
         model: served.model,

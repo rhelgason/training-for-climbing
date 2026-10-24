@@ -98,7 +98,17 @@ export interface DailyInput {
   journals?: JournalEntry[];
   dailyNote?: string;
   climberContext?: string;
-  derivedNotes?: Array<{ text: string; addedAt?: number } | string>;
+  /**
+   * What a keyword match in the journals is allowed to do.
+   *
+   *  - `enforce` (default): it shapes the plan — no near-limit work, and a
+   *    severe reading is a rest day. The offline floor, used whenever no
+   *    model is reading the journals.
+   *  - `hint`: the plan ignores it and it travels as `injuryHint`. The AI
+   *    coach reads the climber's own words and judges the injury live; a
+   *    regex that can't tell a flapper from a pulley does not get the last word.
+   */
+  injuryPolicy?: 'enforce' | 'hint';
 }
 
 export type DailyKind = 'rest' | 'assess' | 'train';
@@ -145,8 +155,13 @@ export interface DailyRecommendation {
    * to pitch.
    */
   climbing: ClimbingPrescription | null;
-  /** Unresolved injury detected from recent logs, if any. */
+  /** Unresolved injury detected from recent logs and applied to this plan, if any. */
   injury: DetectedInjury | null;
+  /**
+   * Under the `hint` policy: what the keyword reading found, not applied.
+   * Null under `enforce`, where any finding is in `injury` instead.
+   */
+  injuryHint: DetectedInjury | null;
 }
 
 const FOCUS_DETAIL: Record<TriadArea, string> = {
@@ -209,13 +224,15 @@ export function buildDailyRecommendation(input: DailyInput): DailyRecommendation
   const streak = currentStreak(input.trainingDates, input.nowMs);
   const reminders = goalReminders(input.goals);
   const equipment = input.equipment ?? DEFAULT_EQUIPMENT;
-  const injury = detectInjury({
+  const detected = detectInjury({
     journals: input.journals ?? [],
     nowMs: input.nowMs,
     dailyNote: input.dailyNote,
     climberContext: input.climberContext,
-    derivedNotes: input.derivedNotes,
   });
+  const hintOnly = input.injuryPolicy === 'hint';
+  const injury = hintOnly ? null : detected;
+  const injuryHint = hintOnly ? detected : null;
 
   // The scheduler needs classified history; without it we fall back to the
   // simpler streak-based logic so existing callers behave exactly as before.
@@ -262,6 +279,7 @@ export function buildDailyRecommendation(input: DailyInput): DailyRecommendation
     lightAlternative: null as DailyRecommendation['lightAlternative'],
     climbing: null as ClimbingPrescription | null,
     injury,
+    injuryHint,
   };
 
   // Note `priorTrainingRun`, not `streak`: the question is what they arrive

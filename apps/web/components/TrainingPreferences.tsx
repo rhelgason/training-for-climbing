@@ -11,11 +11,9 @@ import {
   STYLE_FOCUSES,
   STYLE_FOCUS_LABELS,
   effectiveProfile,
-  revokeDerivedNote,
   type AbilityTier,
   type ClimbDiscipline,
   type ProfilePatch,
-  type ProfileRecord,
   type ProfileSettings,
   type SessionLength,
   type StyleFocus,
@@ -67,21 +65,16 @@ export function TrainingPreferences() {
   const repo = useRepository();
   const { dataVersion } = useSync();
   const [settings, setSettings] = useState<ProfileSettings | null>(null);
-  // The raw record too: `derivedContext` isn't a user-editable setting, so it
-  // isn't on ProfileSettings, but this is where it has to be reviewable.
-  const [profile, setProfile] = useState<ProfileRecord | null>(null);
 
   useEffect(() => {
     repo.getProfile().then((p) => {
       setSettings(effectiveProfile(p));
-      setProfile(p);
     });
   }, [repo, dataVersion]);
 
   const update = async (patch: ProfilePatch) => {
     const saved = await repo.saveProfile(patch);
     setSettings(effectiveProfile(saved));
-    setProfile(saved);
   };
 
   if (settings === null) return null;
@@ -143,36 +136,6 @@ export function TrainingPreferences() {
           }}
         />
       </Card>
-
-      {(profile?.derivedContext?.length ?? 0) > 0 && (
-        <Card>
-          <p className="mb-1 font-semibold">What the app worked out</p>
-          <p className="mb-3 text-sm leading-5 text-muted">
-            Saved earlier, when the app kept its own injury list. Today&apos;s plan follows your
-            recent journal entries instead, not these. Remove any you don&apos;t want kept.
-          </p>
-          {profile!.derivedContext!.map((note) => (
-            <div
-              key={note.id}
-              className="mt-2 flex items-start justify-between gap-3 rounded-lg border border-border/70 bg-surface-alt/40 px-3 py-2"
-            >
-              <div className="min-w-0">
-                <p className="text-sm leading-5">{note.text}</p>
-                <p className="mt-0.5 text-xs text-muted">
-                  Noted {new Date(note.addedAt).toLocaleDateString()}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => void update(revokeDerivedNote(note.id, profile))}
-                className="shrink-0 py-1 text-sm font-semibold text-danger active:opacity-70"
-              >
-                Remove
-              </button>
-            </div>
-          ))}
-        </Card>
-      )}
 
       <Card>
         <p className="mb-1 font-semibold">Training days per week</p>

@@ -56,15 +56,15 @@ packages/core/src/        # platform-neutral domain logic, no UI, fully unit-tes
     train/                # load history, baselines, prescribed numbers, exercise library
     coach/                # AI coach: context builder + client + types
     progress/             # send pyramid, trends, consistency
-    profile/              # ability-tier drift + journal-derived insights
+    profile/              # ability-tier drift proposals
     sync/                 # backend-agnostic snapshot sync engine + HTTP remote
   db/                     # Repository interface + record types + InMemory implementation
   lib/                    # day arithmetic, clock, ids, logger
 
 apps/web/                 # the app itself (Next.js App Router)
-  app/                    # routes and pages, plus /api (auth, snapshot, coach, insights)
+  app/                    # routes and pages, plus /api (auth, snapshot, coach)
   components/             # UI
-  lib/                    # web-side db (IndexedDB), auth session, coach + insight clients
+  lib/                    # web-side db (IndexedDB), auth session, coach client
   lib/server/             # API-route internals: Postgres, JWT, LLM adapters
 
 scripts/                  # one-shot database schema and migrations
@@ -155,6 +155,12 @@ rather than retrying forever.
   **Gemini 3.6 Flash** free tier), cached for offline display, regenerated when today's check-in
   changes, and **falls back to the deterministic baseline** whenever it's off, offline, or
   rate-limited. See [`apps/web/README.md`](apps/web/README.md).
+- **Injuries, judged live (done):** there is no injury list. Each coach call reads the newest
+  journal entries and today's note and decides whether something is a real injury, quoting your
+  words as evidence; the server drops any finding it can't find in the last week of entries. A
+  real injury changes the session (train around it), and only one that keeps you off the wall can
+  rest the day. A strict keyword reading is passed along as a hint, and is the offline floor when
+  the coach is off or unreachable.
 - **Closing the loop (done):** "I did this — log it" records today's journal with the focus that
   was actually prescribed, so tomorrow's 48-hour rules run on fact rather than inference, then
   opens the log for the free text the coach reads next morning.

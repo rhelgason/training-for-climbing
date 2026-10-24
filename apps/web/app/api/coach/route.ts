@@ -36,7 +36,7 @@ export function POST(req: Request) {
       suggestedFocus: context.schedule?.suggestedFocus,
       readiness: context.today?.readiness,
       trainingPush: context.profile?.trainingPush,
-      injury: context.schedule?.injury?.summary,
+      injuryHint: context.schedule?.injuryHint?.summary,
     });
     try {
       const run = await generateCoachRun(context);

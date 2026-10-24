@@ -71,17 +71,15 @@ export interface CoachSchedule {
     taken: boolean;
   }[];
   /**
-   * Unresolved injury from recent logs. When set this is a hard constraint:
-   * do not load the injured area, and do not prescribe performance climbing
-   * if `noClimbing` is true.
+   * What a keyword scan of the recent journals flagged. Not a constraint and
+   * not applied to `allowed`/`blocked`: the model reads the same entries and
+   * decides, live, whether it is a real injury. It can be a false alarm.
    */
-  injury?: {
+  injuryHint?: {
     summary: string;
     evidence: string;
     region: string;
     severity: string;
-    noClimbing: boolean;
-    noHighIntensity: boolean;
   } | null;
 }
 
@@ -100,12 +98,6 @@ export interface CoachContext {
     equipment: EquipmentId[];
     /** The climber's own words about themselves. Free text, read verbatim. */
     climberContext?: string;
-    /**
-     * Facts the app inferred and the climber confirmed — kept as a separate
-     * list rather than folded into `climberContext` so the model can never
-     * mistake its own earlier inference for something the climber said.
-     */
-    derivedContext?: { text: string; addedAt: number }[];
   };
   /** What's true for *today* specifically, from the daily check-in. */
   today: {
@@ -206,9 +198,14 @@ export interface CoachPrescriptions {
   }[];
 }
 
-/** An unresolved physical problem the coach read in the climber's own prose. */
+/**
+ * An unresolved physical problem the coach read in the climber's own prose.
+ * Judged fresh on every call and never stored: tomorrow's call re-reads the
+ * journals, so a finding cannot outlive the writing that produced it.
+ */
 export interface CoachInjuryFinding {
   note: string;
+  /** A quote from a recent entry. The server drops findings it can't find there. */
   evidence: string;
   bodyPart: string;
   /** True when they should not climb or load that tissue today. */

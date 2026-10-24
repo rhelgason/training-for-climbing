@@ -204,6 +204,21 @@ describe('buildDailyRecommendation with recent load', () => {
     expect(rec.plan.join(' ')).not.toMatch(/Max strength —|5 hangs × 10 s/i);
   });
 
+  it('leaves the injury to the coach under the hint policy', () => {
+    const entries = [
+      journal(-1, {
+        struggles: 'Potentially severe leg injury, planning to get an MRI.',
+        focus: ['skill'],
+        intensity: 'easy',
+      }),
+    ];
+    const rec = withHistory(entries, { injuryPolicy: 'hint' });
+    expect(rec.kind).toBe('train');
+    expect(rec.injury).toBeNull();
+    expect(rec.injuryHint?.severity).toBe('severe');
+    expect(withHistory(entries).injuryHint).toBeNull();
+  });
+
   it('exposes the scheduler working so the UI can show the why', () => {
     const rec = withHistory([journal(-1, { focus: ['maxStrength'] })]);
     const blocked = rec.microcycle?.verdicts.find((v) => v.focus === 'maxStrength');

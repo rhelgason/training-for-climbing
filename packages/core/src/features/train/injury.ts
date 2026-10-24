@@ -57,11 +57,6 @@ export interface InjuryInput {
   dailyNote?: string;
   /** The climber's own profile blurb — often historical, so scored more strictly. */
   climberContext?: string;
-  /**
-   * Unused. Kept so existing callers still compile. Saved injury notes are
-   * not read — the journals are the record.
-   */
-  derivedNotes?: Array<{ text: string; addedAt?: number } | string>;
 }
 
 interface Finding {
