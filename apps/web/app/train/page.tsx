@@ -176,8 +176,8 @@ export default function TrainHome() {
     .join(',');
   // `logic` is part of the key so a cached plan from an older coach is
   // thrown out after the rules change, without waiting on a new journal.
-  // logic5 is the wider provider chain: a picture that failed on the old
-  // Gemini-or-Groq path is asked once more, then cached again.
+  // logic6: injuries are judged live by the coach, so a plan cached under the
+  // old keyword-enforced rules is asked again.
   const contextKey =
     today && daily.confirmed && state
       ? [
@@ -189,7 +189,7 @@ export default function TrainHome() {
           journalStamp,
           state.checkinStamp,
           effectiveProfile(state.profile).trainingPush,
-          'logic5',
+          'logic6',
         ].join('|')
       : undefined;
   const coach = useCoach(repo, useDebouncedValue(contextKey, COACH_SETTLE_MS));
