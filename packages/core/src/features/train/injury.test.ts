@@ -213,4 +213,35 @@ describe('detectInjury', () => {
       }),
     ).toBeNull();
   });
+
+  it.each([
+    'Tore a flapper on the crimpy V7, taped up and kept going',
+    'Skin is torn up from the volcanic rock, split a tip',
+    'Finally broke through my plateau on 20mm',
+    'Did my injury prevention routine after',
+    "I can't climb slab to save my life",
+    'Falling off the top hurts my ego',
+    'Sent my project, no injuries, felt amazing',
+    'Pain-free session, fingers felt strong',
+  ])('does not read everyday climbing talk as an injury: %s', (text) => {
+    expect(detectInjury({ journals: [journal(1, text)], nowMs: NOW })).toBeNull();
+  });
+
+  it('scores each sentence alone, so a flapper does not tear a shoulder', () => {
+    expect(
+      detectInjury({
+        journals: [journal(1, 'Tore a flapper on the V7. My shoulder felt great on the dynos.')],
+        nowMs: NOW,
+      }),
+    ).toBeNull();
+  });
+
+  it('still reads a torn pulley as severe', () => {
+    const found = detectInjury({
+      journals: [journal(1, 'Felt a pop in my left ring finger, A2 pulley maybe torn.')],
+      nowMs: NOW,
+    });
+    expect(found?.severity).toBe('severe');
+    expect(found?.region).toBe('finger');
+  });
 });

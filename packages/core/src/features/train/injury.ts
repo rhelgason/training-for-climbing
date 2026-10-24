@@ -85,11 +85,21 @@ const REGION_PATTERNS: { region: InjuryRegion; pattern: RegExp }[] = [
   { region: 'back', pattern: /\b(lower back|lumbar|spine|herniat)/i },
 ];
 
-/** Language that means "do not load this, at all." One mention is enough. */
-const SEVERE = new RegExp(
+/**
+ * Medical language. One mention is enough, with or without a body part —
+ * nobody books an MRI for a flapper.
+ */
+const MEDICAL =
+  /\b(mri|x-?ray|ultrasound|surgery|surgeon|operation|orthopedic|orthopaedic|physio(therapist)?|splint|buddy.?tap(e|ed|ing))\b/i;
+
+/**
+ * Damage language. Only severe when the same sentence names a body part:
+ * "broke through my plateau", "can't climb slab", and "injury prevention" are
+ * everyday climbing talk, and each used to cancel up to a week of training.
+ */
+const DAMAGE = new RegExp(
   [
-    '\\b(mri|x-?ray|surgery|surgeon|operation|orthopedic|orthopaedic)',
-    '(torn|tore|tear|rupture|fracture|broken|broke|avulsion)',
+    '\\b(torn|tore|tear|rupture[ds]?|fracture[ds]?|broken|broke|avulsion|dislocat\\w*|popp?ed)\\b',
     "(can'?t walk|cannot walk|can'?t climb|cannot climb|unable to climb|unable to walk)",
     '(severe|serious)\\s+\\w*\\s*(injur|sprain|strain)',
     '\\binjur(y|ed|ies)\\b',
@@ -97,17 +107,47 @@ const SEVERE = new RegExp(
   'i',
 );
 
-/** Language that means "back off high-intensity," not necessarily a rest day. */
-const MODERATE = new RegExp(
-  [
-    '\\b(tweak|tweaked|tweaky|niggle|niggled|strain|sprained|sprain)',
-    '(tendon|tendin|pulley|tenosynov)',
-    '(sharp pain|stabbing|swollen|swelling|inflamed)',
-    '((left|right|my)\\s+\\w+\\s+(hurts?|pain|sore|aching|grumbling))',
-    '\\b(hurts?|painful|in pain)\\b',
-  ].join('|'),
-  'i',
-);
+/** Language that means "back off high-intensity," even without a body part. */
+const TISSUE =
+  /\b(tweak|tweaked|tweaky|niggle|niggled|strain(ed)?|sprain(ed)?|tendon\w*|tendin\w*|pulley|tenosynov\w*)\b/i;
+
+/** Pain words. Only a finding when the sentence names where. */
+const PAIN =
+  /\b(hurts?|hurting|painful|pain|sore|aching|aches?|grumbl\w*|sharp|stabbing|swollen|swelling|inflamed|twinge\w*|pang)\b/i;
+
+/**
+ * Clauses that are not about tissue at all, removed before anything is scored.
+ * Skin is the big one: flappers and split tips are taped and climbed on, not
+ * rested. Negations ("no injuries", "pain-free") and prevention work are the rest.
+ */
+const NOT_AN_INJURY: RegExp[] = [
+  /\b(tor[en]|tear|tore off|split|ripped|rip|cut|raw|thin|worn)\b[^.!?;,]{0,30}\b(flappers?|skin|tips?|callus(es)?|blisters?|pads?)\b/gi,
+  /\b(flappers?|skin|tips?|callus(es)?|blisters?|pads?)\b[^.!?;,]{0,30}\b(tor[en]|tear|split|ripped|raw|thin|worn|bleed\w*|cut)\b/gi,
+  /\bflappers?\b/gi,
+  /\b(no|zero|without|free of|avoid(ing)?|prevent(ing|ion)?|prehab)\s+(\w+\s+){0,2}(injur\w*|pain|tweaks?)\b/gi,
+  /\b(injury|pain)[- ]free\b/gi,
+  /\binjury[- ]prevention\b/gi,
+  /\bhurts? my (ego|pride|feelings)\b/gi,
+];
+
+function stripNonInjury(text: string): string {
+  return NOT_AN_INJURY.reduce((t, re) => t.replace(re, ' '), text);
+}
+
+function sentences(text: string): string[] {
+  return text
+    .split(/(?<=[.!?;])\s+|\n+/)
+    .map((t) => t.trim())
+    .filter(Boolean);
+}
+
+/** True when some sentence reads as structural damage to a named body part. */
+function readsSevere(text: string): boolean {
+  return sentences(stripNonInjury(text)).some(
+    (sentence) =>
+      MEDICAL.test(sentence) || (DAMAGE.test(sentence) && regionOf(sentence) !== 'other'),
+  );
+}
 
 /**
  * Ordinary training cost, not an injury. Matched first so "sore forearms after
@@ -168,23 +208,29 @@ function classify(text: string, source: Finding['source']): Finding | null {
   // Journals that say it cleared up still become findings so a newer entry can
   // cancel an older one in the same region (see detectInjury below).
   if (source === 'profile' && RESOLVED.test(body)) return null;
-  if (ORDINARY.test(body) && !SEVERE.test(body) && !/\binjur/i.test(body)) return null;
 
-  if (SEVERE.test(body)) {
-    const region = regionOf(body);
-    return { severity: 'severe', region, evidence: snippet(body), source, date: 0 };
+  // Scored a sentence at a time, so "tore a flapper, but my shoulder felt
+  // great" can't stitch a tear onto a shoulder.
+  let best: Finding | null = null;
+  for (const sentence of sentences(stripNonInjury(body))) {
+    const region = regionOf(sentence);
+    const ordinary = ORDINARY.test(sentence);
+    let severity: InjurySeverity | null = null;
+    if (MEDICAL.test(sentence) || (DAMAGE.test(sentence) && region !== 'other')) {
+      severity = 'severe';
+    } else if (TISSUE.test(sentence) && !ordinary) {
+      severity = 'moderate';
+    } else if (region !== 'other' && PAIN.test(sentence) && !ordinary) {
+      // "Right ring finger has been sore on crimps" is a niggle without the
+      // word tweak. "Forearms sore and pumped" is the session working.
+      severity = 'moderate';
+    }
+    if (!severity) continue;
+    if (!best || (severity === 'severe' && best.severity !== 'severe')) {
+      best = { severity, region, evidence: snippet(body), source, date: 0 };
+    }
   }
-  if (MODERATE.test(body)) {
-    const region = regionOf(body);
-    return { severity: 'moderate', region, evidence: snippet(body), source, date: 0 };
-  }
-  // "Right ring finger has been sore on crimps" is a current niggle even when
-  // it doesn't use the words tweak/injury. Ordinary forearm pump is already out.
-  const region = regionOf(body);
-  if (region !== 'other' && /\b(sore|aching|pain|hurt)\b/i.test(body)) {
-    return { severity: 'moderate', region, evidence: snippet(body), source, date: 0 };
-  }
-  return null;
+  return best;
 }
 
 function journalText(journal: JournalEntry): string {
@@ -214,7 +260,7 @@ function loadedTissue(journal: JournalEntry): boolean {
  * better" that names nobody else.
  */
 function wordsSettle(text: string, finding: Finding): boolean {
-  if (SEVERE.test(text)) return false;
+  if (readsSevere(text)) return false;
   const strong = RECOVERY.test(text);
   const legacy = RESOLVED.test(text);
   if (!strong && !legacy) return false;
