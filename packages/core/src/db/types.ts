@@ -337,7 +337,9 @@ export interface SetLog {
   rpe?: number;
   grip?: GripId;
   side?: 'left' | 'right';
-  /** "V6", "fell at move 4" — whatever a number can't say. */
+  /** The problem's grade, for climbing sets (a 4x4 problem, a limit boulder). */
+  grade?: string;
+  /** "Fell at move 4" — whatever a number can't say. */
   note?: string;
 }
 

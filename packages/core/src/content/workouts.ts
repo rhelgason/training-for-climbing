@@ -17,6 +17,7 @@
  * power ladders (Ch 9). RPE scale: figure 8.3.
  */
 import type { GripId } from '../db/types';
+import type { AbilityTier } from './planning';
 import type { EquipmentId, SessionFocusId } from './trainingContext';
 
 /** The number that moves from one session to the next. */
@@ -81,8 +82,8 @@ export interface Workout {
   defaults?: { edgeMm?: number; grip?: GripId; level?: number; loadLb?: number };
   /** Benchmark id the session's top value also writes, for trends and older history. */
   trackableId?: string;
-  /** Only for climbers at or above this tier (index into ABILITY_TIERS). */
-  minTierIndex: number;
+  /** Only for climbers at or above this tier. */
+  minTier: AbilityTier;
   /** What the book says to do when the metric tops out. */
   ceiling?: string;
 }
@@ -149,7 +150,7 @@ export const WORKOUTS: Workout[] = [
     logs: ['load', 'reps'],
     defaults: { edgeMm: 20, grip: 'half-crimp', loadLb: 0 },
     trackableId: 'protocol-max-weight-hang',
-    minTierIndex: 1,
+    minTier: 'intermediate',
   },
   {
     id: 'max-hang-7-53',
@@ -167,7 +168,7 @@ export const WORKOUTS: Workout[] = [
     intervals: ({ sets }) => ({ sets, repsPerSet: 3, workSec: 7, restSec: 53, setRestSec: 300 }),
     logs: ['load', 'reps'],
     defaults: { edgeMm: 20, grip: 'half-crimp', loadLb: 0 },
-    minTierIndex: 1,
+    minTier: 'intermediate',
   },
   {
     id: 'min-edge-hangs',
@@ -187,7 +188,7 @@ export const WORKOUTS: Workout[] = [
     intervals: ({ sets }) => ({ sets, repsPerSet: 5, workSec: 12, restSec: 180, setRestSec: 300 }),
     logs: ['reps'],
     defaults: { edgeMm: 18, grip: 'half-crimp' },
-    minTierIndex: 1,
+    minTier: 'intermediate',
     ceiling:
       'Edges under about 10 mm get painful. Move to max-weight hangs on a 14–20 mm edge and add load instead.',
   },
@@ -213,7 +214,7 @@ export const WORKOUTS: Workout[] = [
     gripPlan: HIT_GRIP_ORDER,
     defaults: { loadLb: 0 },
     trackableId: 'protocol-hit-weight',
-    minTierIndex: 1,
+    minTier: 'intermediate',
   },
   {
     id: 'limit-bouldering',
@@ -234,7 +235,7 @@ export const WORKOUTS: Workout[] = [
     targetRpe: 9,
     intervals: ({ sets }) => ({ sets, repsPerSet: 3, workSec: 15, restSec: 150, setRestSec: 150 }),
     logs: ['grade', 'reps', 'grip'],
-    minTierIndex: 0,
+    minTier: 'beginner',
   },
   {
     id: 'hypergravity-bouldering',
@@ -259,7 +260,7 @@ export const WORKOUTS: Workout[] = [
     logs: ['load', 'reps', 'grade'],
     defaults: { loadLb: 10 },
     trackableId: 'protocol-hypergravity-boulder-weight',
-    minTierIndex: 2,
+    minTier: 'elite',
     ceiling: 'At 7 sets, add 5 lb to the belt and drop back to 5 sets.',
   },
 
@@ -285,8 +286,7 @@ export const WORKOUTS: Workout[] = [
     targetRpe: 8,
     intervals: ({ sets }) => ({ sets, repsPerSet: 1, workSec: 6, restSec: 0, setRestSec: 150 }),
     logs: ['reps', 'seconds'],
-    trackableId: 'protocol-campus-rung',
-    minTierIndex: 2,
+    minTier: 'intermediate',
     ceiling: 'At 10 sets, use smaller rungs or add 5–10 lb rather than skipping rungs.',
   },
   {
@@ -309,7 +309,7 @@ export const WORKOUTS: Workout[] = [
     targetRpe: 8,
     intervals: ({ sets }) => ({ sets, repsPerSet: 1, workSec: 5, restSec: 0, setRestSec: 180 }),
     logs: ['reps', 'seconds'],
-    minTierIndex: 2,
+    minTier: 'intermediate',
     ceiling: 'At 10 clean sets, try 1-4-7.',
   },
   {
@@ -332,7 +332,7 @@ export const WORKOUTS: Workout[] = [
     targetRpe: 8,
     intervals: ({ sets }) => ({ sets, repsPerSet: 2, workSec: 5, restSec: 60, setRestSec: 120 }),
     logs: ['reps', 'side'],
-    minTierIndex: 2,
+    minTier: 'intermediate',
     ceiling: 'At 10 sets a side, use smaller rungs or add a little weight.',
   },
   {
@@ -352,7 +352,7 @@ export const WORKOUTS: Workout[] = [
     targetRpe: 8,
     intervals: ({ sets }) => ({ sets, repsPerSet: 1, workSec: 6, restSec: 0, setRestSec: 120 }),
     logs: ['reps'],
-    minTierIndex: 3,
+    minTier: 'elite',
     ceiling: 'At 6 sets, cut the rest toward 30–60 s to train aerobic power.',
   },
 
@@ -374,7 +374,7 @@ export const WORKOUTS: Workout[] = [
     logs: ['load', 'reps'],
     defaults: { loadLb: 0 },
     trackableId: 'protocol-weighted-pullup',
-    minTierIndex: 1,
+    minTier: 'intermediate',
   },
   {
     id: 'pullup-intervals',
@@ -401,7 +401,7 @@ export const WORKOUTS: Workout[] = [
       setRestSec: 0,
     }),
     logs: ['reps'],
-    minTierIndex: 0,
+    minTier: 'beginner',
   },
   {
     id: 'frenchies',
@@ -420,7 +420,7 @@ export const WORKOUTS: Workout[] = [
     targetRpe: 9,
     intervals: ({ sets }) => ({ sets, repsPerSet: 1, workSec: 60, restSec: 0, setRestSec: 300 }),
     logs: ['reps', 'load'],
-    minTierIndex: 1,
+    minTier: 'intermediate',
     ceiling: 'At 6 clean cycles, add 10 lb and drop back to 3 cycles.',
   },
   {
@@ -442,7 +442,7 @@ export const WORKOUTS: Workout[] = [
     intervals: ({ sets }) => ({ sets, repsPerSet: 4, workSec: 10, restSec: 30, setRestSec: 150 }),
     logs: ['seconds', 'side'],
     trackableId: 'protocol-lock-off-seconds',
-    minTierIndex: 2,
+    minTier: 'elite',
   },
 
   // ── Strength / power endurance ───────────────────────────────────────────
@@ -472,7 +472,7 @@ export const WORKOUTS: Workout[] = [
     gripPlan: ['half-crimp', 'open-hand'],
     defaults: { level: 1, edgeMm: 20 },
     trackableId: 'protocol-repeaters-level',
-    minTierIndex: 1,
+    minTier: 'intermediate',
     ceiling: 'When 5 sets at L4 are not difficult, add a 10 lb belt or use smaller holds.',
   },
   {
@@ -497,7 +497,7 @@ export const WORKOUTS: Workout[] = [
     logs: ['reps', 'grip'],
     gripPlan: ['half-crimp', 'open-hand'],
     defaults: { level: 1, edgeMm: 20 },
-    minTierIndex: 1,
+    minTier: 'intermediate',
     ceiling: 'Past L4, add weight or use a smaller edge.',
   },
   {
@@ -519,7 +519,7 @@ export const WORKOUTS: Workout[] = [
     targetRpe: 9,
     intervals: () => ({ sets: 4, repsPerSet: 4, workSec: 30, restSec: 30, setRestSec: 240 }),
     logs: ['grade', 'reps'],
-    minTierIndex: 1,
+    minTier: 'intermediate',
   },
   {
     id: 'hit-endurance',
@@ -538,7 +538,7 @@ export const WORKOUTS: Workout[] = [
     logs: ['load', 'seconds', 'grip'],
     gripPlan: HIT_GRIP_ORDER,
     defaults: { loadLb: 0 },
-    minTierIndex: 2,
+    minTier: 'elite',
   },
 
   // ── Local aerobic endurance ──────────────────────────────────────────────
@@ -557,7 +557,7 @@ export const WORKOUTS: Workout[] = [
     targetRpe: 5,
     intervals: ({ sets }) => ({ sets, repsPerSet: 1, workSec: 300, restSec: 0, setRestSec: 180 }),
     logs: ['seconds'],
-    minTierIndex: 0,
+    minTier: 'beginner',
   },
   {
     id: 'threshold-intervals',
@@ -574,15 +574,16 @@ export const WORKOUTS: Workout[] = [
     sets: [1, 1],
     reps: 4,
     targetRpe: 8,
+    // One set per interval, so each one is logged and counted on its own.
     intervals: ({ reps }) => ({
-      sets: 1,
-      repsPerSet: reps ?? 4,
+      sets: reps ?? 4,
+      repsPerSet: 1,
       workSec: 240,
-      restSec: 240,
-      setRestSec: 0,
+      restSec: 0,
+      setRestSec: 240,
     }),
     logs: ['seconds'],
-    minTierIndex: 0,
+    minTier: 'beginner',
   },
   {
     id: 'moving-hangs',
@@ -600,7 +601,7 @@ export const WORKOUTS: Workout[] = [
     intervals: ({ sets }) => ({ sets, repsPerSet: 1, workSec: 240, restSec: 0, setRestSec: 180 }),
     logs: ['seconds'],
     trackableId: 'protocol-moving-hang-seconds',
-    minTierIndex: 0,
+    minTier: 'beginner',
   },
 ];
 
@@ -617,7 +618,14 @@ export function gripForSet(workout: Workout, index: number, fallback?: GripId): 
   return plan[index % plan.length];
 }
 
+const TIER_ORDER: AbilityTier[] = ['beginner', 'intermediate', 'elite'];
+
 /** True when one of the workout's equipment needs is on hand (or it needs none). */
 export function workoutIsPossible(workout: Workout, available: EquipmentId[]): boolean {
   return workout.equipment.length === 0 || workout.equipment.some((e) => available.includes(e));
+}
+
+/** True when the climber's tier is high enough for the workout. */
+export function workoutSuitsTier(workout: Workout, tier: AbilityTier): boolean {
+  return TIER_ORDER.indexOf(tier) >= TIER_ORDER.indexOf(workout.minTier);
 }

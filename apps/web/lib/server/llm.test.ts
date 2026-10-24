@@ -42,7 +42,8 @@ function makeContext(restDay = false): CoachContext {
     recentDays: [],
     assessment: null,
     fitness: [],
-    climbing: { sessionsLast30Days: 0, sendRate: 0, hardestSends: [] },
+    climbing: { sessionsLast30Days: 0, sendRate: 0, hardestSends: [], trend: [] },
+    notebook: [],
     goals: [],
     journals: [],
     training: { currentStreak: 0, daysLast14: 0 },
@@ -776,6 +777,14 @@ describe('assertRespectsPrescriptions', () => {
         plan(['Max-weight hangs — +40 lb, 5 sets']),
         withProtocol('+35 lb'),
       ),
+    ).toThrow(/changed the prescribed load/i);
+  });
+
+  it('still catches a changed load when the name is written without its parenthetical', () => {
+    const ctx = withProtocol('+35 lb');
+    ctx.prescriptions.protocols[0].name = 'Max-weight hangs (10 s)';
+    expect(() =>
+      assertRespectsPrescriptions(plan(['Max-weight hangs — +40 lb, 5 sets']), ctx),
     ).toThrow(/changed the prescribed load/i);
   });
 

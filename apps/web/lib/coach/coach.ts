@@ -30,6 +30,7 @@ export async function refreshCoachSuggestion(
     dailyContext,
     periods,
     checkins,
+    exerciseLogs,
   ] = await Promise.all([
     repo.getProfile(),
     repo.listAssessments(),
@@ -40,6 +41,7 @@ export async function refreshCoachSuggestion(
     repo.getDailyContext(nowMs),
     repo.listMacrocyclePeriods(),
     repo.listCheckins(),
+    repo.listExerciseLogs(),
   ]);
 
   const context = buildCoachContext({
@@ -52,6 +54,7 @@ export async function refreshCoachSuggestion(
     dailyContext,
     periods,
     checkins,
+    exerciseLogs,
     nowMs,
   });
 

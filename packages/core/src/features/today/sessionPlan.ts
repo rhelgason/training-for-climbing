@@ -19,12 +19,11 @@ import {
   type SessionFocusId,
   type SessionLength,
 } from '../../content/trainingContext';
-import type { Exercise } from '../../content/types';
-import { EXERCISES } from '../../content/exercises';
-import type { BenchmarkRecord } from '../../db/types';
-import { isDoableWith } from '../train/exercises';
-import { prescribeProtocol, type ProtocolPrescription } from '../train/prescribe';
+import { workoutById, workoutIsPossible, workoutSuitsTier } from '../../content/workouts';
+import type { BenchmarkRecord, ExerciseLogRecord } from '../../db/types';
+import { progressWorkout, type WorkoutTarget } from '../train/progression';
 import type { DetectedInjury } from '../train/injury';
+import { dayStartMs } from '../../lib/day';
 import { formatBands, type ClimbingPrescription } from './climbingPrescription';
 
 /**
@@ -38,20 +37,23 @@ export interface PlanStep {
   text: string;
   focus?: SessionFocusId;
   exerciseId?: string;
-  /** Set when this step has a number worth recording (see content/protocols). */
-  protocolId?: string;
   /**
-   * Today's numbers for that protocol, when the app is willing to prescribe
-   * them. Absent for `track` protocols, where choosing the load is the
-   * climber's call.
+   * A single number worth recording inline (content/protocols) — lifts, where
+   * the load is the climber's call. Catalogued workouts use `workoutId`.
    */
-  prescription?: ProtocolPrescription;
+  protocolId?: string;
+  /** Set when the step runs a catalogued workout (content/workouts): timer and set logger. */
+  workoutId?: string;
+  /** Today's number for that workout, read off the logged sets. */
+  target?: WorkoutTarget;
 }
 
 export interface SessionPlanContext {
   dayIdx: number;
   equipment: EquipmentId[];
   benchmarks: BenchmarkRecord[];
+  /** The training notebook: every logged set, which sets today's numbers. */
+  exerciseLogs?: ExerciseLogRecord[];
   nowMs: number;
   abilityTier: AbilityTier;
   sessionLength: SessionLength;
@@ -86,23 +88,42 @@ function step(text: string, extra: Partial<PlanStep> & { focus: SessionFocusId }
   return { text, ...extra };
 }
 
-function protocolStep(
+/**
+ * A step that runs a catalogued workout: today's number off the training
+ * notebook first, why, then the book protocol. Null when the equipment or the
+ * climber's tier rules it out.
+ */
+function workoutStep(
   focus: SessionFocusId,
-  exerciseId: string,
+  workoutId: string,
   ctx: SessionPlanContext,
-  textFor: (p: ProtocolPrescription | null, exercise: Exercise) => string,
+  title: string,
+  tail = '',
 ): PlanStep | null {
-  const exercise = EXERCISES.find((e) => e.id === exerciseId);
-  if (!exercise || !isDoableWith(exercise, ctx.equipment)) return null;
-  const protocolId = protocolForExercise(exercise.id)?.id;
-  const prescription = protocolId ? prescribeProtocol(protocolId, ctx.benchmarks, ctx.nowMs) : null;
-  return {
-    text: textFor(prescription, exercise),
-    focus,
-    exerciseId,
-    protocolId,
-    ...(prescription ? { prescription } : {}),
-  };
+  const workout = workoutById(workoutId);
+  if (!workout) return null;
+  if (!workoutIsPossible(workout, ctx.equipment) || !workoutSuitsTier(workout, ctx.abilityTier)) {
+    return null;
+  }
+  // Today's own sets don't move today's target: finishing the session would
+  // otherwise rewrite the plan to tomorrow's number while it's still on screen.
+  const before = dayStartMs(ctx.nowMs);
+  const target = progressWorkout(workout, {
+    logs: (ctx.exerciseLogs ?? []).filter((l) => l.date < before),
+    benchmarks: ctx.benchmarks,
+    nowMs: ctx.nowMs,
+  });
+  const text = [
+    `${title} — ${workout.name}:`,
+    target.kind === 'feel' ? '' : `${target.label}.`,
+    target.because,
+    workout.how,
+    target.advice ?? '',
+    tail.trim(),
+  ]
+    .filter(Boolean)
+    .join(' ');
+  return { text, focus, exerciseId: workout.exerciseId, workoutId, target };
 }
 
 function grades(ctx: SessionPlanContext): string {
@@ -200,57 +221,35 @@ function mentalSteps(ctx: SessionPlanContext, role: 'primary' | 'supporting'): P
   ];
 }
 
+/** Hörst: one max-hang protocol per session. Rotate them across days. */
+const MAX_HANGS = ['max-hang-10', 'min-edge-hangs', 'max-hang-7-53'] as const;
+
 function maxStrengthSteps(ctx: SessionPlanContext, role: 'primary' | 'supporting'): PlanStep[] {
   const out: PlanStep[] = [];
-  const hangVariant = ctx.dayIdx % 3;
 
-  if (has(ctx, 'hangboard') && ctx.abilityTier !== 'beginner') {
-    if (hangVariant === 1) {
-      const minEdge = protocolStep('maxStrength', 'fingerboard-pyramids', ctx, (p) => {
-        // Min-edge uses the same exercise id as pyramids/max-weight in the library
-        // but is a different protocol — spell it in Hörst's numbers, no invented load.
-        void p;
-        return 'Max strength — Minimum-edge hangs (Table 8.2): half-crimp, no thumb lock. Pick an edge you can barely hold 15 s. 5 hangs × 12 s · 3 min rest between hangs · 2–3 sets · 5 min between sets. End every hang at 12 s. Little to no pump. Shoulders engaged, chest out, no shrug.';
-      });
-      if (minEdge) {
-        minEdge.protocolId = undefined;
-        minEdge.prescription = undefined;
-        out.push(minEdge);
-      }
-    } else if (hangVariant === 2) {
-      const seven = protocolStep('maxStrength', 'fingerboard-pyramids', ctx, (p) => {
-        const load = p?.kind === 'work' && p.targetLabel ? `${p.targetLabel} ` : '';
-        const core =
-          p?.kind === 'work'
-            ? `7 s hang / 53 s rest · 3 hangs per set · 2–3 sets · 5 min between sets, ${load}on a 14–20 mm edge, half-crimp or open-hand. End every hang at 7 s; the load should make you fail around 10 s if you kept going.`
-            : (p?.text ??
-              'Max-weight 7-53: establish added weight on a 14–20 mm edge so a hang fails around 10 s, then 7 s hang / 53 s rest · 3 hangs · 2–3 sets · 5 min between sets.');
-        return `Max strength — Max-weight 7-53 (Table 8.4): ${core} Do not also do 10-second hangs today.`;
-      });
-      if (seven) out.push(seven);
-    } else {
-      const ten = protocolStep('maxStrength', 'fingerboard-pyramids', ctx, (p) => {
-        if (p?.kind === 'work' && p.targetLabel) {
-          return `Max strength — Max-weight hangs (Table 8.3): ${p.targetLabel} on a 14–20 mm edge, half-crimp or open-hand (no thumb lock). 5 hangs × 10 s · 3 min rest between hangs · 2–3 sets · 5 min between sets. End every hang at 10 s; you should fail around 13 s if you kept going. Shoulders engaged, chest out.`;
-        }
-        return `Max strength — ${p?.text ?? 'Max-weight hangs — establish your baseline on a 14–20 mm edge, half-crimp, 10 s hangs with 3 min rest, adding weight until a hang gets hard but stays clean.'}`;
-      });
-      if (ten) out.push(ten);
-    }
-  }
+  const hang = workoutStep(
+    'maxStrength',
+    rotate([...MAX_HANGS], ctx.dayIdx),
+    ctx,
+    'Max strength',
+    'One hang protocol today, not two.',
+  );
+  if (hang) out.push(hang);
 
   if (canClimb(ctx) && role === 'primary') {
     const boulder = has(ctx, 'boulder-wall') || has(ctx, 'steep-wall') || has(ctx, 'system-board');
     if (boulder) {
       const work = ctx.climbing?.bands.work
-        ? ` around ${ctx.climbing.bands.work}`
-        : ' near your limit';
-      out.push(
-        step(
-          `Max strength — Limit boulders: 4–6 problems${work}, each climbable in under 15 s (ATP-CP, not a pump). 3 attempts per problem with 2–3 min rest. Isolate one grip per problem when you can (half-crimp, open-hand, pinch, 2-finger teams). Step off rather than fight into the lactic system.${styleLine(ctx)}`,
-          { focus: 'maxStrength', exerciseId: 'bouldering' },
-        ),
+        ? ` Grades today: around ${ctx.climbing.bands.work}.`
+        : '';
+      const limit = workoutStep(
+        'maxStrength',
+        'limit-bouldering',
+        ctx,
+        'Max strength',
+        `${work}${styleLine(ctx)}`,
       );
+      if (limit) out.push(limit);
     } else if (has(ctx, 'outdoor-rock') || has(ctx, 'rope-wall')) {
       out.push(
         step(
@@ -261,10 +260,8 @@ function maxStrengthSteps(ctx: SessionPlanContext, role: 'primary' | 'supporting
     }
   }
 
-  if (has(ctx, 'pull-up-bar') && role === 'primary' && ctx.abilityTier !== 'beginner') {
-    const weighted = protocolStep('maxStrength', 'hypergravity-pull-ups', ctx, () => {
-      return 'Max strength — Weighted pull-ups: 3–5 sets of 5 reps with enough added weight that 5 is hard (not a max-rep set). Explode up, 2 s lower, stop just short of a straight-arm shrug. 3 min rest between sets. Use last session’s added weight; do not guess a new max.';
-    });
+  if (role === 'primary') {
+    const weighted = workoutStep('maxStrength', 'weighted-pullups', ctx, 'Max strength');
     if (weighted) out.push(weighted);
   }
 
@@ -281,20 +278,19 @@ function maxStrengthSteps(ctx: SessionPlanContext, role: 'primary' | 'supporting
 
 function powerSteps(ctx: SessionPlanContext, role: 'primary' | 'supporting'): PlanStep[] {
   const out: PlanStep[] = [];
-  if (has(ctx, 'campus-board') && ctx.abilityTier !== 'beginner') {
-    out.push(
-      step(
-        'Power — Campus laddering (large rungs): 1-3-5-7 from matched hands on rung 1, no feet, open-hand grip, slight elbow bend, chest out, never a straight-arm shrugged catch. 4–8 sets, each a 3–6 s sprint. 3 min rest. Quality over volume — stop at the first ugly catch.',
-        { focus: 'power', exerciseId: 'campus-laddering', protocolId: 'protocol-campus-rung' },
-      ),
-    );
+  const ladder = workoutStep(
+    'power',
+    rotate(['campus-power-ladder', 'campus-ladder'], ctx.dayIdx),
+    ctx,
+    'Power',
+  );
+  if (ladder) {
+    out.push(ladder);
     if (role === 'primary') {
-      out.push(
-        step(
-          'Power — Campus bumps or switch-hands on medium rungs, 2–4 sets of ≤10 s, 2 min rest. Same shoulder rules. Skip double dynos unless you already climb ~5.13/V8 and nothing hurts.',
-          { focus: 'power', exerciseId: 'campus-double-dynos', protocolId: 'protocol-campus-rung' },
-        ),
-      );
+      const second =
+        workoutStep('power', 'campus-switch-hands', ctx, 'Power') ??
+        workoutStep('power', 'campus-bumps', ctx, 'Power');
+      if (second) out.push(second);
     }
   } else if (canClimb(ctx)) {
     out.push(
@@ -334,39 +330,34 @@ function powerEnduranceSteps(ctx: SessionPlanContext, role: 'primary' | 'support
   const out: PlanStep[] = [];
   if (canClimb(ctx)) {
     const gradeHint = ctx.climbing?.bands.volume
-      ? ` Pick problems ~${ctx.climbing.bands.volume} to a bit under your limit`
-      : ' Pick problems a few grades below your max';
-    out.push(
-      step(
-        `Power endurance — Bouldering 4×4: 4 problems, 4 laps each.${gradeHint} so you finish (fail only on the 4th pass if at all). 1 min per lap (climb + leftover rest), then 4 min rest after every 4th climb. ~30 min total. Use a timer.${styleLine(ctx)}`,
-        { focus: 'powerEndurance', exerciseId: 'interval-climbing' },
-      ),
+      ? ` Pick problems around ${ctx.climbing.bands.volume}, a bit under your limit.`
+      : '';
+    const fourByFour = workoutStep(
+      'powerEndurance',
+      'bouldering-4x4',
+      ctx,
+      'Power endurance',
+      `${gradeHint}${styleLine(ctx)}`,
     );
+    if (fourByFour) out.push(fourByFour);
   }
-  if (has(ctx, 'hangboard') && (role === 'primary' || !canClimb(ctx))) {
-    const repeater = protocolStep('powerEndurance', 'fingerboard-repeaters', ctx, (p) => {
-      if (p?.kind === 'work' && p.targetLabel) {
-        const level = p.target ?? 1;
-        const rests: Record<number, string> = {
-          1: '10 s on / 30 s off',
-          2: '10 s on / 20 s off',
-          3: '10 s on / 10 s off',
-          4: '10 s on / 5 s off',
-        };
-        const rest = rests[level] ?? '10 s on / 30 s off';
-        return `Power endurance — Repeaters ${p.targetLabel} (${rest}): 6 hangs per set · 4 sets · 1 min between sets. Alternate half-crimp and open-hand each set. Shoulders engaged. When 5 sets at L4 feel easy, add ~10 lb or go smaller.`;
-      }
-      return `Power endurance — ${p?.text ?? 'Repeaters — start at L1 (10 s on / 30 s off), 6 hangs, 3–5 sets, 1 min between sets. Alternate half-crimp / open-hand.'}`;
-    });
+  if (role === 'primary' || !canClimb(ctx)) {
+    const repeater = workoutStep(
+      'powerEndurance',
+      rotate(['repeaters-short', 'repeaters-long'], Math.floor(ctx.dayIdx / 7)),
+      ctx,
+      'Power endurance',
+    );
     if (repeater) out.push(repeater);
   }
-  if (has(ctx, 'pull-up-bar') && role === 'primary') {
-    out.push(
-      step(
-        'Power endurance — Frenchies: pull-up + 4 s lock-off at the top, at 90°, and at 120°. That trio is one cycle (~15 s). Do 2–6 cycles per set (30–90 s), 2–4 sets, 5 min rest. Add a 10–20 lb belt only once 5–6 cycles are clean.',
-        { focus: 'powerEndurance', exerciseId: 'frenchies' },
-      ),
+  if (role === 'primary') {
+    const pull = workoutStep(
+      'powerEndurance',
+      rotate(['frenchies', 'pullup-intervals'], ctx.dayIdx),
+      ctx,
+      'Power endurance',
     );
+    if (pull) out.push(pull);
   }
   if (out.length === 0) {
     out.push(
@@ -383,23 +374,26 @@ function aerobicSteps(ctx: SessionPlanContext, role: 'primary' | 'supporting'): 
   const out: PlanStep[] = [];
   if (canClimb(ctx)) {
     const minutes = role === 'primary' ? '20–30' : '10–15';
-    const arc = protocolStep('enduranceAerobic', 'arc-traverses', ctx, (p) => {
-      return `Aerobic endurance — ARC / recovery climbing: ${minutes} min continuous easy traversing or laps at RPE 4–6 (conversation pace, light pump at most). Step off at the first sign of a flaming pump — that would be anaerobic work, not this. ${p?.text ?? ''}`.trim();
-    });
+    const arc = workoutStep(
+      'enduranceAerobic',
+      'arc',
+      ctx,
+      'Aerobic endurance',
+      `${minutes} min today.`,
+    );
     if (arc) out.push(arc);
     if (role === 'primary') {
-      out.push(
-        step(
-          'Aerobic endurance — Optional threshold finisher: 3–5 min intervals at RPE 7–8.5 with equal rest, 3–6 reps. Stay just at the pump line, never in a fight. Skip this if the ARC already drifted anaerobic.',
-          { focus: 'enduranceAerobic' },
-        ),
+      const threshold = workoutStep(
+        'enduranceAerobic',
+        'threshold-intervals',
+        ctx,
+        'Aerobic endurance',
+        'Skip it if the ARC already drifted into a real pump.',
       );
+      if (threshold) out.push(threshold);
     }
   } else if (has(ctx, 'hangboard')) {
-    const moving = protocolStep('enduranceAerobic', 'fingerboard-moving-hangs', ctx, (p) => {
-      const time = p?.kind === 'work' && p.targetLabel ? p.targetLabel : '3–6 min';
-      return `Aerobic endurance — Moving hangs, feet on a chair: circulate around the board ${time} at RPE 5–8, shake out on jugs when the pump rises. 3–6 sets, work:rest 2:1 to 1:1. Moderate pump only.`;
-    });
+    const moving = workoutStep('enduranceAerobic', 'moving-hangs', ctx, 'Aerobic endurance');
     if (moving) out.push(moving);
   } else {
     out.push(
@@ -579,6 +573,10 @@ function overlayMatchScore(aiText: string, step: PlanStep): number {
     const protocol = TRACKABLE_PROTOCOLS.find((p) => p.id === step.protocolId);
     if (protocol && a.includes(normalizePlanText(protocol.name))) score += 8;
   }
+  if (step.workoutId) {
+    const workout = workoutById(step.workoutId);
+    if (workout && a.includes(normalizePlanText(workout.name))) score += 10;
+  }
   const hints = [
     /min(?:imum)?\s*edge/,
     /\b7\s*53\b/,
@@ -591,6 +589,10 @@ function overlayMatchScore(aiText: string, step: PlanStep): number {
     /deadlift/,
     /moving hang/,
     /weighted pull/,
+    /limit boulder/,
+    /threshold/,
+    /pull up interval/,
+    /hit\b/,
   ];
   for (const re of hints) {
     if (re.test(a) && re.test(b)) score += 6;

@@ -35,6 +35,7 @@ import { TRIAD_LABELS, type TriadArea } from '../../content/types';
 import type { AbilityTier } from '../../content/planning';
 import type {
   BenchmarkRecord,
+  ExerciseLogRecord,
   ClimbRecord,
   GoalRecord,
   JournalEntry,
@@ -86,6 +87,11 @@ export interface DailyInput {
    * without them it prescribes a test session to establish one.
    */
   benchmarks?: BenchmarkRecord[];
+  /**
+   * The training notebook. Each catalogued workout reads its own logged sets
+   * to decide today's number: clean and comfortable goes up a step.
+   */
+  exerciseLogs?: ExerciseLogRecord[];
   /** Logged climbs, used to pitch today's grades against the climber's own pyramid. */
   climbs?: ClimbRecord[];
   /** Which scale to prescribe grades on. Defaults to bouldering. */
@@ -188,6 +194,7 @@ function planContext(
     dayIdx: dayIndex(input.nowMs),
     equipment: input.equipment ?? DEFAULT_EQUIPMENT,
     benchmarks: input.benchmarks ?? [],
+    exerciseLogs: input.exerciseLogs ?? [],
     nowMs: input.nowMs,
     abilityTier: input.abilityTier ?? 'intermediate',
     sessionLength: input.sessionLength ?? 'standard',

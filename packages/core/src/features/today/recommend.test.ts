@@ -226,12 +226,12 @@ describe('buildDailyRecommendation with recent load', () => {
     expect(blocked?.reason).toContain('48 hours');
   });
 
-  it('attaches a trackable protocol to steps that have a number worth logging', () => {
+  it('attaches a workout and target to steps that have a number worth logging', () => {
     const rec = withHistory([], { weakestArea: 'physical' });
-    const tracked = rec.steps.filter((s) => s.protocolId);
+    const tracked = rec.steps.filter((s) => s.workoutId);
     expect(tracked.length).toBeGreaterThan(0);
-    // Every protocol step must name its exercise, or the UI can't seed a value.
-    for (const step of tracked) expect(step.exerciseId).toBeTruthy();
+    // Every workout step carries today's target, or the session screen has nothing to run.
+    for (const step of tracked) expect(step.target).toBeTruthy();
   });
 
   it('keeps plan text and structured steps in lockstep', () => {
