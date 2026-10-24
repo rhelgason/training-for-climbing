@@ -311,6 +311,103 @@ export interface BenchmarkRecord {
 export type NewBenchmark = Omit<BenchmarkRecord, 'id' | 'createdAt'> & { createdAt?: number };
 
 /**
+ * Grip positions Hörst trains (Ch 8). Never the full crimp with thumb lock —
+ * the gains transfer from the half crimp without the tendon cost.
+ */
+export type GripId =
+  | 'half-crimp'
+  | 'open-crimp'
+  | 'open-hand'
+  | 'pinch'
+  | 'pocket-front'
+  | 'pocket-middle'
+  | 'pocket-back';
+
+/** One set of one exercise, as it actually went. */
+export interface SetLog {
+  /** Added load in lb. Negative is assistance (counterweight, band). */
+  loadLb?: number;
+  /** Count done: hangs held, pull-ups, hand moves, laps, problems sent. */
+  reps?: number;
+  /** Seconds, where time is the result (a test hang, a lock-off, an interval). */
+  seconds?: number;
+  /** Hit the prescription: every hang held full length, every rep done. */
+  completed: boolean;
+  /** Rate of perceived exertion on Hörst's 1–10 scale. */
+  rpe?: number;
+  grip?: GripId;
+  side?: 'left' | 'right';
+  /** "V6", "fell at move 4" — whatever a number can't say. */
+  note?: string;
+}
+
+/**
+ * One exercise in one session, every set. This is the training notebook
+ * Hörst tells you to keep ("record hold size, weight used, and the number of
+ * hangs and sets"), and what lets tomorrow's plan say "+30 lb, because last
+ * time all ten hangs were clean at RPE 8" instead of a guess.
+ */
+export interface ExerciseLogRecord {
+  id: string;
+  createdAt: number;
+  updatedAt: number;
+  /** The session day (epoch ms). */
+  date: number;
+  /** Which workout (matches Workout.id in content/workouts). */
+  workoutId: string;
+  /** Held constant for the whole exercise. */
+  edgeMm?: number;
+  grip?: GripId;
+  /** Repeater level, or the like. */
+  level?: number;
+  /** Grade the sets were climbed at (4x4s, limit boulders). */
+  grade?: string;
+  /** Body weight that day, so loads read as a share of it. */
+  bodyWeightLb?: number;
+  sets: SetLog[];
+  /** What the app asked for, so "did they hit it" stays checkable. */
+  prescribedLabel?: string;
+  /** Felt tendon or joint pain. Hörst: stop at the first sign. */
+  pain?: boolean;
+  notes?: string;
+}
+
+export type NewExerciseLog = Omit<ExerciseLogRecord, 'id' | 'createdAt' | 'updatedAt'> & {
+  createdAt?: number;
+  updatedAt?: number;
+};
+
+export type ExerciseLogPatch = Partial<
+  Pick<
+    ExerciseLogRecord,
+    | 'date'
+    | 'edgeMm'
+    | 'grip'
+    | 'level'
+    | 'grade'
+    | 'bodyWeightLb'
+    | 'sets'
+    | 'prescribedLabel'
+    | 'pain'
+    | 'notes'
+  >
+>;
+
+/** A body-weight reading. Loads and test ratios are read against the nearest one. */
+export interface BodyWeightRecord {
+  id: string;
+  createdAt: number;
+  updatedAt: number;
+  date: number;
+  lb: number;
+}
+
+export type NewBodyWeight = Omit<BodyWeightRecord, 'id' | 'createdAt' | 'updatedAt'> & {
+  createdAt?: number;
+  updatedAt?: number;
+};
+
+/**
  * An Energy-Emotion reading (Appendix B chart). Energy on a 0–10 axis,
  * emotion on a −5..+5 axis; logged through the day to spot patterns.
  */
@@ -337,7 +434,9 @@ export type SyncTable =
   | 'periods'
   | 'benchmarks'
   | 'checkins'
-  | 'dailyContexts';
+  | 'dailyContexts'
+  | 'exerciseLogs'
+  | 'bodyWeights';
 
 /** Records that a record was deleted, so deletions propagate during sync. */
 export interface TombstoneRecord {
@@ -361,6 +460,8 @@ export interface Snapshot {
   benchmarks: BenchmarkRecord[];
   checkins: CheckinRecord[];
   dailyContexts: DailyContextRecord[];
+  exerciseLogs: ExerciseLogRecord[];
+  bodyWeights: BodyWeightRecord[];
   /** Singleton profile (last-write-wins by updatedAt), or null if never set. */
   profile: ProfileRecord | null;
   tombstones: TombstoneRecord[];

@@ -5,6 +5,11 @@ import type {
   ClimbRecord,
   DailyContextPatch,
   DailyContextRecord,
+  BodyWeightRecord,
+  ExerciseLogPatch,
+  ExerciseLogRecord,
+  NewBodyWeight,
+  NewExerciseLog,
   GoalPatch,
   GoalRecord,
   MacrocyclePeriodPatch,
@@ -109,6 +114,19 @@ export interface Repository {
   getDailyContext(dateMs: number): Promise<DailyContextRecord | null>;
   updateDailyContext(id: string, patch: DailyContextPatch): Promise<DailyContextRecord | null>;
   deleteDailyContext(id: string): Promise<void>;
+
+  // --- Exercise logs (every set of every exercise) ---
+  saveExerciseLog(input: NewExerciseLog): Promise<ExerciseLogRecord>;
+  /** Newest first. */
+  listExerciseLogs(): Promise<ExerciseLogRecord[]>;
+  updateExerciseLog(id: string, patch: ExerciseLogPatch): Promise<ExerciseLogRecord | null>;
+  deleteExerciseLog(id: string): Promise<void>;
+
+  // --- Body weight ---
+  saveBodyWeight(input: NewBodyWeight): Promise<BodyWeightRecord>;
+  /** Newest first. */
+  listBodyWeights(): Promise<BodyWeightRecord[]>;
+  deleteBodyWeight(id: string): Promise<void>;
 
   // --- Profile (singleton settings) ---
   getProfile(): Promise<ProfileRecord | null>;
