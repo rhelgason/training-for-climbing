@@ -171,7 +171,8 @@ describe('buildFocusSteps — every focus, gym gear', () => {
       ctx({ dayIdx: 2, benchmarks: [hang(40), hang(38)] }),
       'primary',
     );
-    expect(seven.some((s) => /7-53/.test(s.text) && /\+35 lb/.test(s.text))).toBe(true);
+    // 7-53 loads differ from 10 s loads, so a 10 s benchmark doesn't carry over: it's a test.
+    expect(seven.some((s) => /7-53/.test(s.text) && s.target?.kind === 'test')).toBe(true);
 
     const sevenTest = buildFocusSteps('maxStrength', ctx({ dayIdx: 2 }), 'primary');
     expect(sevenTest.some((s) => /7-53/.test(s.text))).toBe(true);
@@ -181,10 +182,12 @@ describe('buildFocusSteps — every focus, gym gear', () => {
       ctx({ dayIdx: 0, benchmarks: [hang(40), hang(38)] }),
       'primary',
     );
-    expect(ten.some((s) => /Max-weight hangs/.test(s.text) && /\+35 lb/.test(s.text))).toBe(true);
+    expect(ten.some((s) => /Max-weight hangs/.test(s.text) && /\+40 lb/.test(s.text))).toBe(true);
 
     const tenTest = buildFocusSteps('maxStrength', ctx({ dayIdx: 0 }), 'primary');
-    expect(tenTest.some((s) => /Max-weight hangs|establish/.test(s.text))).toBe(true);
+    expect(tenTest.some((s) => /Max-weight hangs/.test(s.text) && s.target?.kind === 'test')).toBe(
+      true,
+    );
   });
 
   it('max-strength on a rope or outdoor day without a boulder wall names short efforts', () => {
@@ -213,9 +216,9 @@ describe('buildFocusSteps — every focus, gym gear', () => {
   });
 
   it('power uses campus when available, boulders otherwise, clap pull-ups on a bar, generic last', () => {
-    expect(
-      buildFocusSteps('power', ctx(), 'primary').some((s) => /Campus laddering/.test(s.text)),
-    ).toBe(true);
+    expect(buildFocusSteps('power', ctx(), 'primary').some((s) => /Campus/.test(s.text))).toBe(
+      true,
+    );
     expect(buildFocusSteps('power', ctx(), 'supporting')).toHaveLength(1);
 
     const boulders = buildFocusSteps(
@@ -243,7 +246,7 @@ describe('buildFocusSteps — every focus, gym gear', () => {
       ctx({ equipment: ['hangboard'], benchmarks: [repeater(3), repeater(3)] }),
       'primary',
     );
-    expect(withLevel.some((s) => /Repeaters L2|Repeaters L3/.test(s.text))).toBe(true);
+    expect(withLevel.some((s) => /Repeaters/.test(s.text) && s.target?.level === 3)).toBe(true);
 
     const testLevel = buildFocusSteps(
       'powerEndurance',
@@ -260,7 +263,7 @@ describe('buildFocusSteps — every focus, gym gear', () => {
   it('aerobic uses ARC on a wall, moving hangs on a board, or a tempo run', () => {
     const arc = buildFocusSteps('enduranceAerobic', ctx({ climbing: climbing() }), 'primary');
     expect(arc.some((s) => /ARC/.test(s.text))).toBe(true);
-    expect(arc.some((s) => /threshold finisher/.test(s.text))).toBe(true);
+    expect(arc.some((s) => /Threshold intervals/.test(s.text))).toBe(true);
     expect(
       buildFocusSteps('enduranceAerobic', ctx(), 'supporting').some((s) =>
         /10–15 min/.test(s.text),
@@ -312,15 +315,16 @@ describe('buildFocusSteps — every focus, gym gear', () => {
 });
 
 describe('overlayAiPlan', () => {
-  it('keeps AI wording and re-attaches the matching protocol', () => {
+  it('keeps AI wording and re-attaches the matching workout', () => {
     const baseline = buildFocusSteps('maxStrength', ctx({ dayIdx: 0 }), 'primary');
-    const hang = baseline.find((s) => s.protocolId === 'protocol-max-weight-hang');
+    const hang = baseline.find((s) => s.workoutId === 'max-hang-10');
     expect(hang).toBeTruthy();
     const overlaid = overlayAiPlan(baseline, [
       'Max-weight hangs today: 5 x 10 s, half-crimp, rest 3 min. Use the prescribed load.',
     ]);
     expect(overlaid[0].text).toMatch(/Max-weight hangs today/);
-    expect(overlaid[0].protocolId).toBe('protocol-max-weight-hang');
+    expect(overlaid[0].workoutId).toBe('max-hang-10');
+    expect(overlaid[0].target).toBe(hang!.target);
   });
 
   it('returns the baseline unchanged when there is no AI plan', () => {

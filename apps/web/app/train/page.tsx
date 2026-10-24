@@ -9,6 +9,8 @@ import {
   acceptInsight,
   buildDailyRecommendation,
   combineReadiness,
+  dayStartMs,
+  describeSession,
   detectAbilityDrift,
   dismissInsight,
   formatBands,
@@ -32,10 +34,13 @@ import {
   log,
   sessionFocus,
   suggestionLooksLikeRest,
+  summarizeSession,
   trackEvent,
   trainingDates,
+  workoutById,
   type BenchmarkRecord,
   type DailyRecommendation,
+  type ExerciseLogRecord,
   type JournalEntry,
   type JournalIntensity,
   type SessionFocusId,
@@ -87,6 +92,10 @@ interface LoadState {
   hasAssessment: boolean;
   hasGoal: boolean;
   benchmarks: BenchmarkRecord[];
+  /** Workouts already logged set by set today, newest first. */
+  todayLogs: ExerciseLogRecord[];
+  /** Fingerprint of the notebook before today, so a newly logged day re-asks the coach. */
+  notebookStamp: string;
   profile: ProfileRecord | null;
   /** Today's latest energy/emotion reading, so a new check-in asks the coach again. */
   checkinStamp: string;
@@ -177,7 +186,8 @@ export default function TrainHome() {
   // `logic` is part of the key so a cached plan from an older coach is
   // thrown out after the rules change, without waiting on a new journal.
   // logic6: injuries are judged live by the coach, so a plan cached under the
-  // old keyword-enforced rules is asked again.
+  // old keyword-enforced rules is asked again. logic7: targets come from the
+  // per-set notebook.
   const contextKey =
     today && daily.confirmed && state
       ? [
@@ -189,7 +199,8 @@ export default function TrainHome() {
           journalStamp,
           state.checkinStamp,
           effectiveProfile(state.profile).trainingPush,
-          'logic6',
+          state.notebookStamp,
+          'logic7',
         ].join('|')
       : undefined;
   const coach = useCoach(repo, useDebouncedValue(contextKey, COACH_SETTLE_MS));
@@ -298,118 +309,138 @@ export default function TrainHome() {
       repo.listBenchmarks(),
       repo.listMacrocyclePeriods(),
       repo.listCheckins(),
-    ]).then(([journals, climbs, assessments, goals, profile, benchmarks, periods, checkins]) => {
-      if (!on) return;
-      const nowMs = now();
-
-      // A brand-new install with nothing in it goes through guided sign-up.
-      // Existing users predate `onboardedAt`, so a profile or any logged
-      // history is what protects them from being dropped into the wizard.
-      if (
-        !hasCompletedSetup(profile, {
-          journals: journals.length,
-          climbs: climbs.length,
-          assessments: assessments.length,
-          goals: goals.length,
-        })
-      ) {
-        router.replace('/welcome');
-        return;
-      }
-
-      const settings = effectiveProfile(profile);
-      const latest = assessments[0] ?? null;
-      const weakestArea = latest?.weakestArea ?? null;
-      const dates = trainingDates(journals, climbs);
-      const block = resolveTrainingBlock(
-        periods,
-        nowMs,
-        mesocycleAnchor(profile, dates.length > 0 ? Math.min(...dates) : null, nowMs),
-      );
-      const energy = latestReadingForDay(checkins, nowMs);
-      const dailyInput: Parameters<typeof buildDailyRecommendation>[0] = {
-        weakestArea,
-        weakSpots:
-          latest && weakestArea ? flaggedPromptsForArea(latest.responses, weakestArea) : [],
-        goals,
-        trainingDates: dates,
-        nowMs,
-        history: loadHistory(journals, climbs),
-        abilityTier: settings.abilityTier,
-        styleFocus: settings.styleFocus,
-        daysPerWeek: settings.daysPerWeek,
-        trainingPush: settings.trainingPush,
-        equipment: today.equipment,
-        readiness: combineReadiness(
-          today.readiness,
-          energy ? readinessFromEnergyEmotion(energy.energy, energy.emotion) : null,
-        ),
-        sessionLength: today.sessionLength,
-        benchmarks,
+      repo.listExerciseLogs(),
+    ]).then(
+      ([
+        journals,
         climbs,
-        discipline: settings.defaultDiscipline,
-        journals,
-        dailyNote: today.note,
-        climberContext: settings.climberContext,
-        blockFocuses: block.focuses,
-      };
-      const recommendation = buildDailyRecommendation(dailyInput);
-      const live = buildDailyRecommendation({ ...dailyInput, injuryPolicy: 'hint' });
-      // Newest-edit-wins rather than first match: sync can leave two entries
-      // for one day, and editing an arbitrary one loses the other's text.
-      const todayJournal = journals
-        .filter((j) => dayIndex(j.date) === dayIndex(nowMs))
-        .reduce<JournalEntry | null>(
-          (newest, j) => (!newest || j.updatedAt > newest.updatedAt ? j : newest),
-          null,
-        );
-
-      // Pre-fill each protocol with what was done last time, so confirming is
-      // the default and typing is the exception.
-      const seeded: Record<string, number> = {};
-      for (const step of [...live.steps, ...recommendation.steps]) {
-        if (!step.protocolId || step.protocolId in seeded) continue;
-        const protocol = protocolById(step.protocolId);
-        if (!protocol) continue;
-        seeded[step.protocolId] =
-          step.prescription?.target ??
-          latestForTest(benchmarks, step.protocolId)?.value ??
-          protocol.defaultValue;
-      }
-      setMetrics(seeded);
-
-      log.info('train: built-in plan', {
-        kind: recommendation.kind,
-        focus: recommendation.focus,
-        headline: recommendation.headline,
-        restReason: recommendation.microcycle?.restReason,
-        offFingers: recommendation.microcycle?.offFingers ?? false,
-        fingerDaysInARow: recommendation.microcycle?.fingerDaysInARow,
-        fingerDaysThisWeek: recommendation.microcycle?.fingerDaysThisWeek,
-        readiness: today.readiness,
-      });
-      setState({
-        journals,
-        recommendation,
-        live,
-        todayJournalId: todayJournal?.id ?? null,
-        hasAssessment: assessments.length > 0,
-        hasGoal: goals.length > 0,
-        benchmarks,
+        assessments,
+        goals,
         profile,
-        blockLabel:
-          block.source === 'auto' ? `${block.label} (4-3-2-1)` : `${block.label} — ${block.focus}`,
-        // Deterministic and on-device: whether someone is climbing a grade is a
-        // query over their own sends, not something worth asking a model.
-        checkinStamp: energy ? `${energy.id}:${energy.time}` : '',
-        insights: pendingInsights(
-          [detectAbilityDrift(climbs, profile, settings.defaultDiscipline, nowMs)].filter(
-            (i): i is Insight => i !== null,
+        benchmarks,
+        periods,
+        checkins,
+        exerciseLogs,
+      ]) => {
+        if (!on) return;
+        const nowMs = now();
+
+        // A brand-new install with nothing in it goes through guided sign-up.
+        // Existing users predate `onboardedAt`, so a profile or any logged
+        // history is what protects them from being dropped into the wizard.
+        if (
+          !hasCompletedSetup(profile, {
+            journals: journals.length,
+            climbs: climbs.length,
+            assessments: assessments.length,
+            goals: goals.length,
+          })
+        ) {
+          router.replace('/welcome');
+          return;
+        }
+
+        const settings = effectiveProfile(profile);
+        const latest = assessments[0] ?? null;
+        const weakestArea = latest?.weakestArea ?? null;
+        const dates = trainingDates(journals, climbs);
+        const block = resolveTrainingBlock(
+          periods,
+          nowMs,
+          mesocycleAnchor(profile, dates.length > 0 ? Math.min(...dates) : null, nowMs),
+        );
+        const energy = latestReadingForDay(checkins, nowMs);
+        const dailyInput: Parameters<typeof buildDailyRecommendation>[0] = {
+          weakestArea,
+          weakSpots:
+            latest && weakestArea ? flaggedPromptsForArea(latest.responses, weakestArea) : [],
+          goals,
+          trainingDates: dates,
+          nowMs,
+          history: loadHistory(journals, climbs),
+          abilityTier: settings.abilityTier,
+          styleFocus: settings.styleFocus,
+          daysPerWeek: settings.daysPerWeek,
+          trainingPush: settings.trainingPush,
+          equipment: today.equipment,
+          readiness: combineReadiness(
+            today.readiness,
+            energy ? readinessFromEnergyEmotion(energy.energy, energy.emotion) : null,
           ),
+          sessionLength: today.sessionLength,
+          benchmarks,
+          exerciseLogs,
+          climbs,
+          discipline: settings.defaultDiscipline,
+          journals,
+          dailyNote: today.note,
+          climberContext: settings.climberContext,
+          blockFocuses: block.focuses,
+        };
+        const recommendation = buildDailyRecommendation(dailyInput);
+        const live = buildDailyRecommendation({ ...dailyInput, injuryPolicy: 'hint' });
+        // Newest-edit-wins rather than first match: sync can leave two entries
+        // for one day, and editing an arbitrary one loses the other's text.
+        const todayJournal = journals
+          .filter((j) => dayIndex(j.date) === dayIndex(nowMs))
+          .reduce<JournalEntry | null>(
+            (newest, j) => (!newest || j.updatedAt > newest.updatedAt ? j : newest),
+            null,
+          );
+
+        // Pre-fill each protocol with what was done last time, so confirming is
+        // the default and typing is the exception.
+        const seeded: Record<string, number> = {};
+        for (const step of [...live.steps, ...recommendation.steps]) {
+          if (!step.protocolId || step.protocolId in seeded) continue;
+          const protocol = protocolById(step.protocolId);
+          if (!protocol) continue;
+          seeded[step.protocolId] =
+            latestForTest(benchmarks, step.protocolId)?.value ?? protocol.defaultValue;
+        }
+        setMetrics(seeded);
+
+        log.info('train: built-in plan', {
+          kind: recommendation.kind,
+          focus: recommendation.focus,
+          headline: recommendation.headline,
+          restReason: recommendation.microcycle?.restReason,
+          offFingers: recommendation.microcycle?.offFingers ?? false,
+          fingerDaysInARow: recommendation.microcycle?.fingerDaysInARow,
+          fingerDaysThisWeek: recommendation.microcycle?.fingerDaysThisWeek,
+          readiness: today.readiness,
+        });
+        setState({
+          journals,
+          recommendation,
+          live,
+          todayJournalId: todayJournal?.id ?? null,
+          hasAssessment: assessments.length > 0,
+          hasGoal: goals.length > 0,
+          benchmarks,
+          todayLogs: exerciseLogs.filter((l) => l.date >= dayStartMs(nowMs)),
+          notebookStamp: exerciseLogs
+            .filter((l) => l.date < dayStartMs(nowMs))
+            .map((l) => `${l.id}:${l.updatedAt}`)
+            .sort()
+            .join(','),
           profile,
-        ),
-      });
-    });
+          blockLabel:
+            block.source === 'auto'
+              ? `${block.label} (4-3-2-1)`
+              : `${block.label} — ${block.focus}`,
+          // Deterministic and on-device: whether someone is climbing a grade is a
+          // query over their own sends, not something worth asking a model.
+          checkinStamp: energy ? `${energy.id}:${energy.time}` : '',
+          insights: pendingInsights(
+            [detectAbilityDrift(climbs, profile, settings.defaultDiscipline, nowMs)].filter(
+              (i): i is Insight => i !== null,
+            ),
+            profile,
+          ),
+        });
+      },
+    );
     return () => {
       on = false;
     };
@@ -592,7 +623,10 @@ export default function TrainHome() {
               const step = planStep.text;
               const done = !skippedSteps.includes(step);
               const protocol = protocolById(planStep.protocolId ?? '');
-              const prescription = planStep.prescription;
+              const workout = planStep.workoutId ? workoutById(planStep.workoutId) : null;
+              const loggedToday = workout
+                ? state.todayLogs.find((l) => l.workoutId === workout.id)
+                : undefined;
               return (
                 <div key={i}>
                   <button
@@ -616,18 +650,41 @@ export default function TrainHome() {
                       {step}
                     </span>
                   </button>
-                  {/* Where the number came from. Worth a line: a prescription
-                      you can't interrogate is one you stop trusting the first
-                      time it looks wrong. */}
-                  {prescription && done && prescription.because && (
-                    <p className="mt-1 ml-7 text-xs leading-4 text-muted">{prescription.because}</p>
+                  {/* The workout runs in its own screen: timer, set-by-set log,
+                      and the next target. Logged sets are the record, so the
+                      day's "log it" never writes a second number for them. */}
+                  {workout && planStep.target && done && (
+                    <div className="mt-2 ml-7 flex items-center gap-2">
+                      {loggedToday ? (
+                        <Link
+                          href={`/train/session/${workout.id}`}
+                          className="flex-1 truncate rounded-lg border border-success/50 bg-success/10 px-3 py-2 text-sm font-semibold text-success"
+                        >
+                          ✓ {describeSession(workout, summarizeSession(workout, loggedToday))}
+                        </Link>
+                      ) : (
+                        <Link
+                          href={`/train/session/${workout.id}`}
+                          aria-label={`Start ${workout.name}: ${
+                            planStep.target.kind === 'test' ? 'test' : planStep.target.label
+                          }`}
+                          className="flex items-center gap-2 rounded-lg bg-brand px-3 py-2 text-sm font-bold text-primary-text shadow shadow-primary/25 active:scale-[0.98]"
+                        >
+                          ▶ Start
+                          <span className="font-semibold opacity-90">
+                            {planStep.target.kind === 'test'
+                              ? 'test'
+                              : planStep.target.label.split(' · ')[0]}
+                          </span>
+                        </Link>
+                      )}
+                    </div>
                   )}
                   {protocol && done && (
                     <ProtocolMetric
                       protocol={protocol}
                       value={metrics[protocol.id] ?? protocol.defaultValue}
                       previous={latestForTest(state.benchmarks, protocol.id)?.value ?? null}
-                      prescribed={prescription?.kind === 'work'}
                       onChange={(value) => setMetrics((m) => ({ ...m, [protocol.id]: value }))}
                       disabled={marking}
                     />
@@ -764,6 +821,9 @@ export default function TrainHome() {
       </Link>
       <Link href="/train/energy-emotion">
         <Button variant="secondary">Energy &amp; emotion check-in</Button>
+      </Link>
+      <Link href="/train/session">
+        <Button variant="secondary">Run any workout</Button>
       </Link>
       <Link href="/train/exercises">
         <Button variant="secondary">Exercise library</Button>

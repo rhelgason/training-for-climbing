@@ -548,3 +548,53 @@ export function adjustAfterFirstSet(
     ? { message: "Set 1 didn't go. Finish the session at this level and log it." }
     : null;
 }
+
+/**
+ * The one number today's target moves, as it should appear in the plan text
+ * ("+30 lb", "12 mm", "L3"). Null on a test or a feel day, where there's no
+ * number to hold the coach to.
+ */
+export function targetNumber(workout: Workout, t: WorkoutTarget): string | null {
+  if (t.kind === 'test' || t.kind === 'feel') return null;
+  const value =
+    workout.metric === 'load'
+      ? t.loadLb
+      : workout.metric === 'edge'
+        ? t.edgeMm
+        : workout.metric === 'level'
+          ? t.level
+          : workout.metric === 'reps'
+            ? t.reps
+            : workout.metric === 'sets'
+              ? t.sets
+              : undefined;
+  return value === undefined ? null : formatMetric(workout.metric, value);
+}
+
+/** The interval shape a session runs today: the target's sets, level, and reps. */
+export function sessionSpec(workout: Workout, t: Pick<WorkoutTarget, 'sets' | 'level' | 'reps'>) {
+  return workout.intervals?.({ sets: t.sets, level: t.level, reps: t.reps }) ?? null;
+}
+
+/**
+ * The single number a finished session writes to the workout's benchmark
+ * (content/protocols), so trend charts and older screens keep working.
+ * Null when the workout has no benchmark or the session has no such number.
+ */
+export function trackableValue(workout: Workout, log: ExerciseLogRecord): number | null {
+  const protocol = workout.trackableId ? protocolById(workout.trackableId) : null;
+  if (!protocol) return null;
+  if (protocol.unit === 'lb') {
+    const loads = log.sets
+      .filter((s) => s.completed)
+      .map((s) => s.loadLb)
+      .filter((n): n is number => typeof n === 'number');
+    return loads.length > 0 ? Math.max(...loads) : null;
+  }
+  if (protocol.unit === 'level') return log.level ?? null;
+  if (protocol.unit === 'seconds') {
+    const secs = log.sets.map((s) => s.seconds).filter((n): n is number => typeof n === 'number');
+    return secs.length > 0 ? Math.max(...secs) : null;
+  }
+  return null;
+}

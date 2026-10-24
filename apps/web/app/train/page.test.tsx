@@ -244,12 +244,15 @@ describe('TrainHome — prescribed numbers', () => {
     vi.useRealTimers();
   });
 
-  it('asks for a baseline test before it will name a weight', async () => {
+  it('makes the first session the test before it will name a weight', async () => {
     await renderScreen();
-    expect(screen.getByText(/Max-weight hangs/)).toHaveTextContent(/establish your baseline/i);
+    expect(screen.getByText(/Max-weight hangs/)).toHaveTextContent(/Today finds your number/);
+    expect(
+      screen.getByRole('link', { name: /Start Max-weight hangs \(10 s\): test/ }),
+    ).toHaveAttribute('href', '/train/session/max-hang-10');
   });
 
-  it('prescribes off the logged baseline and explains where it came from', async () => {
+  it('starts from an older benchmark and says where the number came from', async () => {
     await repo.saveBenchmark({
       testId: 'protocol-max-weight-hang',
       value: 40,
@@ -262,9 +265,42 @@ describe('TrainHome — prescribed numbers', () => {
     });
     await renderScreen();
 
-    // 90% of the best of two recent sessions, rounded down to the 5 lb step.
-    expect(screen.getByText(/Max-weight hangs/)).toHaveTextContent('+35 lb');
-    expect(screen.getByText(/your best of 2 recent sessions/i)).toBeInTheDocument();
+    expect(screen.getByText(/Max-weight hangs/)).toHaveTextContent('+40 lb');
+    expect(screen.getByText(/Your last max-weight hangs was \+40 lb/)).toBeInTheDocument();
+  });
+
+  it('progresses off the logged sets', async () => {
+    const date = now() - 3 * DAY;
+    await repo.saveExerciseLog({
+      date,
+      workoutId: 'max-hang-10',
+      edgeMm: 20,
+      sets: [1, 2, 3].map(() => ({ loadLb: 25, rpe: 8, completed: true, reps: 5 })),
+    });
+    await renderScreen();
+
+    expect(screen.getByText(/Max-weight hangs/)).toHaveTextContent(
+      /^Max strength — Max-weight hangs \(10 s\): \+30 lb/,
+    );
+    expect(screen.getByText(/Max-weight hangs/)).toHaveTextContent(
+      /Last time \(3 days ago\): \+25 lb/,
+    );
+    expect(
+      screen.getByRole('link', { name: /Start Max-weight hangs \(10 s\): \+30 lb/ }),
+    ).toBeInTheDocument();
+  });
+
+  it('shows a workout logged today in place of its start button', async () => {
+    await repo.saveExerciseLog({
+      date: now(),
+      workoutId: 'max-hang-10',
+      edgeMm: 20,
+      sets: [{ loadLb: 0, rpe: 9, completed: true, reps: 5 }],
+    });
+    await renderScreen();
+
+    expect(screen.getByRole('link', { name: /✓ bodyweight on 20 mm/ })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Start Max-weight hangs/ })).not.toBeInTheDocument();
   });
 });
 

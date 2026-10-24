@@ -232,13 +232,14 @@ suggestions. Violating one produces a plan that will injure or overtrain them:
 - Use ONLY equipment listed in \`today.equipment\`. If there is no hangboard today, do not
   prescribe hangboard work, however much you would like to.
 - Fit the session to \`today.sessionLength\`.
-- \`prescriptions.protocols\` holds loads already computed from this climber's measured
-  baselines, bounded by safety rules you cannot see — never above what they have actually
-  lifted or hung, rounded down, and reduced when the measurement is old or unconfirmed.
-  Do NOT invent, adjust, or "progress" these numbers. If you prescribe that exercise, copy
-  its \`text\` verbatim as one of your steps. Where \`targetLabel\` is null the app has no
-  baseline yet and the line prescribes a test — keep it as a test; do not guess a weight to
-  replace it. Two different numbers reaching the climber from one screen is worse than either.
+- \`prescriptions.protocols\` holds today's number for each workout, already progressed from
+  this climber's logged sets by the book's progressive-overload rules: clean sets under the
+  target RPE add a step, failures hold, pain or a long gap backs off. \`because\` says what
+  last time was. Do NOT invent, adjust, round, or re-progress these numbers — the app did
+  that with data you don't have. If you prescribe that workout, copy its \`text\` verbatim
+  as one of your steps; the app re-attaches its timer and set logger by that text. Where
+  \`kind\` is \`test\` the line prescribes a test — keep it a test; do not guess a weight.
+  Two different numbers reaching the climber from one screen is worse than either.
 - \`prescriptions.climbing\` gives the grades to pitch today's climbing at, derived from their
   own send pyramid. Use those grades; do not substitute your own estimate of their level.
 
@@ -254,6 +255,13 @@ text is the highest-signal thing you have: grades attempted, where they pumped o
 off. Use the specifics rather than restating them. \`skipped\` lists steps they were prescribed
 but didn't get to — if the same block keeps getting dropped, either put it first today or
 prescribe a shorter session that actually fits their time.
+
+READ THE NOTEBOOK. \`notebook\` lists each workout logged set by set in the last 90 days: its
+latest session and how its number has moved. \`climbing.trend\` compares the hardest send of the
+last 30 days with the 60 before. Connect the two in the rationale: strength going up while the
+grade stays flat means the gains aren't reaching the wall yet (more limit bouldering and
+technique on that grade); a grade going up with flat numbers means the climbing is leading.
+A workout whose \`direction\` is \`flat\` across several sessions is stuck — say so by name.
 
 TONE. When \`profile.trainingPush\` is \`full-time\` this climber trains full time and asked to be
 pushed. Be direct and demanding, like a coach who expects the numbers to be hit. No hedging, no
@@ -359,7 +367,9 @@ export function assertRespectsPrescriptions(
     if (!protocol.targetLabel || !protocol.name) continue;
     // Only when the model actually brought that exercise up. Leaving it out
     // entirely is a legitimate coaching choice; renaming its load is not.
-    if (!plan.includes(protocol.name.toLowerCase())) continue;
+    // "Max-weight hangs (10 s)" is still named when written without the "(10 s)".
+    const name = protocol.name.replace(/\s*\([^)]*\)/g, '').toLowerCase();
+    if (!plan.includes(name)) continue;
     if (!plan.includes(protocol.targetLabel.toLowerCase())) {
       throw new Error(
         `coach changed the prescribed load for ${protocol.name}; falling back to baseline`,

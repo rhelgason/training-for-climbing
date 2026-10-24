@@ -18,6 +18,7 @@ import { DISCIPLINE_LABELS, DISCIPLINES, ENVIRONMENT_LABELS } from '../../conten
 import type {
   AssessmentRecord,
   BenchmarkRecord,
+  ExerciseLogRecord,
   CheckinRecord,
   ClimbRecord,
   DailyContextRecord,
@@ -28,6 +29,7 @@ import type {
 } from '../../db/types';
 import { effectiveProfile } from '../../content/profile';
 import { protocolById } from '../../content/protocols';
+import { workoutById } from '../../content/workouts';
 import { sessionFocus, type SessionFocusId } from '../../content/trainingContext';
 import { flaggedPromptsForArea } from '../assess/scoring';
 import { activeGoals } from '../plan/goals';
@@ -40,6 +42,8 @@ import {
 } from '../plan/macrocycle';
 import { buildMicrocycle, type Microcycle } from '../plan/microcycle';
 import { countInLastDays, hardestSend, sendRate } from '../progress/dashboard';
+import { climbingTrends, workoutTrends } from '../progress/notebook';
+import { targetNumber } from '../train/progression';
 import { buildDailyRecommendation } from '../today/recommend';
 import { formatBands } from '../today/climbingPrescription';
 import { loadHistory, recentDays } from '../train/load';
@@ -65,6 +69,8 @@ export interface CoachContextInput {
   periods?: MacrocyclePeriodRecord[];
   /** Energy/emotion readings; today's latest can tighten readiness. */
   checkins?: CheckinRecord[];
+  /** The training notebook: per-set logs that set today's numbers. */
+  exerciseLogs?: ExerciseLogRecord[];
   nowMs: number;
 }
 
@@ -219,6 +225,7 @@ export function buildCoachContext(input: CoachContextInput): CoachContext {
     readiness,
     sessionLength,
     benchmarks: input.benchmarks,
+    exerciseLogs: input.exerciseLogs,
     climbs: input.climbs,
     discipline: profile.defaultDiscipline,
     journals: input.journals,
@@ -313,7 +320,15 @@ export function buildCoachContext(input: CoachContextInput): CoachContext {
       ),
       sendRate: sendRate(input.climbs),
       hardestSends: hardestSends(input.climbs),
+      trend: climbingTrends(input.climbs, input.nowMs),
     },
+    notebook: workoutTrends(input.exerciseLogs ?? [], input.nowMs).map((t) => ({
+      name: t.name,
+      sessions: t.sessions,
+      latest: t.latest,
+      change: t.change,
+      direction: t.direction,
+    })),
     goals: activeGoals(input.goals)
       .slice(0, MAX_GOALS)
       .map((g) => ({ horizon: g.horizon, title: g.title })),
@@ -342,21 +357,26 @@ export function buildCoachContext(input: CoachContextInput): CoachContext {
             because: recommendation.climbing.because,
           }
         : null,
-      // Deduped by protocol: a focus can appear twice in a session, and the
+      // Deduped by workout: a focus can appear twice in a session, and the
       // number is the same both times.
       protocols: [
         ...new Map(
-          recommendation.steps
-            .filter((step) => step.prescription)
-            .map((step) => [
-              step.protocolId,
-              {
-                name: protocolById(step.protocolId ?? '')?.name ?? '',
-                text: step.text,
-                targetLabel: step.prescription!.targetLabel,
-                because: step.prescription!.because,
-              },
-            ]),
+          recommendation.steps.flatMap((step) => {
+            const workout = step.workoutId ? workoutById(step.workoutId) : null;
+            if (!workout || !step.target) return [];
+            return [
+              [
+                workout.id,
+                {
+                  name: workout.name,
+                  text: step.text,
+                  targetLabel: targetNumber(workout, step.target),
+                  kind: step.target.kind,
+                  because: step.target.because,
+                },
+              ] as const,
+            ];
+          }),
         ).values(),
       ],
     },

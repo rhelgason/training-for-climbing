@@ -129,7 +129,26 @@ export interface CoachContext {
     sessionsLast30Days: number;
     sendRate: number;
     hardestSends: { discipline: string; grade: string }[];
+    /** Hardest send in the last 30 days against the 60 before — is the climbing improving? */
+    trend: {
+      discipline: string;
+      recent: string | null;
+      before: string | null;
+      sendsAtTop: number;
+      direction: 'up' | 'down' | 'flat' | 'new';
+    }[];
   };
+  /**
+   * The training notebook: every workout logged set by set in the last 90
+   * days, with its latest session and how its number has moved.
+   */
+  notebook: {
+    name: string;
+    sessions: number;
+    latest: string;
+    change: string | null;
+    direction: 'up' | 'down' | 'flat' | 'new';
+  }[];
   goals: { horizon: string; title: string }[];
   /** Most recent journal entries (newest first), free text included. */
   journals: {
@@ -184,16 +203,18 @@ export interface CoachPrescriptions {
     because: string;
   } | null;
   /**
-   * Protocol lines to reproduce verbatim if that work is prescribed. Copying
-   * them exactly is also what lets the app re-attach its inline number logger,
-   * which matches steps by text.
+   * Workout lines to reproduce verbatim if that work is prescribed. Copying
+   * them exactly is also what lets the app re-attach its timer and set
+   * logger, which match steps by text.
    */
   protocols: {
     name: string;
     /** The full line, ready to be used as a plan step unchanged. */
     text: string;
-    /** The number itself, or null on a test/general day. */
+    /** The number itself ("+30 lb", "L3", "12 mm"), or null on a test or feel day. */
     targetLabel: string | null;
+    /** progress / hold / backoff / test / feel. */
+    kind: string;
     because: string;
   }[];
 }
