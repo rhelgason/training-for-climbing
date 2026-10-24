@@ -3,6 +3,11 @@ import type { Repository } from './repository';
 import type {
   AssessmentRecord,
   BenchmarkRecord,
+  BodyWeightRecord,
+  ExerciseLogPatch,
+  ExerciseLogRecord,
+  NewBodyWeight,
+  NewExerciseLog,
   CheckinRecord,
   ClimbPatch,
   ClimbRecord,
@@ -45,6 +50,8 @@ export class InMemoryRepository implements Repository {
   private benchmarks: BenchmarkRecord[] = [];
   private checkins: CheckinRecord[] = [];
   private dailyContexts: DailyContextRecord[] = [];
+  private exerciseLogs: ExerciseLogRecord[] = [];
+  private bodyWeights: BodyWeightRecord[] = [];
   private profile: ProfileRecord | null = null;
   private tombstones: TombstoneRecord[] = [];
   private events: UsageEventRecord[] = [];
@@ -292,6 +299,56 @@ export class InMemoryRepository implements Repository {
     this.tombstone('checkins', id);
   }
 
+  async saveExerciseLog(input: NewExerciseLog): Promise<ExerciseLogRecord> {
+    const ts = Date.now();
+    const record: ExerciseLogRecord = {
+      ...input,
+      sets: input.sets.map((set) => ({ ...set })),
+      id: newId(),
+      createdAt: input.createdAt ?? ts,
+      updatedAt: input.updatedAt ?? input.createdAt ?? ts,
+    };
+    this.exerciseLogs.push(record);
+    return record;
+  }
+
+  async listExerciseLogs(): Promise<ExerciseLogRecord[]> {
+    return [...this.exerciseLogs].sort((a, b) => b.date - a.date || b.createdAt - a.createdAt);
+  }
+
+  async updateExerciseLog(id: string, patch: ExerciseLogPatch): Promise<ExerciseLogRecord | null> {
+    const log = this.exerciseLogs.find((l) => l.id === id);
+    if (!log) return null;
+    Object.assign(log, patch, { updatedAt: Math.max(Date.now(), log.updatedAt + 1) });
+    return log;
+  }
+
+  async deleteExerciseLog(id: string): Promise<void> {
+    this.exerciseLogs = this.exerciseLogs.filter((l) => l.id !== id);
+    this.tombstone('exerciseLogs', id);
+  }
+
+  async saveBodyWeight(input: NewBodyWeight): Promise<BodyWeightRecord> {
+    const ts = Date.now();
+    const record: BodyWeightRecord = {
+      ...input,
+      id: newId(),
+      createdAt: input.createdAt ?? ts,
+      updatedAt: input.updatedAt ?? input.createdAt ?? ts,
+    };
+    this.bodyWeights.push(record);
+    return record;
+  }
+
+  async listBodyWeights(): Promise<BodyWeightRecord[]> {
+    return [...this.bodyWeights].sort((a, b) => b.date - a.date);
+  }
+
+  async deleteBodyWeight(id: string): Promise<void> {
+    this.bodyWeights = this.bodyWeights.filter((w) => w.id !== id);
+    this.tombstone('bodyWeights', id);
+  }
+
   async saveDailyContext(input: NewDailyContext): Promise<DailyContextRecord> {
     const ts = Date.now();
     // One row per calendar day: re-saving today edits rather than duplicates.
@@ -387,6 +444,8 @@ export class InMemoryRepository implements Repository {
       benchmarks: [...this.benchmarks],
       checkins: [...this.checkins],
       dailyContexts: [...this.dailyContexts],
+      exerciseLogs: [...this.exerciseLogs],
+      bodyWeights: [...this.bodyWeights],
       profile: this.profile,
       tombstones: [...this.tombstones],
     };
@@ -406,6 +465,8 @@ export class InMemoryRepository implements Repository {
     this.benchmarks = upsert(this.benchmarks, snapshot.benchmarks);
     this.checkins = upsert(this.checkins, snapshot.checkins);
     this.dailyContexts = upsert(this.dailyContexts, snapshot.dailyContexts ?? []);
+    this.exerciseLogs = upsert(this.exerciseLogs, snapshot.exerciseLogs ?? []);
+    this.bodyWeights = upsert(this.bodyWeights, snapshot.bodyWeights ?? []);
     if (
       snapshot.profile &&
       (!this.profile || snapshot.profile.updatedAt >= this.profile.updatedAt)
@@ -423,6 +484,8 @@ export class InMemoryRepository implements Repository {
       benchmarks: (id) => (this.benchmarks = this.benchmarks.filter((r) => r.id !== id)),
       checkins: (id) => (this.checkins = this.checkins.filter((r) => r.id !== id)),
       dailyContexts: (id) => (this.dailyContexts = this.dailyContexts.filter((r) => r.id !== id)),
+      exerciseLogs: (id) => (this.exerciseLogs = this.exerciseLogs.filter((r) => r.id !== id)),
+      bodyWeights: (id) => (this.bodyWeights = this.bodyWeights.filter((r) => r.id !== id)),
     };
     for (const t of snapshot.tombstones) {
       removals[t.table](t.id);

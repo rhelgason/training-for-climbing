@@ -10,6 +10,11 @@ import {
   InMemoryRepository,
   type AssessmentRecord,
   type BenchmarkRecord,
+  type BodyWeightRecord,
+  type ExerciseLogPatch,
+  type ExerciseLogRecord,
+  type NewBodyWeight,
+  type NewExerciseLog,
   type CheckinRecord,
   type ClimbPatch,
   type ClimbRecord,
@@ -189,6 +194,34 @@ export class WebRepository extends InMemoryRepository {
 
   async deleteCheckin(id: string): Promise<void> {
     await super.deleteCheckin(id);
+    this.schedulePersist();
+  }
+
+  async saveExerciseLog(input: NewExerciseLog): Promise<ExerciseLogRecord> {
+    const r = await super.saveExerciseLog(input);
+    this.schedulePersist();
+    return r;
+  }
+
+  async updateExerciseLog(id: string, patch: ExerciseLogPatch): Promise<ExerciseLogRecord | null> {
+    const r = await super.updateExerciseLog(id, patch);
+    this.schedulePersist();
+    return r;
+  }
+
+  async deleteExerciseLog(id: string): Promise<void> {
+    await super.deleteExerciseLog(id);
+    this.schedulePersist();
+  }
+
+  async saveBodyWeight(input: NewBodyWeight): Promise<BodyWeightRecord> {
+    const r = await super.saveBodyWeight(input);
+    this.schedulePersist();
+    return r;
+  }
+
+  async deleteBodyWeight(id: string): Promise<void> {
+    await super.deleteBodyWeight(id);
     this.schedulePersist();
   }
 

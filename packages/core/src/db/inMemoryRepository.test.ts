@@ -292,6 +292,59 @@ describe('InMemoryRepository', () => {
     });
   });
 
+  describe('exercise logs and body weight', () => {
+    it('keeps every set and lists newest first', async () => {
+      const repo = new InMemoryRepository();
+      await repo.saveExerciseLog({
+        date: 1,
+        workoutId: 'max-hang-10',
+        edgeMm: 20,
+        grip: 'half-crimp',
+        sets: [{ loadLb: 25, reps: 5, completed: true, rpe: 8 }],
+      });
+      const newer = await repo.saveExerciseLog({
+        date: 2,
+        workoutId: 'max-hang-10',
+        sets: [
+          { loadLb: 30, reps: 5, completed: true, rpe: 9 },
+          { loadLb: 30, reps: 4, completed: false, rpe: 10 },
+        ],
+      });
+      const logs = await repo.listExerciseLogs();
+      expect(logs.map((l) => l.date)).toEqual([2, 1]);
+      expect(logs[0].sets).toHaveLength(2);
+
+      const edited = await repo.updateExerciseLog(newer.id, { pain: true });
+      expect(edited?.pain).toBe(true);
+      expect(edited!.updatedAt).toBeGreaterThan(newer.updatedAt - 1);
+    });
+
+    it('round-trips both tables through the snapshot and propagates deletes', async () => {
+      const repo = new InMemoryRepository();
+      const log = await repo.saveExerciseLog({ date: 1, workoutId: 'arc', sets: [] });
+      const weight = await repo.saveBodyWeight({ date: 1, lb: 160 });
+      const other = new InMemoryRepository();
+      await other.applySnapshot(await repo.exportSnapshot());
+      expect(await other.listExerciseLogs()).toHaveLength(1);
+      expect((await other.listBodyWeights())[0].lb).toBe(160);
+
+      await repo.deleteExerciseLog(log.id);
+      await repo.deleteBodyWeight(weight.id);
+      await other.applySnapshot(await repo.exportSnapshot());
+      expect(await other.listExerciseLogs()).toHaveLength(0);
+      expect(await other.listBodyWeights()).toHaveLength(0);
+    });
+
+    it('applies an older snapshot that has neither table', async () => {
+      const repo = new InMemoryRepository();
+      const { exerciseLogs: _logs, bodyWeights: _weights, ...old } = emptySnapshot();
+      void _logs;
+      void _weights;
+      await repo.applySnapshot(old as ReturnType<typeof emptySnapshot>);
+      expect(await repo.listExerciseLogs()).toEqual([]);
+    });
+  });
+
   it('persists the recorded focus on a journal entry', async () => {
     const repo = new InMemoryRepository();
     const saved = await repo.saveJournal({

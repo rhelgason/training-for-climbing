@@ -21,6 +21,8 @@ export function emptySnapshot(): Snapshot {
     benchmarks: [],
     checkins: [],
     dailyContexts: [],
+    exerciseLogs: [],
+    bodyWeights: [],
     profile: null,
     tombstones: [],
   };
@@ -54,6 +56,8 @@ export function normalizeSnapshot(snapshot: Partial<Snapshot> | null | undefined
     benchmarks: snapshot.benchmarks ?? empty.benchmarks,
     checkins: snapshot.checkins ?? empty.checkins,
     dailyContexts: snapshot.dailyContexts ?? empty.dailyContexts,
+    exerciseLogs: snapshot.exerciseLogs ?? empty.exerciseLogs,
+    bodyWeights: snapshot.bodyWeights ?? empty.bodyWeights,
     profile: snapshot.profile ?? empty.profile,
     tombstones: snapshot.tombstones ?? empty.tombstones,
   };
@@ -154,6 +158,8 @@ export function mergeSnapshots(aIn: Partial<Snapshot>, bIn: Partial<Snapshot>): 
     benchmarks: survive('benchmarks', a.benchmarks, b.benchmarks),
     checkins: survive('checkins', a.checkins, b.checkins),
     dailyContexts: survive('dailyContexts', a.dailyContexts, b.dailyContexts),
+    exerciseLogs: survive('exerciseLogs', a.exerciseLogs, b.exerciseLogs),
+    bodyWeights: survive('bodyWeights', a.bodyWeights, b.bodyWeights),
     profile: !a.profile
       ? b.profile
       : !b.profile
@@ -189,6 +195,8 @@ export function mergeSnapshots(aIn: Partial<Snapshot>, bIn: Partial<Snapshot>): 
     ['benchmarks', merged.benchmarks],
     ['checkins', merged.checkins],
     ['dailyContexts', merged.dailyContexts],
+    ['exerciseLogs', merged.exerciseLogs],
+    ['bodyWeights', merged.bodyWeights],
   ] as const) {
     for (const r of list) surviving.add(`${table}:${r.id}`);
   }
