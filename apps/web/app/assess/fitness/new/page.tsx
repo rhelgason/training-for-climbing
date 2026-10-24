@@ -1,12 +1,26 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { FITNESS_TESTS, now, trackEvent, type NewBenchmark } from '@tfc/core';
 import { Button } from '@/components/Button';
 import { Screen } from '@/components/Screen';
 import { PageHeader } from '@/components/PageHeader';
+import { TestTimer } from '@/components/session/TestTimer';
 import { useRepository } from '@/lib/db/RepositoryProvider';
+
+/** Tests the app can time, so the result fills itself in. */
+const TIMED: Record<string, 'stopwatch' | 'repeaters'> = {
+  'finger-endurance-repeaters': 'repeaters',
+  'finger-endurance-hang': 'stopwatch',
+  'rope-climb-power': 'stopwatch',
+  'campus-ladder-power': 'stopwatch',
+};
+
+/** Ratio = added weight ÷ body weight, to two places. */
+function ratio(addedLb: number, bodyWeightLb: number): number {
+  return Math.round((addedLb / bodyWeightLb) * 100) / 100;
+}
 
 const inputClass =
   'w-full rounded-md border border-border bg-surface-alt px-4 py-2 text-base text-text placeholder:text-muted';
@@ -35,6 +49,23 @@ export default function FitnessFormScreen() {
   const router = useRouter();
   const [values, setValues] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  /** Latest recorded body weight, which the ratio tests divide by. */
+  const [lastWeight, setLastWeight] = useState<number | null>(null);
+  const [weight, setWeight] = useState('');
+
+  useEffect(() => {
+    let on = true;
+    repo.listBodyWeights().then((weights) => {
+      const latest = [...weights].sort((a, b) => b.date - a.date)[0];
+      if (!on || !latest) return;
+      setLastWeight(latest.lb);
+      setWeight(String(latest.lb));
+    });
+    return () => {
+      on = false;
+    };
+  }, [repo]);
+  const bodyWeight = parseValue(weight);
 
   const set = (key: string, v: string) => setValues((prev) => ({ ...prev, [key]: v }));
 
@@ -42,6 +73,9 @@ export default function FitnessFormScreen() {
     setSaving(true);
     try {
       const date = now();
+      if (bodyWeight !== null && bodyWeight > 0 && bodyWeight !== lastWeight) {
+        await repo.saveBodyWeight({ date, lb: bodyWeight });
+      }
       const toSave: NewBenchmark[] = [];
       for (const test of FITNESS_TESTS) {
         if (test.bilateral) {
@@ -49,6 +83,10 @@ export default function FitnessFormScreen() {
           const right = parseValue(values[`${test.id}:right`]);
           if (left !== null) toSave.push({ testId: test.id, side: 'left', value: left, date });
           if (right !== null) toSave.push({ testId: test.id, side: 'right', value: right, date });
+        } else if (test.unit === 'ratio' && bodyWeight) {
+          const added = parseValue(values[test.id]);
+          if (added !== null)
+            toSave.push({ testId: test.id, value: ratio(added, bodyWeight), date });
         } else {
           const v = parseValue(values[test.id]);
           if (v !== null) toSave.push({ testId: test.id, value: v, date });
@@ -71,6 +109,14 @@ export default function FitnessFormScreen() {
         <p className="text-base text-muted">
           Enter the tests you completed today; leave the rest blank.
         </p>
+
+        <div>
+          <p className="font-bold">Body weight (lb)</p>
+          <p className="mt-1 text-sm leading-5 text-muted">
+            The strength tests are a share of it, so weigh in on test day.
+          </p>
+          <NumberField value={weight} onChange={setWeight} />
+        </div>
 
         {FITNESS_TESTS.map((test) => (
           <div key={test.id}>
@@ -96,8 +142,23 @@ export default function FitnessFormScreen() {
                   />
                 </div>
               </div>
+            ) : test.unit === 'ratio' && bodyWeight ? (
+              <>
+                <p className="mt-2 text-sm text-muted">Added weight (lb)</p>
+                <NumberField value={values[test.id] ?? ''} onChange={(v) => set(test.id, v)} />
+                {parseValue(values[test.id]) !== null ? (
+                  <p className="mt-1 text-sm font-semibold text-primary">
+                    = {ratio(parseValue(values[test.id])!, bodyWeight).toFixed(2)} × body weight
+                  </p>
+                ) : null}
+              </>
             ) : (
-              <NumberField value={values[test.id] ?? ''} onChange={(v) => set(test.id, v)} />
+              <>
+                {TIMED[test.id] ? (
+                  <TestTimer mode={TIMED[test.id]} onResult={(sec) => set(test.id, String(sec))} />
+                ) : null}
+                <NumberField value={values[test.id] ?? ''} onChange={(v) => set(test.id, v)} />
+              </>
             )}
           </div>
         ))}

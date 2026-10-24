@@ -20,7 +20,10 @@ import {
   sendRate,
   triadSeries,
   weeklyCounts,
+  climbingTrends,
+  workoutTrends,
   type AssessmentRecord,
+  type ExerciseLogRecord,
   type BenchmarkRecord,
   type ClimbRecord,
   type JournalEntry,
@@ -40,8 +43,16 @@ interface LoadState {
   journals: JournalEntry[];
   assessments: AssessmentRecord[];
   benchmarks: BenchmarkRecord[];
+  exerciseLogs: ExerciseLogRecord[];
   profile: ProfileRecord | null;
 }
+
+const DIRECTION = {
+  up: { mark: '▲', color: colors.success },
+  down: { mark: '▼', color: colors.danger },
+  flat: { mark: '■', color: colors.warning },
+  new: { mark: '●', color: colors.textMuted },
+} as const;
 
 function pct(n: number): string {
   return `${Math.round(n * 100)}%`;
@@ -84,8 +95,9 @@ export default function DashboardScreen() {
       repo.listAssessments(),
       repo.listBenchmarks(),
       repo.getProfile(),
-    ]).then(([climbs, journals, assessments, benchmarks, profile]) => {
-      if (on) setState({ climbs, journals, assessments, benchmarks, profile });
+      repo.listExerciseLogs(),
+    ]).then(([climbs, journals, assessments, benchmarks, profile, exerciseLogs]) => {
+      if (on) setState({ climbs, journals, assessments, benchmarks, profile, exerciseLogs });
     });
     return () => {
       on = false;
@@ -93,8 +105,10 @@ export default function DashboardScreen() {
   }, [repo, dataVersion]);
 
   if (state === null) return <Screen />;
-  const { climbs, journals, assessments, benchmarks, profile } = state;
+  const { climbs, journals, assessments, benchmarks, profile, exerciseLogs } = state;
   const nowMs = now();
+  const notebook = workoutTrends(exerciseLogs, nowMs);
+  const climbingTrend = climbingTrends(climbs, nowMs);
   const trainDates = trainingDates(journals, climbs);
   const { reassessWeeks } = effectiveProfile(profile);
   const showReassessNudge = reassessDue(assessments, nowMs, reassessWeeks);
@@ -222,6 +236,68 @@ export default function DashboardScreen() {
               yMax={maxWeekly}
             />
           </Card>
+        </>
+      )}
+
+      {climbingTrend.length > 0 && (
+        <>
+          <h2 className="mt-2 text-lg font-bold">Is the climbing improving?</h2>
+          <Card>
+            {climbingTrend.map((t) => (
+              <div key={t.discipline} className="flex items-baseline justify-between py-1">
+                <span className="font-semibold">{t.discipline}</span>
+                <span className="text-sm">
+                  <span className="text-muted">hardest, last 30 days </span>
+                  <span className="font-bold">{t.recent ?? '—'}</span>
+                  <span className="text-muted"> vs {t.before ?? '—'} before </span>
+                  <span style={{ color: DIRECTION[t.direction].color }}>
+                    {DIRECTION[t.direction].mark}
+                  </span>
+                </span>
+              </div>
+            ))}
+          </Card>
+        </>
+      )}
+
+      {notebook.length > 0 && (
+        <>
+          <h2 className="mt-2 text-lg font-bold">Training notebook</h2>
+          {notebook.map((t) => (
+            <Link key={t.workoutId} href={`/train/session/${t.workoutId}`}>
+              <Card interactive>
+                <div className="flex flex-row items-baseline justify-between gap-2">
+                  <span className="font-semibold">{t.name}</span>
+                  <span
+                    className="shrink-0 text-sm"
+                    style={{ color: DIRECTION[t.direction].color }}
+                  >
+                    {DIRECTION[t.direction].mark} {t.sessions}{' '}
+                    {t.sessions === 1 ? 'session' : 'sessions'}
+                  </span>
+                </div>
+                {t.change ? <p className="mt-0.5 text-sm font-semibold">{t.change}</p> : null}
+                <p className="mt-0.5 text-xs leading-4 text-muted">Last: {t.latest}</p>
+                {t.points.length >= 2 && (
+                  <div className="mt-2">
+                    <LineChart
+                      series={[
+                        {
+                          color: colors.success,
+                          label: t.name,
+                          values: t.points.map((p) => p.value),
+                        },
+                      ]}
+                      xLabels={t.points.map((p) => formatDate(p.date))}
+                      yMin={Math.min(...t.points.map((p) => p.value), 0)}
+                      yMax={Math.max(...t.points.map((p) => p.value), 1)}
+                      height={140}
+                    />
+                  </div>
+                )}
+              </Card>
+            </Link>
+          ))}
         </>
       )}
 

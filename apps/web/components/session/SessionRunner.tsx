@@ -346,7 +346,7 @@ export function SessionRunner({ workoutId }: { workoutId: string }) {
   const bwHint =
     bw && workout.logs.includes('load')
       ? `${Math.round(((bw + setup.loadLb) / bw) * 100)}% of body weight`
-      : 'Negative is assisted';
+      : '− for assisted';
 
   // ── Setup ───────────────────────────────────────────────────────────────
   if (stage === 'setup') {
@@ -511,9 +511,11 @@ export function SessionRunner({ workoutId }: { workoutId: string }) {
   // ── Timer / log ─────────────────────────────────────────────────────────
   const nextPhase = !done && index >= 0 ? phases[index + 1] : undefined;
   const sub =
-    phase && phase.kind !== 'prep'
-      ? `Set ${phase.set + 1}/${rows}${efforts > 1 ? ` · ${effortNoun(workout)} ${phase.rep + 1}/${efforts}` : ''}`
-      : undefined;
+    phase?.kind === 'setRest'
+      ? `Set ${phase.set + 1} done · set ${phase.set + 2} next`
+      : phase && phase.kind !== 'prep'
+        ? `Set ${phase.set + 1}/${rows}${efforts > 1 ? ` · ${effortNoun(workout)} ${phase.rep + 1}/${efforts}` : ''}`
+        : undefined;
   const currentGrip = phase ? sets[phase.set]?.grip : undefined;
 
   return (

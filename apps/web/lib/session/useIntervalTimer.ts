@@ -28,6 +28,8 @@ export function useIntervalTimer(phases: Phase[]): IntervalTimer {
   const [started, setStarted] = useState(false);
   // Elapsed at the last start/seek, and the clock time it happened.
   const base = useRef({ elapsed: 0, at: 0 });
+  // Latest elapsed, so start() right after reset() or seek() resumes from it.
+  const latest = useRef(0);
   const end = totalMs(phases);
 
   const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
@@ -37,9 +39,11 @@ export function useIntervalTimer(phases: Phase[]): IntervalTimer {
     const id = setInterval(() => {
       const next = base.current.elapsed + (now() - base.current.at);
       if (next >= end) {
+        latest.current = end;
         setElapsed(end);
         setRunning(false);
       } else {
+        latest.current = next;
         setElapsed(next);
       }
     }, TICK_MS);
@@ -47,15 +51,16 @@ export function useIntervalTimer(phases: Phase[]): IntervalTimer {
   }, [running, end]);
 
   const start = useCallback(() => {
-    base.current = { elapsed: elapsedMs, at: now() };
+    base.current = { elapsed: latest.current, at: now() };
     setStarted(true);
     setRunning(true);
-  }, [elapsedMs]);
+  }, []);
 
   const pause = useCallback(() => {
     if (!running) return;
     const at = base.current.elapsed + (now() - base.current.at);
     base.current = { elapsed: at, at: now() };
+    latest.current = at;
     setElapsed(at);
     setRunning(false);
   }, [running]);
@@ -64,6 +69,7 @@ export function useIntervalTimer(phases: Phase[]): IntervalTimer {
     (ms: number) => {
       const clamped = Math.max(0, Math.min(end, ms));
       base.current = { elapsed: clamped, at: now() };
+      latest.current = clamped;
       setElapsed(clamped);
       if (clamped >= end) setRunning(false);
     },
@@ -72,6 +78,7 @@ export function useIntervalTimer(phases: Phase[]): IntervalTimer {
 
   const reset = useCallback(() => {
     base.current = { elapsed: 0, at: now() };
+    latest.current = 0;
     setElapsed(0);
     setRunning(false);
     setStarted(false);
