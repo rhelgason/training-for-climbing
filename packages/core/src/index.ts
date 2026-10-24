@@ -23,6 +23,7 @@ export * from './content/profile';
 export * from './content/selfAssessment';
 export * from './content/trainingContext';
 export * from './content/grades';
+export * from './content/workouts';
 
 // ── Domain logic ───────────────────────────────────────────────────────────
 export * from './features/assess/scoring';
@@ -38,6 +39,8 @@ export * from './features/train/prescribe';
 export * from './features/train/injury';
 export * from './features/train/energyEmotion';
 export * from './features/train/exercises';
+export * from './features/train/progression';
+export * from './features/train/timer';
 export * from './features/plan/goals';
 export * from './features/plan/macrocycle';
 export * from './features/plan/microcycle';
