@@ -93,9 +93,9 @@ export default function EnergyEmotionScreen() {
     <Screen>
       <h1 className="text-2xl font-bold">Energy &amp; emotion</h1>
       <p className="mt-2 text-base leading-6 text-muted">
-        Log physical energy and mind-set. Today&apos;s latest reading changes the plan: the
-        performance zone (high energy, positive) leaves it alone; low energy plus a bad mood is a
-        rest day; the other off-zones drop high-intensity work.
+        Log physical energy and mind-set. Today&apos;s latest reading can change the plan: low
+        energy drops near-limit work for the day. A bad mood never cancels training — it&apos;s a
+        state to work on.
       </p>
 
       <Link href="/train/checkin" className="mt-4 block">

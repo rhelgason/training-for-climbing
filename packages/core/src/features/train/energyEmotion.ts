@@ -63,15 +63,17 @@ const READINESS_RANK: Record<Readiness, number> = {
 };
 
 /**
- * Map Appendix B quadrant onto today's readiness.
- * II (performance zone) does not override. III (in the hole) is a rest day.
- * I and IV are tired — no high-intensity work.
+ * Map an energy/emotion reading onto today's readiness.
+ *
+ * Hörst uses the matrix (Ch 3) to notice and change a mental state, not to
+ * cancel training, so a reading only ever speaks to energy. Low energy
+ * (III or IV) is "tired": skip near-limit work. High energy is ready whatever
+ * the mood; a negative mind-set is something to work on, not a reason to rest.
+ * No reading ever means "something hurts" — that is the climber's own tap.
  */
 export function readinessFromEnergyEmotion(energy: number, emotion: number): Readiness | null {
   const q = quadrantOf(energy, emotion);
-  if (q.id === 'II') return null;
-  if (q.id === 'III') return 'tweaky';
-  return 'tired';
+  return q.id === 'III' || q.id === 'IV' ? 'tired' : null;
 }
 
 /** The more conservative of two readiness readings. */

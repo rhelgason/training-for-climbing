@@ -42,9 +42,9 @@ describe('readinessFromEnergyEmotion', () => {
     expect(readinessFromEnergyEmotion(8, 3)).toBeNull();
   });
 
-  it('rests when energy and emotion are both low, and deloads the other off-zones', () => {
-    expect(readinessFromEnergyEmotion(2, -3)).toBe('tweaky');
-    expect(readinessFromEnergyEmotion(8, -3)).toBe('tired');
+  it('reads low energy as tired and never as a rest day', () => {
+    expect(readinessFromEnergyEmotion(2, -3)).toBe('tired');
+    expect(readinessFromEnergyEmotion(8, -3)).toBeNull();
     expect(readinessFromEnergyEmotion(2, 3)).toBe('tired');
   });
 
