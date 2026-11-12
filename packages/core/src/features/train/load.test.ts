@@ -40,8 +40,20 @@ function climb(dayOffset: number, partial: Partial<ClimbRecord> = {}): ClimbReco
 
 describe('inferJournalFocuses', () => {
   it('trusts a recorded focus over the tags', () => {
-    const entry = journal(0, { activities: ['mobility'], focus: ['maxStrength'] });
+    const entry = journal(0, { activities: ['climbing'], focus: ['maxStrength'] });
     expect(inferJournalFocuses(entry)).toEqual(['maxStrength']);
+  });
+
+  it('drops a recorded hands focus when Climbing and Fingerboard are unticked', () => {
+    const entry = journal(0, { activities: ['strength'], focus: ['maxStrength', 'conditioning'] });
+    expect(inferJournalFocuses(entry)).toEqual(['conditioning']);
+  });
+
+  it('treats hard lifting and cardio as conditioning, not max strength', () => {
+    const focuses = inferJournalFocuses(
+      journal(0, { activities: ['strength', 'cardio'], intensity: 'hard' }),
+    );
+    expect(focuses).toEqual(['conditioning']);
   });
 
   it('treats hard fingerboard work as max strength', () => {
@@ -154,6 +166,38 @@ describe('recent-load queries', () => {
   it('windows recent load by day count', () => {
     expect(recentLoad(history, NOW, 3)).toHaveLength(1);
     expect(recentLoad(history, NOW, 7)).toHaveLength(2);
+  });
+});
+
+describe('finger days', () => {
+  it.each([
+    [['climbing'], true],
+    [['fingerboard'], true],
+    [['strength'], false],
+    [['cardio'], false],
+    [['mobility'], false],
+    [['strength', 'cardio', 'mobility', 'other'], false],
+    [['strength', 'fingerboard'], true],
+  ] as const)('%j loads fingers: %s', (activities, expected) => {
+    for (const intensity of ['easy', 'moderate', 'hard'] as const) {
+      const [event] = loadHistory([journal(0, { activities: [...activities], intensity })], []);
+      expect(event.loadsFingers).toBe(expected);
+    }
+  });
+
+  it('counts a hard lifting day as neither a finger day nor a hard day', () => {
+    const [event] = loadHistory([journal(0, { activities: ['strength'], intensity: 'hard' })], []);
+    expect(event.loadsFingers).toBe(false);
+    expect(isHardDay(event)).toBe(false);
+  });
+
+  it('counts a logged climb even when the journal only ticked lifting', () => {
+    const [event] = loadHistory(
+      [journal(0, { activities: ['strength'], intensity: 'moderate' })],
+      [climb(0)],
+    );
+    expect(event.loadsFingers).toBe(true);
+    expect(event.focuses).toEqual(expect.arrayContaining(['conditioning', 'skill']));
   });
 });
 
