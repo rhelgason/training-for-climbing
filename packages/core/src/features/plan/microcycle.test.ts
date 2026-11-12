@@ -257,12 +257,50 @@ describe('whole-day rest rules', () => {
 
   it('does not count a lifting day toward the finger streak', () => {
     const history = loadHistory(
-      [day(-1, ['conditioning'], 'easy'), day(-2, ['maxStrength']), day(-3, ['skill'], 'moderate')],
+      [
+        journal(-1, {
+          id: 'd-1',
+          focus: ['conditioning'],
+          intensity: 'easy',
+          activities: ['strength', 'cardio', 'mobility'],
+        }),
+        day(-2, ['maxStrength']),
+        day(-3, ['skill'], 'moderate'),
+      ],
       [],
     );
     const cycle = buildMicrocycle(input({ history, daysPerWeek: 7 }));
     expect(cycle.fingerDaysInARow).toBe(0);
     expect(cycle.offFingers).toBe(false);
+  });
+
+  it('keeps hard lifting, runs and stretching from blocking the hangboard', () => {
+    // Three hands days, each followed by a hard off-wall day. None of the
+    // off-wall days counts as a finger day, a hard day, or a max-strength session.
+    const offWall = (o: number) =>
+      journal(o, {
+        id: `o${o}`,
+        activities: ['strength', 'cardio', 'mobility'],
+        intensity: 'hard',
+      });
+    const history = loadHistory(
+      [
+        offWall(-1),
+        day(-2, ['skill'], 'moderate'),
+        offWall(-3),
+        offWall(-4),
+        day(-5, ['skill'], 'moderate'),
+      ],
+      [],
+    );
+    const cycle = buildMicrocycle(input({ history, daysPerWeek: 7 }));
+    expect(cycle.fingerDaysInARow).toBe(0);
+    expect(cycle.fingerDaysThisWeek).toBe(2);
+    expect(cycle.hardDaysInARow).toBe(0);
+    expect(cycle.offFingers).toBe(false);
+    const max = cycle.verdicts.find((v) => v.focus === 'maxStrength')!;
+    expect(max.usedThisWeek).toBe(0);
+    expect(max.status).not.toBe('blocked');
   });
 
   it('does not rest a full-time climber just because the weekly count is met', () => {

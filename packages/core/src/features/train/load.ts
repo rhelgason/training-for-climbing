@@ -32,9 +32,8 @@ export interface LoadEvent {
   /** True when the focus came from a recorded plan rather than inference. */
   recorded: boolean;
   /**
-   * Climbing, hangboard, campus, or on-the-wall aerobic. Lifting, a run, and
-   * stretching do not. A recorded conditioning day stays off the hands even if
-   * an older client tagged the activity as climbing.
+   * Climbing or fingerboard was ticked, or a climb was logged. Lifting, a run,
+   * and stretching never count, at any intensity.
    */
   loadsFingers: boolean;
 }
@@ -59,35 +58,24 @@ export interface RecentDay {
 
 const DEFAULT_INTENSITY: JournalIntensity = 'moderate';
 
-/** On-the-wall or hangboard work. General cardio and antagonist lifting are not. */
+/** Focuses that only happen on the wall or the hangboard. */
 const HAND_FOCUSES: SessionFocusId[] = [
   'skill',
   'maxStrength',
   'power',
   'powerEndurance',
+  'enduranceAerobic',
   'mental',
 ];
 
 /**
- * Whether this entry loaded the fingers.
- *
- * A recorded focus wins over the activity tag. "I did this" used to stamp
- * every training day as climbing, including a lifting day.
+ * Whether this entry loaded the fingers: the climber ticked Climbing or
+ * Fingerboard. The ticks are the truth. Finishing a plan ticks Climbing for a
+ * hands day, and unticking it afterwards means it didn't happen.
  */
 export function entryLoadsFingers(journal: JournalEntry): boolean {
-  const activities = new Set(journal.activities ?? []);
-  if (activities.has('fingerboard')) return true;
-  const recorded = journal.focus ?? [];
-  if (recorded.length > 0) {
-    return recorded.some(
-      (focus) =>
-        HAND_FOCUSES.includes(focus) || (focus === 'enduranceAerobic' && !activities.has('cardio')),
-    );
-  }
-  if (activities.has('climbing')) return true;
-  const inferred = inferJournalFocuses(journal);
-  if (inferred.some((focus) => HAND_FOCUSES.includes(focus))) return true;
-  return inferred.includes('enduranceAerobic') && !activities.has('cardio');
+  const activities = journal.activities ?? [];
+  return activities.includes('climbing') || activities.includes('fingerboard');
 }
 
 /**
@@ -107,10 +95,11 @@ function focusesForActivity(activity: ActivityTag, intensity: JournalIntensity):
       if (intensity === 'hard') return ['maxStrength'];
       if (intensity === 'easy') return ['conditioning'];
       return ['powerEndurance'];
+    // Lifting and a run are conditioning at any intensity. Hard lifting is not
+    // max-strength finger work and must not use up a hangboard day.
     case 'strength':
-      return intensity === 'hard' ? ['maxStrength'] : ['conditioning'];
     case 'cardio':
-      return ['enduranceAerobic'];
+      return ['conditioning'];
     case 'mobility':
       return ['conditioning'];
     case 'rest':
@@ -123,10 +112,17 @@ function focusesForActivity(activity: ActivityTag, intensity: JournalIntensity):
 
 /**
  * The focuses a journal entry represents. Recorded focus wins; otherwise infer
- * from the tags. A day with only `rest` stays 'rest'.
+ * from the tags. A day with only `rest` stays 'rest'. Without a Climbing or
+ * Fingerboard tick, recorded hand focuses are dropped: the plan said hangs, but
+ * the climber says they didn't touch the wall.
  */
 export function inferJournalFocuses(journal: JournalEntry): SessionFocusId[] {
-  if (journal.focus && journal.focus.length > 0) return [...journal.focus];
+  if (journal.focus && journal.focus.length > 0) {
+    const recorded = entryLoadsFingers(journal)
+      ? journal.focus
+      : journal.focus.filter((focus) => !HAND_FOCUSES.includes(focus));
+    if (recorded.length > 0) return [...recorded];
+  }
   const intensity = journal.intensity ?? DEFAULT_INTENSITY;
   const out = new Set<SessionFocusId>();
   for (const activity of journal.activities) {
@@ -164,7 +160,17 @@ export function loadHistory(journals: JournalEntry[], climbs: ClimbRecord[]): Lo
   for (const climb of climbs) {
     const day = dayIndex(climb.date);
     const existing = byDay.get(day);
-    if (existing) continue; // the journal already describes this day
+    if (existing) {
+      // A logged climb is climbing, even if the journal only ticked lifting.
+      if (!existing.loadsFingers) {
+        byDay.set(day, {
+          ...existing,
+          focuses: [...existing.focuses.filter((f) => f !== 'rest'), 'skill'],
+          loadsFingers: true,
+        });
+      }
+      continue;
+    }
     byDay.set(day, {
       day,
       date: climb.date,
@@ -223,10 +229,14 @@ export function countFocusInWeek(
   return recentLoad(history, nowMs, 7).filter((e) => e.focuses.includes(focus)).length;
 }
 
-/** True when the day applied a high-intensity load. */
+/**
+ * True when the day put a high-intensity load on the fingers. A hard lifting
+ * or cardio day doesn't count: the hard-day cap protects the hands.
+ */
 export function isHardDay(event: LoadEvent): boolean {
   return (
-    event.intensity === 'hard' || event.focuses.some((f) => sessionFocus(f).intensity === 'high')
+    event.loadsFingers &&
+    (event.intensity === 'hard' || event.focuses.some((f) => sessionFocus(f).intensity === 'high'))
   );
 }
 
