@@ -1,4 +1,4 @@
-import type { ClimbRecord, JournalEntry } from '../../db/types';
+import type { ClimbRecord, ExerciseLogRecord, JournalEntry } from '../../db/types';
 import {
   consecutiveHardDays,
   countFocusInWeek,
@@ -198,6 +198,44 @@ describe('finger days', () => {
     );
     expect(event.loadsFingers).toBe(true);
     expect(event.focuses).toEqual(expect.arrayContaining(['conditioning', 'skill']));
+  });
+});
+
+describe('session runner logs', () => {
+  const log = (workoutId: string, dayOffset = 0): ExerciseLogRecord => ({
+    id: `x${workoutId}`,
+    createdAt: 0,
+    updatedAt: 0,
+    date: NOW + dayOffset * DAY,
+    workoutId,
+    sets: [{ loadLb: 20, completed: true }],
+  });
+
+  it('counts a logged hang session as a finger day with no journal', () => {
+    const [event] = loadHistory([], [], [log('max-hang-7-53')]);
+    expect(event).toMatchObject({ loadsFingers: true, focuses: ['maxStrength'] });
+    expect(isHardDay(event)).toBe(true);
+  });
+
+  it('counts hangs on a day the journal only ticked lifting', () => {
+    const [event] = loadHistory(
+      [journal(0, { activities: ['strength'] })],
+      [],
+      [log('repeaters-short')],
+    );
+    expect(event.loadsFingers).toBe(true);
+    expect(event.focuses).toEqual(expect.arrayContaining(['conditioning', 'powerEndurance']));
+  });
+
+  it("leaves today's workouts out of the history today's plan is built from", () => {
+    expect(loadHistory([], [], [log('max-hang-7-53')], NOW)).toEqual([]);
+    expect(loadHistory([], [], [log('max-hang-7-53', -1)], NOW)).toHaveLength(1);
+  });
+
+  it('keeps weighted pull-ups off the fingers and out of max strength', () => {
+    const [event] = loadHistory([], [], [log('weighted-pullups')]);
+    expect(event).toMatchObject({ loadsFingers: false, focuses: ['conditioning'] });
+    expect(isHardDay(event)).toBe(false);
   });
 });
 

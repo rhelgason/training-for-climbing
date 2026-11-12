@@ -406,6 +406,6 @@ export function dailyRecommendationFrom(
     ...rest,
     climbs,
     journals,
-    history: loadHistory(journals, climbs),
+    history: loadHistory(journals, climbs, rest.exerciseLogs, rest.nowMs),
   });
 }

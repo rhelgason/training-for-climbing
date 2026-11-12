@@ -18,8 +18,9 @@
 import type { ActivityTag, JournalIntensity } from '../../content/journal';
 import type { SessionFocusId } from '../../content/trainingContext';
 import { sessionFocus } from '../../content/trainingContext';
-import type { ClimbRecord, JournalEntry } from '../../db/types';
-import { addDays, dayIndex } from '../../lib/day';
+import { workoutById, workoutLoadsFingers } from '../../content/workouts';
+import type { ClimbRecord, ExerciseLogRecord, JournalEntry } from '../../db/types';
+import { addDays, dayIndex, dayStartMs } from '../../lib/day';
 
 /** One day's worth of applied training stress. */
 export interface LoadEvent {
@@ -133,11 +134,26 @@ export function inferJournalFocuses(journal: JournalEntry): SessionFocusId[] {
   return [...out];
 }
 
+const FOCUS_INTENSITY: Record<'low' | 'moderate' | 'high', JournalIntensity> = {
+  low: 'easy',
+  moderate: 'moderate',
+  high: 'hard',
+};
+
 /**
  * Every day of applied load, newest first. Journals are authoritative for a
  * day; climbs logged on a day with no journal count as a skill/climbing day.
+ * A workout logged in the session runner adds its own load: a hang session
+ * loads the fingers even if the day's journal only ticked lifting. Workouts
+ * logged on or after `nowMs`'s day are left out: today's plan is the thing
+ * being decided, and finishing its hangs must not pull them off the screen.
  */
-export function loadHistory(journals: JournalEntry[], climbs: ClimbRecord[]): LoadEvent[] {
+export function loadHistory(
+  journals: JournalEntry[],
+  climbs: ClimbRecord[],
+  exerciseLogs: ExerciseLogRecord[] = [],
+  nowMs: number = Infinity,
+): LoadEvent[] {
   const byDay = new Map<number, LoadEvent>();
 
   for (const journal of journals) {
@@ -179,6 +195,26 @@ export function loadHistory(journals: JournalEntry[], climbs: ClimbRecord[]): Lo
       recorded: false,
       loadsFingers: true,
     });
+  }
+
+  const todayStart = Number.isFinite(nowMs) ? dayStartMs(nowMs) : Infinity;
+  for (const log of exerciseLogs) {
+    if (log.date >= todayStart) continue;
+    const workout = workoutById(log.workoutId);
+    if (!workout) continue;
+    const fingers = workoutLoadsFingers(workout);
+    const day = dayIndex(log.date);
+    const event: LoadEvent = {
+      day,
+      date: log.date,
+      // Pull-up bar work counts as conditioning, not a finger max-strength session.
+      focuses: fingers ? [workout.focus] : ['conditioning'],
+      intensity: FOCUS_INTENSITY[sessionFocus(workout.focus).intensity],
+      recorded: true,
+      loadsFingers: fingers,
+    };
+    const existing = byDay.get(day);
+    byDay.set(day, existing ? mergeEvents(existing, event) : event);
   }
 
   return [...byDay.values()].sort((a, b) => b.day - a.day);
@@ -309,9 +345,10 @@ export function recentDays(
   climbs: ClimbRecord[],
   nowMs: number,
   count: number,
+  exerciseLogs: ExerciseLogRecord[] = [],
 ): RecentDay[] {
   const today = dayIndex(nowMs);
-  const history = loadHistory(journals, climbs);
+  const history = loadHistory(journals, climbs, exerciseLogs, nowMs);
   const journalByDay = new Map(journals.map((j) => [dayIndex(j.date), j]));
 
   const climbsByDay = new Map<number, ClimbRecord[]>();

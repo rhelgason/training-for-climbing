@@ -270,7 +270,7 @@ describe('TrainHome — prescribed numbers', () => {
   });
 
   it('progresses off the logged sets', async () => {
-    const date = now() - 3 * DAY;
+    const date = now() - 8 * DAY;
     await repo.saveExerciseLog({
       date,
       workoutId: 'max-hang-10',
@@ -283,7 +283,7 @@ describe('TrainHome — prescribed numbers', () => {
       /^Max strength — Max-weight hangs \(10 s\): \+30 lb/,
     );
     expect(screen.getByText(/Max-weight hangs/)).toHaveTextContent(
-      /Last time \(3 days ago\): \+25 lb/,
+      /Last time \(8 days ago\): \+25 lb/,
     );
     expect(
       screen.getByRole('link', { name: /Start Max-weight hangs \(10 s\): \+30 lb/ }),
