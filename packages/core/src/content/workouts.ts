@@ -618,6 +618,14 @@ export function gripForSet(workout: Workout, index: number, fallback?: GripId): 
   return plan[index % plan.length];
 }
 
+/**
+ * Hangs, campus, and wall work load the fingers. Pull-up bar work (weighted
+ * pull-ups, frenchies, lock-offs) is on jugs or the bar and doesn't.
+ */
+export function workoutLoadsFingers(workout: Workout): boolean {
+  return !workout.equipment.includes('pull-up-bar');
+}
+
 const TIER_ORDER: AbilityTier[] = ['beginner', 'intermediate', 'elite'];
 
 /** True when one of the workout's equipment needs is on hand (or it needs none). */

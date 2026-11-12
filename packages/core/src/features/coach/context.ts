@@ -187,7 +187,7 @@ export function buildCoachContext(input: CoachContextInput): CoachContext {
   const profile = effectiveProfile(input.profile);
   const assessment = latestAssessment(input.assessments);
   const trainDates = trainingDates(input.journals, input.climbs);
-  const history = loadHistory(input.journals, input.climbs);
+  const history = loadHistory(input.journals, input.climbs, input.exerciseLogs, input.nowMs);
   const daily = input.dailyContext ?? null;
   const periods = input.periods ?? [];
   const earliest = trainDates.length > 0 ? Math.min(...trainDates) : null;
@@ -289,7 +289,13 @@ export function buildCoachContext(input: CoachContextInput): CoachContext {
         : null,
       resolveAnnouncedRests(input.journals, history, input.nowMs),
     ),
-    recentDays: recentDays(input.journals, input.climbs, input.nowMs, MAX_RECENT_DAYS).map((d) => ({
+    recentDays: recentDays(
+      input.journals,
+      input.climbs,
+      input.nowMs,
+      MAX_RECENT_DAYS,
+      input.exerciseLogs,
+    ).map((d) => ({
       date: d.date,
       daysAgo: d.daysAgo,
       focus: d.focusLabels,

@@ -357,7 +357,7 @@ export default function TrainHome() {
           goals,
           trainingDates: dates,
           nowMs,
-          history: loadHistory(journals, climbs),
+          history: loadHistory(journals, climbs, exerciseLogs, nowMs),
           abilityTier: settings.abilityTier,
           styleFocus: settings.styleFocus,
           daysPerWeek: settings.daysPerWeek,
