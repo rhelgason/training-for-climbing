@@ -54,12 +54,15 @@ import { Screen } from '../../components/Screen';
 import { BackupBanner } from '../../components/BackupBanner';
 import { TodayContext } from '../../components/TodayContext';
 import { InsightCard } from '../../components/InsightCard';
+import { Debrief, type TomorrowPreview } from '../../components/Debrief';
 import { ProtocolMetric } from '../../components/ProtocolMetric';
 import { WhyThisPlan } from '../../components/WhyThisPlan';
 import { useRepository, useSync } from '../../lib/db/RepositoryProvider';
 import { useCoach } from '../../lib/coach/useCoach';
 import { useBackupNudge } from '../../lib/auth/useBackupNudge';
 import { useDailyContext } from '../../lib/today/useDailyContext';
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 function greeting(nowMs: number): string {
   const h = new Date(nowMs).getHours();
@@ -84,6 +87,11 @@ interface LoadState {
    * record of the day, not a request for a new session.
    */
   dayLogged: boolean;
+  /** What the debrief starts from: today's logged effort and words. */
+  todayIntensity: JournalIntensity;
+  todayNote: string;
+  /** The scheduler's read on tomorrow, once today is logged. */
+  tomorrow: TomorrowPreview | null;
   /** Ninety days since the last self-assessment. */
   reassessDue: boolean;
   goals: GoalRecord[];
@@ -137,6 +145,39 @@ function resolvePlan(state: LoadState, coach: CoachView) {
   };
 }
 
+/**
+ * Tomorrow, as the scheduler sees it with today on the books. A preview, not
+ * a promise: tomorrow's check-in and the coach still get the final say.
+ */
+function previewTomorrow(
+  input: Parameters<typeof buildDailyRecommendation>[0],
+  journals: JournalEntry[],
+  climbs: Parameters<typeof loadHistory>[1],
+  exerciseLogs: ExerciseLogRecord[],
+): TomorrowPreview {
+  const nowMs = input.nowMs + DAY_MS;
+  const rec = buildDailyRecommendation({
+    ...input,
+    nowMs,
+    history: loadHistory(journals, climbs, exerciseLogs, nowMs),
+    // How they'll feel tomorrow is tomorrow's answer; today's note is today's.
+    readiness: 'ok',
+    dailyNote: undefined,
+    injuryPolicy: 'hint',
+  });
+  if (rec.kind === 'rest') {
+    return { label: 'Rest day', detail: rec.microcycle?.restReason };
+  }
+  if (rec.microcycle?.offFingers) {
+    return { label: 'Off the fingers', detail: 'Lifting, easy cardio, and stretching.' };
+  }
+  return {
+    label: rec.focus ? sessionFocus(rec.focus).label : rec.headline,
+    // The scheduler speaks from tomorrow, where today is "yesterday".
+    detail: rec.because?.replace(/^Yesterday:/, 'After today:') || undefined,
+  };
+}
+
 export default function TrainHome() {
   const repo = useRepository();
   const { dataVersion } = useSync();
@@ -152,6 +193,8 @@ export default function TrainHome() {
   const [skippedSteps, setSkippedSteps] = useState<string[]>([]);
   /** Protocol values for today, keyed by protocol id; seeded from last session. */
   const [metrics, setMetrics] = useState<Record<string, number>>({});
+  /** Bumped after logging, so the screen re-reads into its debrief. */
+  const [reload, setReload] = useState(0);
 
   const toggleStep = (step: string) =>
     setSkippedSteps((prev) =>
@@ -286,8 +329,9 @@ export default function TrainHome() {
         kind: rest ? 'rest' : plan.kind,
         skipped: skippedSteps.length,
       });
-      // Open the log so they can add the free text the coach reads tomorrow.
-      router.push(`/train/journal/${journalId}`);
+      // Stay here: the debrief opens in place for the words the coach reads
+      // tomorrow, rather than a separate form a page away.
+      setReload((n) => n + 1);
     } finally {
       setMarking(false);
     }
@@ -379,12 +423,16 @@ export default function TrainHome() {
         const live = buildDailyRecommendation({ ...dailyInput, injuryPolicy: 'hint' });
         // Newest-edit-wins rather than first match: sync can leave two entries
         // for one day, and editing an arbitrary one loses the other's text.
-        const todayJournal = journals
-          .filter((j) => dayIndex(j.date) === dayIndex(nowMs))
-          .reduce<JournalEntry | null>(
-            (newest, j) => (!newest || j.updatedAt > newest.updatedAt ? j : newest),
+        const newest = (list: JournalEntry[]) =>
+          list.reduce<JournalEntry | null>(
+            (best, j) => (!best || j.updatedAt > best.updatedAt ? j : best),
             null,
           );
+        const todays = journals.filter((j) => dayIndex(j.date) === dayIndex(nowMs));
+        // The entry that recorded the plan. A second session logged by hand
+        // later is its own entry, and must not make the day look unlogged.
+        const loggedJournal = newest(todays.filter((j) => j.focus?.length));
+        const todayJournal = loggedJournal ?? newest(todays);
 
         // Pre-fill each protocol with what was done last time, so confirming is
         // the default and typing is the exception.
@@ -413,7 +461,12 @@ export default function TrainHome() {
           recommendation,
           live,
           todayJournalId: todayJournal?.id ?? null,
-          dayLogged: Boolean(todayJournal?.focus?.length),
+          dayLogged: loggedJournal !== null,
+          todayIntensity: loggedJournal?.intensity ?? 'moderate',
+          todayNote: loggedJournal?.summary ?? '',
+          tomorrow: loggedJournal
+            ? previewTomorrow(dailyInput, journals, climbs, exerciseLogs)
+            : null,
           reassessDue: reassessDue(assessments, nowMs),
           goals,
           weakestArea,
@@ -453,7 +506,7 @@ export default function TrainHome() {
     return () => {
       on = false;
     };
-  }, [repo, dataVersion, router, today]);
+  }, [repo, dataVersion, router, today, reload]);
 
   useEffect(() => {
     const suggestion = coach.suggestion;
@@ -537,6 +590,21 @@ export default function TrainHome() {
       )}
 
       {backup.visible && <BackupBanner onDismiss={backup.dismiss} />}
+
+      {state.dayLogged && (
+        <Debrief
+          key={todayJournalId ?? 'today'}
+          intensity={state.todayIntensity}
+          note={state.todayNote}
+          tomorrow={state.tomorrow}
+          onSave={async (intensity, note) => {
+            if (!todayJournalId) return;
+            await repo.updateJournal(todayJournalId, { intensity, summary: note || undefined });
+            trackEvent('debrief_saved', { intensity, words: note ? note.split(/\s+/).length : 0 });
+            setReload((n) => n + 1);
+          }}
+        />
+      )}
 
       <TodayContext
         value={today}
@@ -815,19 +883,31 @@ export default function TrainHome() {
         </p>
       )}
 
-      <Button onClick={markDone} disabled={marking}>
-        {marking
-          ? 'Saving…'
-          : restToday
-            ? 'Log today as a rest day'
-            : skippedSteps.length > 0
-              ? `Log it — ${planSteps.length - skippedSteps.length} of ${planSteps.length} done`
-              : 'I did this — log it'}
-      </Button>
+      {!state.dayLogged && (
+        <Button onClick={markDone} disabled={marking}>
+          {marking
+            ? 'Saving…'
+            : restToday
+              ? 'Log today as a rest day'
+              : skippedSteps.length > 0
+                ? `Log it — ${planSteps.length - skippedSteps.length} of ${planSteps.length} done`
+                : 'I did this — log it'}
+        </Button>
+      )}
 
-      <Link href={todayJournalId ? `/train/journal/${todayJournalId}` : '/train/journal/new'}>
+      <Link
+        href={
+          todayJournalId && !state.dayLogged
+            ? `/train/journal/${todayJournalId}`
+            : '/train/journal/new'
+        }
+      >
         <Button variant="secondary">
-          {todayJournalId ? "Edit today's log" : 'Log something else'}
+          {state.dayLogged
+            ? 'Log another session'
+            : todayJournalId
+              ? "Edit today's log"
+              : 'Log something else'}
         </Button>
       </Link>
       {/* Off the main path: the plan already says what to run. These are for

@@ -77,6 +77,7 @@ export type UsageEvent =
   | { name: 'coach_feedback'; props: { rating: 'up' | 'down' } }
   | { name: 'onboarding_completed'; props: { goals: number; signedIn: boolean } }
   | { name: 'nux_completed'; props?: Record<string, never> }
+  | { name: 'debrief_saved'; props: { intensity: string; words: number } }
   | { name: 'daily_context_set'; props: { readiness: string; environment: string } }
   | { name: 'plan_completed'; props: { focus: string; kind: string; skipped: number } }
   | { name: 'workout_started'; props: { workout: string; mode: 'timer' | 'log' } }

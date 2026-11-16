@@ -135,12 +135,38 @@ describe('TrainHome — logging the day', () => {
     });
   });
 
-  it('opens the log afterwards so the free text can be added', async () => {
+  it('debriefs in place: effort and a sentence, then a look at tomorrow', async () => {
     await renderScreen();
     await click(screen.getByRole('button', { name: /I did this/i }));
-    await waitFor(() =>
-      expect(push).toHaveBeenCalledWith(expect.stringMatching(/^\/train\/journal\//)),
-    );
+    await waitFor(() => expect(screen.getByText('Done for today ✓')).toBeInTheDocument());
+    expect(push).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: /I did this/i })).not.toBeInTheDocument();
+    expect(screen.getByText('Tomorrow')).toBeInTheDocument();
+
+    await click(screen.getByRole('button', { name: 'Hard' }));
+    fireEvent.change(screen.getByPlaceholderText(/Tomorrow's plan reads this/), {
+      target: { value: 'Left ring finger tweaky on crimps' },
+    });
+    await click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(async () => {
+      const [journal] = await repo.listJournals();
+      expect(journal.summary).toBe('Left ring finger tweaky on crimps');
+      expect(journal.intensity).toBe('hard');
+    });
+    expect(await screen.findByText('Left ring finger tweaky on crimps')).toBeInTheDocument();
+  });
+
+  it('keeps the day logged when a second session is added by hand', async () => {
+    await renderScreen();
+    await click(screen.getByRole('button', { name: /I did this/i }));
+    await waitFor(() => expect(screen.getByText('Done for today ✓')).toBeInTheDocument());
+    await repo.saveJournal({ date: now(), activities: ['cardio'], summary: 'Evening run' });
+    cleanup();
+
+    await renderScreen();
+    expect(screen.getByText('Done for today ✓')).toBeInTheDocument();
+    await waitFor(() => expect(lastCoachAsk().auto).toBe(false));
   });
 
   it('edits the day’s existing entry instead of creating a second', async () => {
