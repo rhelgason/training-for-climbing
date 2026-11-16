@@ -45,10 +45,19 @@ describe('buildDailyRecommendation', () => {
     expect(rec.kind).toBe('train');
   });
 
-  it('prompts an assessment when none has been taken', () => {
+  it('prompts an assessment when none has been taken and there is no scheduler', () => {
     const rec = buildDailyRecommendation(input({ weakestArea: null }));
     expect(rec.kind).toBe('assess');
     expect(rec.focusArea).toBeNull();
+  });
+
+  it('gives a brand-new climber a real session on day one, assessment or not', () => {
+    const rec = buildDailyRecommendation(
+      input({ weakestArea: null, history: loadHistory([], []) }),
+    );
+    expect(rec.kind).toBe('train');
+    expect(rec.focus).not.toBeNull();
+    expect(rec.plan.join(' ')).not.toMatch(/self-assessment/i);
   });
 
   it('targets the weakest area when rested and assessed', () => {

@@ -54,7 +54,7 @@ export function AssessResults({ id }: { id: string }) {
         <PageHeader title="Results" />
         <Screen>
           <h1 className="text-2xl font-bold">Result not found</h1>
-          <Button onClick={() => router.push('/assess')}>Back</Button>
+          <Button onClick={() => router.push('/you')}>Back</Button>
         </Screen>
       </>
     );
@@ -122,7 +122,7 @@ export function AssessResults({ id }: { id: string }) {
           <Button variant="secondary" onClick={() => router.replace('/assess/history')}>
             View history
           </Button>
-          <Button onClick={() => router.push('/assess')}>Done</Button>
+          <Button onClick={() => router.push('/you')}>Done</Button>
         </div>
       </Screen>
     </>

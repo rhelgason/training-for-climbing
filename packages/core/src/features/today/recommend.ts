@@ -180,7 +180,7 @@ const FOCUS_DETAIL: Record<TriadArea, string> = {
 };
 
 const ASSESS_STEPS: PlanStep[] = [
-  { text: 'Open Assess and complete the 30-question self-assessment.' },
+  { text: 'Open You and take the self-assessment — about five minutes.' },
   { text: 'Note your weakest triad area — it becomes the focus of your daily plan.' },
 ];
 
@@ -324,19 +324,10 @@ export function buildDailyRecommendation(input: DailyInput): DailyRecommendation
     };
   }
 
-  if (input.weakestArea === null) {
-    return {
-      ...common,
-      kind: 'assess',
-      headline: 'Start with a self-assessment',
-      detail:
-        'Take the 30-question self-assessment so the app can target your weakest area of the performance triad.',
-      focusArea: null,
-      plan: texts(ASSESS_STEPS),
-      steps: ASSESS_STEPS,
-    };
-  }
-
+  // No assessment is not a reason to withhold a workout. The scheduler picks
+  // a session from quotas, the block, and style without one; the assessment
+  // only sharpens it. Day one has to be a real session, or the app's first
+  // impression is homework.
   if (cycle && cycle.primary) {
     const spec = sessionFocus(cycle.primary);
     const climbing = cycle.offFingers
@@ -370,6 +361,20 @@ export function buildDailyRecommendation(input: DailyInput): DailyRecommendation
       focus: cycle.primary,
       supportingFocuses: cycle.supporting,
       climbing,
+    };
+  }
+
+  // Callers without history (and so without a scheduler) have nothing to pick
+  // a session from but the weakest area.
+  if (input.weakestArea === null) {
+    return {
+      ...common,
+      kind: 'assess',
+      headline: 'Start with a self-assessment',
+      detail: 'Take the self-assessment under You so the app can target your weakest area.',
+      focusArea: null,
+      plan: texts(ASSESS_STEPS),
+      steps: ASSESS_STEPS,
     };
   }
 

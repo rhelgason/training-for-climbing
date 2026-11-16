@@ -7,6 +7,7 @@ import {
   ACTIVITY_LABELS,
   INTENSITY_LABELS,
   acceptInsight,
+  activeGoals,
   buildDailyRecommendation,
   combineReadiness,
   dayStartMs,
@@ -18,9 +19,12 @@ import {
   mesocycleAnchor,
   overlayAiPlan,
   pendingInsights,
+  planNods,
   readinessFromEnergyEmotion,
   resolveTrainingBlock,
+  type GoalRecord,
   type Insight,
+  type TriadArea,
   type ProfileRecord,
   dayIndex,
   effectiveProfile,
@@ -48,7 +52,7 @@ import {
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { Screen } from '../../components/Screen';
-import { GettingStarted, type OnboardingStep } from '../../components/GettingStarted';
+import { FirstDay } from '../../components/FirstDay';
 import { BackupBanner } from '../../components/BackupBanner';
 import { TodayContext } from '../../components/TodayContext';
 import { InsightCard } from '../../components/InsightCard';
@@ -92,7 +96,10 @@ interface LoadState {
    */
   dayLogged: boolean;
   hasAssessment: boolean;
-  hasGoal: boolean;
+  goals: GoalRecord[];
+  weakestArea: TriadArea | null;
+  /** What the coach is given, in a line, so its plan isn't a black box. */
+  coachRead: string[];
   benchmarks: BenchmarkRecord[];
   /** Workouts already logged set by set today, newest first. */
   todayLogs: ExerciseLogRecord[];
@@ -419,7 +426,17 @@ export default function TrainHome() {
           todayJournalId: todayJournal?.id ?? null,
           dayLogged: Boolean(todayJournal?.focus?.length),
           hasAssessment: assessments.length > 0,
-          hasGoal: goals.length > 0,
+          goals,
+          weakestArea,
+          coachRead: [
+            `${dates.filter((d) => dayIndex(nowMs) - dayIndex(d) <= 7).length} days of logs`,
+            ...(activeGoals(goals).length > 0
+              ? [`${activeGoals(goals).length} goal${activeGoals(goals).length === 1 ? '' : 's'}`]
+              : []),
+            ...(latest ? ['your assessment'] : []),
+            ...(exerciseLogs.length > 0 ? ['your logged sets'] : []),
+            block.source === 'auto' ? `${block.label} phase` : `${block.label} block`,
+          ],
           benchmarks,
           todayLogs: exerciseLogs.filter((l) => l.date >= dayStartMs(nowMs)),
           notebookStamp: exerciseLogs
@@ -462,7 +479,7 @@ export default function TrainHome() {
   }, [coach, state]);
 
   if (state === null || today === null) return <Screen />;
-  const { journals, todayJournalId, hasAssessment, hasGoal } = state;
+  const { journals, todayJournalId, hasAssessment } = state;
   const { rec, shownAi, restToday, injuries, coachLive } = resolvePlan(state, coach);
 
   /** Apply the climber's decision, then drop the card whichever way it went. */
@@ -486,27 +503,15 @@ export default function TrainHome() {
   const ai = coach.suggestion;
   const hint = coachLive && !shownAi ? rec.injuryHint : null;
 
-  const onboardingSteps: OnboardingStep[] = [
-    {
-      key: 'assess',
-      label: 'Take the self-assessment',
-      done: hasAssessment,
-      onClick: () => router.push('/assess/new'),
-    },
-    {
-      key: 'goal',
-      label: 'Set your first goal',
-      done: hasGoal,
-      onClick: () => router.push('/plan/goals/new'),
-    },
-    {
-      key: 'journal',
-      label: 'Log your first day',
-      done: journals.length > 0,
-      onClick: () => router.push('/train/journal/new'),
-    },
-  ];
-  const showOnboarding = !onboarding.dismissed && onboardingSteps.some((s) => !s.done);
+  const showFirstDay = !onboarding.dismissed && journals.length === 0;
+  const nods = planNods({
+    goals: state.goals,
+    weakestArea: state.weakestArea,
+    todayArea: restToday
+      ? null
+      : (shownAi?.focusArea ?? (rec.focus ? sessionFocus(rec.focus).triadArea : null)),
+    nowMs: now(),
+  });
 
   const displaySteps = overlayAiPlan(rec.steps, shownAi?.plan);
   const planSteps = displaySteps.map((s) => s.text);
@@ -529,7 +534,13 @@ export default function TrainHome() {
         )}
       </div>
 
-      {showOnboarding && <GettingStarted steps={onboardingSteps} onDismiss={onboarding.dismiss} />}
+      {showFirstDay && (
+        <FirstDay
+          needsAssessment={!hasAssessment}
+          needsGoal={activeGoals(state.goals).length === 0}
+          onDismiss={onboarding.dismiss}
+        />
+      )}
 
       {backup.visible && <BackupBanner onDismiss={backup.dismiss} />}
 
@@ -562,6 +573,11 @@ export default function TrainHome() {
         <p className="mt-2 text-sm leading-5 text-muted">
           {shownAi ? shownAi.rationale || rec.detail : rec.detail}
         </p>
+        {nods.map((nod) => (
+          <p key={nod} className="mt-1.5 text-sm font-semibold text-primary">
+            {nod}
+          </p>
+        ))}
 
         {/* Judged live from today's call and never saved, so nothing here
             outlives the entries it came from. */}
@@ -720,19 +736,15 @@ export default function TrainHome() {
           </div>
         )}
 
-        {rec.goalReminders.length > 0 && (
-          <div className="mt-4">
-            <p className="text-sm font-semibold text-muted">Keep in mind</p>
-            {rec.goalReminders.map((g) => (
-              <p key={g} className="mt-1 text-sm">
-                • {g}
-              </p>
-            ))}
-          </div>
+        {shownAi && (
+          <p className="mt-4 text-xs leading-4 text-muted">
+            Coach read {state.coachRead.join(' · ')}
+            {today.note ? ' · today’s note' : ''}
+          </p>
         )}
 
         {shownAi && (
-          <div className="mt-4 flex items-center gap-4 border-t border-border pt-2">
+          <div className="mt-2 flex items-center gap-4 border-t border-border pt-2">
             {feedback ? (
               <span className="text-sm italic text-muted">
                 Thanks — this helps tune your coach.
@@ -822,15 +834,24 @@ export default function TrainHome() {
           {todayJournalId ? "Edit today's log" : 'Log something else'}
         </Button>
       </Link>
-      <Link href="/train/energy-emotion">
-        <Button variant="secondary">Energy &amp; emotion check-in</Button>
-      </Link>
-      <Link href="/train/session">
-        <Button variant="secondary">Run any workout</Button>
-      </Link>
-      <Link href="/train/exercises">
-        <Button variant="secondary">Exercise library</Button>
-      </Link>
+      {/* Off the main path: the plan already says what to run. These are for
+          a day that goes off-script, and they shouldn't compete with it. */}
+      <details className="rounded-xl border border-border/70 px-4 py-2">
+        <summary className="cursor-pointer text-sm font-semibold text-muted">
+          Off-plan tools
+        </summary>
+        <div className="mt-2 flex flex-col gap-2 pb-2">
+          <Link href="/train/session" className="text-sm font-semibold text-primary">
+            Run any workout →
+          </Link>
+          <Link href="/train/energy-emotion" className="text-sm font-semibold text-primary">
+            Energy &amp; emotion check-in →
+          </Link>
+          <Link href="/train/exercises" className="text-sm font-semibold text-primary">
+            Exercise library →
+          </Link>
+        </div>
+      </details>
 
       <h2 className="mt-2 text-lg font-bold">Recent</h2>
       {journals.length === 0 ? (

@@ -197,6 +197,25 @@ describe('TrainHome — the daily check-in', () => {
   });
 });
 
+describe('TrainHome — tied back to what they set up', () => {
+  it('reminds them of the goal with the nearest deadline', async () => {
+    await repo.saveGoal({ title: 'Send V7', horizon: 'medium', targetDate: now() + 41 * DAY });
+    await renderScreen();
+    expect(screen.getByText('Remember: Send V7 — 41 days left')).toBeInTheDocument();
+  });
+
+  it('explains the daily loop until the first day is logged', async () => {
+    await renderScreen();
+    await waitFor(() => expect(screen.getByText('How Today works')).toBeInTheDocument());
+    // The seed has an assessment but no goal, so only the goal is offered.
+    expect(screen.getByText(/Add a goal/)).toBeInTheDocument();
+    expect(screen.queryByText(/Take the self-assessment/)).not.toBeInTheDocument();
+
+    await click(screen.getByRole('button', { name: 'Got it' }));
+    expect(screen.queryByText('How Today works')).not.toBeInTheDocument();
+  });
+});
+
 describe('TrainHome — when the coach is asked', () => {
   it('asks nothing while the check-in is being filled in, then once on Done', async () => {
     await renderScreen();

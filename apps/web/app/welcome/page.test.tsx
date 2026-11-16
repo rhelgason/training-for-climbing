@@ -121,4 +121,25 @@ describe('Welcome', () => {
     await waitFor(() => expect(screen.getByText('About you')).toBeInTheDocument());
     expect(replace).not.toHaveBeenCalled();
   });
+
+  it('ends on how the app works, then saves a dated goal and opens Today', async () => {
+    render(<Welcome />);
+    await click(screen.getByRole('button', { name: /Skip for now/i }));
+    await click(screen.getByRole('button', { name: 'Continue' }));
+
+    fireEvent.change(screen.getByPlaceholderText(/first V7/i), { target: { value: 'Send V7' } });
+    await click(screen.getByRole('button', { name: '3 months' }));
+    await click(screen.getByRole('button', { name: '+ Add goal' }));
+    expect(screen.getByText(/in 90 days/)).toBeInTheDocument();
+    await click(screen.getByRole('button', { name: 'Continue' }));
+    await click(screen.getByRole('button', { name: 'Continue' }));
+
+    expect(screen.getByText('Do exactly what it says')).toBeInTheDocument();
+    await click(screen.getByRole('button', { name: "Show me today's workout" }));
+
+    await waitFor(() => expect(router.push).toHaveBeenCalledWith('/train'));
+    const [goal] = await repo.listGoals();
+    expect(goal.title).toBe('Send V7');
+    expect(goal.targetDate).toBeGreaterThan(Date.now() + 89 * 24 * 60 * 60 * 1000);
+  });
 });
