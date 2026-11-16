@@ -78,6 +78,7 @@ export type UsageEvent =
   | { name: 'onboarding_completed'; props: { goals: number; signedIn: boolean } }
   | { name: 'nux_completed'; props?: Record<string, never> }
   | { name: 'debrief_saved'; props: { intensity: string; words: number } }
+  | { name: 'goal_resolved'; props: { outcome: string } }
   | { name: 'daily_context_set'; props: { readiness: string; environment: string } }
   | { name: 'plan_completed'; props: { focus: string; kind: string; skipped: number } }
   | { name: 'workout_started'; props: { workout: string; mode: 'timer' | 'log' } }

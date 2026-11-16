@@ -230,6 +230,26 @@ describe('TrainHome — tied back to what they set up', () => {
     expect(screen.getByText('Remember: Send V7 — 41 days left')).toBeInTheDocument();
   });
 
+  it('asks whether a lapsed goal was met, then asks for the next one', async () => {
+    await repo.saveGoal({ title: 'Send V7', horizon: 'medium', targetDate: now() - 2 * DAY });
+    await renderScreen();
+    expect(screen.getByText('Deadline passed')).toBeInTheDocument();
+
+    await click(screen.getByRole('button', { name: /Yes, done/ }));
+    await waitFor(async () => expect((await repo.listGoals())[0].status).toBe('done'));
+    expect(await screen.findByText(/What.s next\?/)).toBeInTheDocument();
+  });
+
+  it('extends a lapsed goal by four weeks', async () => {
+    await repo.saveGoal({ title: 'Send V7', horizon: 'medium', targetDate: now() - 2 * DAY });
+    await renderScreen();
+    await click(screen.getByRole('button', { name: 'Extend 4 weeks' }));
+    await waitFor(async () =>
+      expect((await repo.listGoals())[0].targetDate).toBeGreaterThan(now() + 27 * DAY),
+    );
+    await waitFor(() => expect(screen.queryByText('Deadline passed')).not.toBeInTheDocument());
+  });
+
   it('asks for a reassessment once the last one is three months old', async () => {
     await renderScreen();
     expect(screen.queryByText('Time to reassess')).not.toBeInTheDocument();

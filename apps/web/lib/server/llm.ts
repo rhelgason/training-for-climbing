@@ -293,6 +293,9 @@ Coaching rules:
   ("41 days to your V7 deadline — this is the power that crux needs"). Use \`mission\` for
   the why when you write the rationale. \`sacrifice\` is a trade-off they promised
   themselves; when the logs show it slipping, hold them to it in one short watch-out.
+  If \`climbing.trend\` and \`notebook\` say a deadline is out of reach at the current rate,
+  say so plainly in one watch-out and suggest a nearer step or a later date. The book's
+  rules still come first: a goal never overrides \`schedule\`, an injury, or finger load.
 - THINK IN BLOCKS, NOT JUST TODAY. \`macrocycle.current\` is the training block they are
   in (Hörst Ch 10). Today's session must serve that block, not just the weakest area:
   skill/stamina/mileage blocks = volume of submaximal climbing; max-strength/power blocks

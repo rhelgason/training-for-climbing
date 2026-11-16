@@ -12,6 +12,7 @@ import {
   describeSession,
   detectAbilityDrift,
   dismissInsight,
+  isOverdue,
   formatBands,
   latestReadingForDay,
   mesocycleAnchor,
@@ -55,6 +56,7 @@ import { BackupBanner } from '../../components/BackupBanner';
 import { TodayContext } from '../../components/TodayContext';
 import { InsightCard } from '../../components/InsightCard';
 import { Debrief, type TomorrowPreview } from '../../components/Debrief';
+import { GoalCheckIn, type GoalOutcome } from '../../components/GoalCheckIn';
 import { ProtocolMetric } from '../../components/ProtocolMetric';
 import { WhyThisPlan } from '../../components/WhyThisPlan';
 import { useRepository, useSync } from '../../lib/db/RepositoryProvider';
@@ -188,6 +190,7 @@ export default function TrainHome() {
   const [feedback, setFeedback] = useState<'up' | 'down' | null>(null);
   const [marking, setMarking] = useState(false);
   const [decidingInsight, setDecidingInsight] = useState(false);
+  const [decidingGoal, setDecidingGoal] = useState(false);
   const [showLight, setShowLight] = useState(false);
   /** Prescribed steps the climber has unticked as not done. */
   const [skippedSteps, setSkippedSteps] = useState<string[]>([]);
@@ -542,6 +545,30 @@ export default function TrainHome() {
       setDecidingInsight(false);
     }
   };
+  const decideGoal = async (goal: GoalRecord, outcome: GoalOutcome) => {
+    setDecidingGoal(true);
+    try {
+      const nowMs = now();
+      await repo.updateGoal(
+        goal.id,
+        outcome === 'done'
+          ? { status: 'done', completedAt: nowMs }
+          : outcome === 'extend'
+            ? { targetDate: nowMs + 28 * DAY_MS }
+            : { status: 'archived' },
+      );
+      trackEvent('goal_resolved', { outcome });
+      setReload((n) => n + 1);
+    } finally {
+      setDecidingGoal(false);
+    }
+  };
+  const activeNow = activeGoals(state.goals);
+  const overdueGoal = activeNow.find((g) => isOverdue(g, now())) ?? null;
+  // Asked once there was a goal to finish; a climber who never set one is
+  // asked by the tutorial, not by a nag here.
+  const askGoal = overdueGoal !== null || (activeNow.length === 0 && state.goals.length > 0);
+
   const ai = coach.suggestion;
   const hint = coachLive && !shownAi ? rec.injuryHint : null;
 
@@ -590,6 +617,8 @@ export default function TrainHome() {
       )}
 
       {backup.visible && <BackupBanner onDismiss={backup.dismiss} />}
+
+      {askGoal && <GoalCheckIn goal={overdueGoal} onDecide={decideGoal} busy={decidingGoal} />}
 
       {state.dayLogged && (
         <Debrief
