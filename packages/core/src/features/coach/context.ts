@@ -195,6 +195,7 @@ export function buildCoachContext(input: CoachContextInput): CoachContext {
     periods,
     input.nowMs,
     mesocycleAnchor(input.profile, earliest, input.nowMs),
+    { goals: input.goals, climber: profile },
   );
   const nextBlock = upcomingPeriod(periods, input.nowMs);
   const blockFocuses = block.focuses;
@@ -397,8 +398,16 @@ export function buildCoachContext(input: CoachContextInput): CoachContext {
     },
     macrocycle: {
       current: {
-        label: block.source === 'auto' ? `${block.label} (4-3-2-1)` : block.label,
+        label:
+          block.source === 'auto'
+            ? `${block.label} (4-3-2-1)`
+            : block.goal
+              ? `${block.label} (${block.goal.cycle})`
+              : block.label,
         focus: block.focus,
+        objective: block.goal
+          ? `Peak for "${block.goal.title}" in ${block.goal.daysLeft} days`
+          : undefined,
         startDate: formatYmd(input.nowMs),
         endDate: formatYmd(input.nowMs + block.daysRemaining * 24 * 60 * 60 * 1000),
         daysRemaining: block.daysRemaining,

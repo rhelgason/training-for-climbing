@@ -29,7 +29,7 @@ describe('You', () => {
       '/plan/goals/new',
     );
     expect(screen.getByText(/your plan leans\s+into it/)).toBeInTheDocument();
-    expect(screen.getByText(/automatic 4-3-2-1 cycle/)).toBeInTheDocument();
+    expect(screen.getByText(/Picked for you/)).toBeInTheDocument();
   });
 
   it('summarises what is set up', async () => {
@@ -45,5 +45,7 @@ describe('You', () => {
     await waitFor(() => expect(screen.getByText('Send V7')).toBeInTheDocument());
     expect(screen.getByText(/41 days left/)).toBeInTheDocument();
     expect(screen.getByText('Weakest area: Mental')).toBeInTheDocument();
+    // A dated goal plans the season back from its deadline: taper last.
+    expect(screen.getByText(/Built back from “Send V7”/)).toBeInTheDocument();
   });
 });

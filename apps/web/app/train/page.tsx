@@ -394,6 +394,7 @@ export default function TrainHome() {
           periods,
           nowMs,
           mesocycleAnchor(profile, dates.length > 0 ? Math.min(...dates) : null, nowMs),
+          { goals, climber: settings },
         );
         const energy = latestReadingForDay(checkins, nowMs);
         const dailyInput: Parameters<typeof buildDailyRecommendation>[0] = {
@@ -491,10 +492,7 @@ export default function TrainHome() {
             .sort()
             .join(','),
           profile,
-          blockLabel:
-            block.source === 'auto'
-              ? `${block.label} (4-3-2-1)`
-              : `${block.label} — ${block.focus}`,
+          blockLabel: block.source === 'planned' ? `${block.label} — ${block.focus}` : block.label,
           // Deterministic and on-device: whether someone is climbing a grade is a
           // query over their own sends, not something worth asking a model.
           checkinStamp: energy ? `${energy.id}:${energy.time}` : '',

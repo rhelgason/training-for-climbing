@@ -1,7 +1,8 @@
 import { dayIndex } from '../../lib/day';
 /** Pure helpers for the macrocycle planner. No I/O — unit-testable. */
-import type { MacrocyclePeriodRecord } from '../../db/types';
-import type { SessionFocusId } from '../../content/trainingContext';
+import type { GoalRecord, MacrocyclePeriodRecord } from '../../db/types';
+import type { SessionFocusId, StyleFocus } from '../../content/trainingContext';
+import type { AbilityTier } from '../../content/planning';
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -64,12 +65,109 @@ export const HORST_4321: {
 
 const CYCLE_WEEKS = HORST_4321.reduce((sum, p) => sum + p.weeks, 0);
 
+/**
+ * Hörst 3-2-1 (Ch 10, fig 10.3): the 4-3-2-1 without the skill/stamina phase.
+ * For climbers who prefer hard bouldering, and for advanced climbers.
+ */
+export const HORST_321 = HORST_4321.slice(1);
+
 export interface TrainingBlock {
   label: string;
   focus: string;
   focuses: SessionFocusId[];
-  source: 'planned' | 'auto';
+  source: 'planned' | 'goal' | 'auto';
   daysRemaining: number;
+  /** For a `goal` block: what it is peaking for. */
+  goal?: { title: string; daysLeft: number; cycle: '4-3-2-1' | '3-2-1' };
+}
+
+/** Who the cycle is for, which decides whether and which one to run. */
+export interface ClimberShape {
+  abilityTier: AbilityTier;
+  styleFocus: StyleFocus;
+}
+
+/** Deadlines further out than this are left to the rolling cycle. */
+const GOAL_HORIZON_WEEKS = 26;
+
+/**
+ * A training block planned backwards from a goal's deadline, so the taper
+ * lands on the day it matters (Ch 10, "Produce a peaking effect").
+ *
+ * Only the nearest medium or long goal with a deadline 1–26 weeks out counts;
+ * a short goal is a week's intention, not a season. Beginners get none — the
+ * book advises no formal mesocycle for a true novice. Boulderers and elite
+ * climbers run 3-2-1; everyone else 4-3-2-1. With time for whole cycles they
+ * stack back from the deadline and spare weeks lengthen the first phase; with
+ * less, the cycle keeps its last phases — sharpen, then taper.
+ *
+ * This only biases which focus wins an open day. The scheduler's recovery,
+ * finger-load, and injury rules are applied first and a goal never lifts them.
+ */
+export function goalTrainingBlock(
+  goals: GoalRecord[],
+  climber: ClimberShape,
+  nowMs: number,
+): TrainingBlock | null {
+  if (climber.abilityTier === 'beginner') return null;
+  const today = dayIndex(nowMs);
+  const goal = goals
+    .filter(
+      (g) =>
+        g.status === 'active' &&
+        g.horizon !== 'short' &&
+        g.targetDate !== undefined &&
+        dayIndex(g.targetDate) - today >= 7 &&
+        dayIndex(g.targetDate) - today <= GOAL_HORIZON_WEEKS * 7,
+    )
+    .sort((a, b) => a.targetDate! - b.targetDate!)[0];
+  if (!goal) return null;
+
+  const cycleName =
+    climber.styleFocus === 'boulder-power' || climber.abilityTier === 'elite' ? '3-2-1' : '4-3-2-1';
+  const cycle = cycleName === '3-2-1' ? HORST_321 : HORST_4321;
+  const daysLeft = dayIndex(goal.targetDate!) - today;
+  const weeksLeft = Math.ceil(daysLeft / 7);
+  const length = cycle.reduce((sum, p) => sum + p.weeks, 0);
+
+  // Lay phases out backwards from the deadline, as week counts from today.
+  const plan: { phase: (typeof cycle)[number]; weeks: number }[] = [];
+  if (weeksLeft >= length) {
+    const whole = Math.floor(weeksLeft / length);
+    const spare = weeksLeft - whole * length;
+    for (let c = 0; c < whole; c++) {
+      cycle.forEach((phase, i) =>
+        plan.push({ phase, weeks: phase.weeks + (c === 0 && i === 0 ? spare : 0) }),
+      );
+    }
+  } else {
+    let room = weeksLeft;
+    for (const phase of [...cycle].reverse()) {
+      if (room <= 0) break;
+      const weeks = Math.min(phase.weeks, room);
+      plan.unshift({ phase, weeks });
+      room -= weeks;
+    }
+  }
+
+  // Count from the deadline back, so a partial week falls at the start.
+  const daysBeforeDeadline = daysLeft;
+  let end = 0;
+  for (const { phase, weeks } of [...plan].reverse()) {
+    const start = end + weeks * 7;
+    if (daysBeforeDeadline <= start) {
+      return {
+        label: phase.label,
+        focus: phase.focus,
+        focuses: phase.focuses,
+        source: 'goal',
+        daysRemaining: daysBeforeDeadline - end,
+        goal: { title: goal.title, daysLeft, cycle: cycleName },
+      };
+    }
+    end = start;
+  }
+  return null;
 }
 
 /** Anchor for the rolling 4-3-2-1: onboarded date, else profile created, else first training. */
@@ -109,11 +207,15 @@ export function autoMesocyclePhase(nowMs: number, startMs: number): TrainingBloc
   };
 }
 
-/** Planned block if one is in range; otherwise the rolling 4-3-2-1. */
+/**
+ * The block today belongs to: one the climber planned by hand, else one
+ * planned back from their nearest goal deadline, else the rolling 4-3-2-1.
+ */
 export function resolveTrainingBlock(
   periods: MacrocyclePeriodRecord[],
   nowMs: number,
   cycleStartMs: number,
+  toward?: { goals: GoalRecord[]; climber: ClimberShape },
 ): TrainingBlock {
   const planned = currentPeriod(periods, nowMs);
   if (planned) {
@@ -126,7 +228,8 @@ export function resolveTrainingBlock(
       daysRemaining: daysRemainingInPeriod(planned, nowMs),
     };
   }
-  return autoMesocyclePhase(nowMs, cycleStartMs);
+  const fromGoal = toward ? goalTrainingBlock(toward.goals, toward.climber, nowMs) : null;
+  return fromGoal ?? autoMesocyclePhase(nowMs, cycleStartMs);
 }
 
 export function inferBlockFocuses(period: MacrocyclePeriodRecord | null): SessionFocusId[] {

@@ -40,7 +40,7 @@ interface LoadState {
   testsLogged: number;
   testDue: boolean;
   goals: GoalRecord[];
-  block: { label: string; daysRemaining: number; planned: boolean };
+  block: { label: string; daysRemaining: number; planned: boolean; goal?: string };
 }
 
 function Section({
@@ -97,6 +97,7 @@ export default function YouPage() {
         periods,
         nowMs,
         mesocycleAnchor(profile, dates.length > 0 ? Math.min(...dates) : null, nowMs),
+        { goals, climber: settings },
       );
       const latest = [...assessments].sort((a, b) => b.createdAt - a.createdAt)[0] ?? null;
       setState({
@@ -109,7 +110,8 @@ export default function YouPage() {
         block: {
           label: block.label,
           daysRemaining: block.daysRemaining,
-          planned: block.source !== 'auto',
+          planned: block.source === 'planned',
+          goal: block.goal?.title,
         },
       });
     });
@@ -211,7 +213,9 @@ export default function YouPage() {
         <p>
           {state.block.planned
             ? 'Every session serves this block.'
-            : 'Running an automatic 4-3-2-1 cycle. Plan blocks yourself if you have a trip or a peak.'}
+            : state.block.goal
+              ? `Built back from “${state.block.goal}” so you peak on the day.`
+              : 'Picked for you. Plan blocks yourself only if you have a trip coming up.'}
         </p>
       </Section>
 
