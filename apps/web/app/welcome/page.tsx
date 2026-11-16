@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Guided sign-up: account → about you → goals → your week → how it works.
+ * Guided sign-up: account → about you → your week.
  *
  * The point of this flow is that a climber finishes it and immediately has a
  * real plan for today. Everything it asks for is something the scheduler or the
@@ -11,9 +11,9 @@
  * Answers are held in local state and written once at the end, so backing out
  * halfway leaves no half-configured profile behind.
  *
- * The last screen is the only one that asks nothing. A new climber's first
- * question is "what am I supposed to do with this?", and the answer — open
- * Today, confirm, do the plan, log it — fits on one screen.
+ * Goals, the self-assessment, and how to use Today are taught afterwards by
+ * the tutorial (NuxGuide), on the real screens, so a climber learns where
+ * things live by putting them there.
  */
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -22,9 +22,6 @@ import {
   ABILITY_TIER_LABELS,
   AuthError,
   DEFAULT_EQUIPMENT,
-  GOAL_DEADLINE_OPTIONS,
-  GOAL_HORIZONS,
-  GOAL_HORIZON_LABELS,
   HttpRemoteStore,
   SESSION_LENGTHS,
   SESSION_LENGTH_LABELS,
@@ -39,7 +36,6 @@ import {
   trackEvent,
   type AbilityTier,
   type EquipmentId,
-  type GoalHorizon,
   type SessionLength,
   type StyleFocus,
   type TrainingPush,
@@ -53,8 +49,7 @@ import { useRepository } from '../../lib/db/RepositoryProvider';
 import { API_BASE } from '../../lib/config';
 import { getSession, saveSession, type AuthSession } from '../../lib/auth/session';
 
-const STEPS = ['Account', 'About you', 'Goals', 'Your week', 'How it works'] as const;
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
+const STEPS = ['Account', 'About you', 'Your week'] as const;
 
 const inputClass =
   'w-full rounded-xl border border-border bg-surface-alt/60 px-4 py-2.5 text-base text-text placeholder:text-muted focus:border-primary focus:outline-none';
@@ -79,17 +74,6 @@ const PUSH_OPTIONS: ChipOption<TrainingPush>[] = [
   { label: 'Full-time', value: 'full-time' },
   { label: 'Steady', value: 'steady' },
 ];
-const HORIZON_OPTIONS: ChipOption<GoalHorizon>[] = GOAL_HORIZONS.map((h) => ({
-  label: GOAL_HORIZON_LABELS[h.id],
-  value: h.id,
-}));
-
-interface DraftGoal {
-  title: string;
-  horizon: GoalHorizon;
-  /** Days from today, or null for no deadline. */
-  days: number | null;
-}
 
 export default function Welcome() {
   const repo = useRepository();
@@ -111,13 +95,7 @@ export default function Welcome() {
   const [styleFocus, setStyleFocus] = useState<StyleFocus>('all-round');
   const [climberContext, setClimberContext] = useState('');
 
-  // Step 3 — goals
-  const [goals, setGoals] = useState<DraftGoal[]>([]);
-  const [goalTitle, setGoalTitle] = useState('');
-  const [goalHorizon, setGoalHorizon] = useState<GoalHorizon>('medium');
-  const [goalDeadline, setGoalDeadline] = useState('none');
-
-  // Step 4 — your week
+  // Step 3 — your week
   const [daysPerWeek, setDaysPerWeek] = useState(3);
   const [trainingPush, setTrainingPush] = useState<TrainingPush>('full-time');
   const [sessionLength, setSessionLength] = useState<SessionLength>('standard');
@@ -200,15 +178,6 @@ export default function Welcome() {
     }
   };
 
-  const addGoal = () => {
-    const title = goalTitle.trim();
-    if (!title) return;
-    const days = GOAL_DEADLINE_OPTIONS[goalHorizon].find((o) => o.id === goalDeadline)?.days;
-    setGoals([...goals, { title, horizon: goalHorizon, days: days ?? null }]);
-    setGoalTitle('');
-    setGoalDeadline('none');
-  };
-
   const finish = async () => {
     setBusy(true);
     try {
@@ -222,14 +191,7 @@ export default function Welcome() {
         equipment,
         onboardedAt: now(),
       });
-      for (const goal of goals) {
-        await repo.saveGoal({
-          title: goal.title,
-          horizon: goal.horizon,
-          targetDate: goal.days === null ? undefined : now() + goal.days * MS_PER_DAY,
-        });
-      }
-      trackEvent('onboarding_completed', { goals: goals.length, signedIn });
+      trackEvent('onboarding_completed', { goals: 0, signedIn });
       router.push('/train');
     } catch (err) {
       log.error('onboarding save failed', err);
@@ -385,75 +347,6 @@ export default function Welcome() {
 
       {step === 2 && (
         <>
-          <h1 className="display text-3xl font-extrabold">Your goals</h1>
-          <p className="text-sm leading-6 text-muted">
-            What are you working toward? Your coach plans every session toward these, and a deadline
-            tells it how urgent each one is.
-          </p>
-
-          <Card className="flex flex-col gap-3">
-            <input
-              className={inputClass}
-              placeholder="e.g. Send my first V7"
-              value={goalTitle}
-              onChange={(e) => setGoalTitle(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') addGoal();
-              }}
-            />
-            <OptionChips
-              options={HORIZON_OPTIONS}
-              selected={goalHorizon}
-              onSelect={(h) => {
-                setGoalHorizon(h);
-                setGoalDeadline('none');
-              }}
-            />
-            <OptionChips
-              options={GOAL_DEADLINE_OPTIONS[goalHorizon].map((o) => ({
-                label: o.label,
-                value: o.id,
-              }))}
-              selected={goalDeadline}
-              onSelect={setGoalDeadline}
-            />
-            <Button variant="secondary" onClick={addGoal} disabled={!goalTitle.trim()}>
-              + Add goal
-            </Button>
-          </Card>
-
-          {goals.map((goal, i) => (
-            <Card key={`${goal.title}-${i}`}>
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="font-semibold">{goal.title}</p>
-                  <p className="text-sm text-muted">
-                    {GOAL_HORIZON_LABELS[goal.horizon]}
-                    {goal.days !== null ? ` · in ${goal.days} days` : ''}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setGoals(goals.filter((_, j) => j !== i))}
-                  className="text-sm text-danger"
-                >
-                  Remove
-                </button>
-              </div>
-            </Card>
-          ))}
-
-          <Button onClick={() => setStep(3)}>
-            {goals.length > 0 ? 'Continue' : 'Skip for now'}
-          </Button>
-          <Button variant="secondary" onClick={() => setStep(1)}>
-            Back
-          </Button>
-        </>
-      )}
-
-      {step === 3 && (
-        <>
           <h1 className="display text-3xl font-extrabold">Your week</h1>
           <Card>
             <p className="mb-1 font-semibold">How hard to push</p>
@@ -496,52 +389,10 @@ export default function Welcome() {
             </p>
             <EquipmentPicker selected={equipment} onChange={setEquipment} />
           </Card>
-          <Button onClick={() => setStep(4)}>Continue</Button>
-          <Button variant="secondary" onClick={() => setStep(2)}>
-            Back
-          </Button>
-        </>
-      )}
-
-      {step === 4 && (
-        <>
-          <h1 className="display text-3xl font-extrabold">
-            Every day, <span className="text-gradient">one screen</span>
-          </h1>
-          <p className="text-sm leading-6 text-muted">
-            You don&apos;t plan your training here. You tell it about today, and it tells you what
-            to do.
-          </p>
-          {[
-            {
-              title: 'Open Today and confirm',
-              body: 'Where you are, how long you have, how you feel. It remembers yesterday, so most days it’s one tap.',
-            },
-            {
-              title: 'Do exactly what it says',
-              body: 'Your coach picks the session from your goals, this week’s load, and how recent sessions went. It keeps the rest days and recovery gaps for you, so you don’t have to count.',
-            },
-            {
-              title: 'Log it in a sentence',
-              body: 'Tap “I did this”, then say how it felt. That sentence is what tomorrow’s plan is built on: sore fingers, a send, a block you ran out of time for.',
-            },
-          ].map((beat, i) => (
-            <Card key={beat.title}>
-              <p className="font-semibold">
-                <span className="text-primary">{i + 1}.</span> {beat.title}
-              </p>
-              <p className="mt-1 text-sm leading-5 text-muted">{beat.body}</p>
-            </Card>
-          ))}
-          <p className="text-sm leading-6 text-muted">
-            Want sharper plans? The five-minute self-assessment and a finger-strength test live
-            under <span className="font-semibold text-text">You</span>. Today will suggest them when
-            they&apos;d help.
-          </p>
           <Button onClick={finish} disabled={busy}>
-            {busy ? 'Setting up…' : "Show me today's workout"}
+            {busy ? 'Setting up…' : 'Continue'}
           </Button>
-          <Button variant="secondary" onClick={() => setStep(3)}>
+          <Button variant="secondary" onClick={() => setStep(1)}>
             Back
           </Button>
         </>

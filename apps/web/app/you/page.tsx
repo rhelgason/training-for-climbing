@@ -48,6 +48,7 @@ function Section({
   href,
   action,
   missing,
+  nux,
   children,
 }: {
   title: string;
@@ -55,10 +56,12 @@ function Section({
   action: string;
   /** Not set up yet: drawn as a prompt rather than a summary. */
   missing?: boolean;
+  /** Spotlight hook for the first-use tutorial. */
+  nux?: string;
   children: React.ReactNode;
 }) {
   return (
-    <Link href={href} className="block">
+    <Link href={href} className="block" data-nux={nux}>
       <Card interactive className={missing ? 'border-primary/60' : undefined}>
         <div className="flex items-baseline justify-between gap-3">
           <h2 className="text-lg font-semibold">{title}</h2>
@@ -99,7 +102,7 @@ export default function YouPage() {
       setState({
         profile,
         assessment: latest,
-        assessDue: reassessDue(assessments, nowMs, settings.reassessWeeks),
+        assessDue: reassessDue(assessments, nowMs),
         testsLogged: new Set(benchmarks.map((b) => b.testId)).size,
         testDue: benchmarks.length > 0 && retestDue(benchmarks, nowMs),
         goals: activeGoals(goals),
@@ -131,6 +134,7 @@ export default function YouPage() {
 
       <Section
         title="Goals"
+        nux="you-goals"
         href={state.goals.length > 0 ? '/plan/goals' : '/plan/goals/new'}
         action={state.goals.length > 0 ? 'Edit' : 'Add one'}
         missing={state.goals.length === 0}
@@ -154,6 +158,7 @@ export default function YouPage() {
 
       <Section
         title="Self-assessment"
+        nux="you-assess"
         href="/assess/new"
         action={state.assessment ? 'Retake' : 'Take it'}
         missing={!state.assessment}

@@ -110,8 +110,6 @@ export default function DashboardScreen() {
   const notebook = workoutTrends(exerciseLogs, nowMs);
   const climbingTrend = climbingTrends(climbs, nowMs);
   const trainDates = trainingDates(journals, climbs);
-  const { reassessWeeks } = effectiveProfile(profile);
-  const showReassessNudge = reassessDue(assessments, nowMs, reassessWeeks);
 
   const trainingByWeek = weeklyCounts(trainDates, nowMs, 8);
   const maxWeekly = Math.max(...trainingByWeek.map((w) => w.count), 1);
@@ -158,15 +156,6 @@ export default function DashboardScreen() {
           <Button variant="secondary">All climbs</Button>
         </Link>
       </div>
-
-      {showReassessNudge && (
-        <Card className="border-warning">
-          <p className="text-sm leading-5">
-            It&apos;s been {reassessWeeks}+ weeks since your last self-assessment. Retake it in the
-            Assess tab to keep your training aimed at the right weakness.
-          </p>
-        </Card>
-      )}
 
       <h2 className="mt-2 text-lg font-bold">Personal bests</h2>
       <PersonalBests climbs={climbs} />
@@ -427,6 +416,10 @@ export default function DashboardScreen() {
           </Card>
         ))
       )}
+
+      <Link href="/progress/log" className="py-2 text-center text-sm text-muted underline-offset-4">
+        Training log →
+      </Link>
     </Screen>
   );
 }

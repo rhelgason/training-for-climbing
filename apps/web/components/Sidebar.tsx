@@ -20,6 +20,7 @@ export function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
+              data-nux={`tab-${item.href}`}
               className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-base font-semibold transition ${
                 active
                   ? 'bg-surface-alt text-text'

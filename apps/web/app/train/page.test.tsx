@@ -204,15 +204,27 @@ describe('TrainHome — tied back to what they set up', () => {
     expect(screen.getByText('Remember: Send V7 — 41 days left')).toBeInTheDocument();
   });
 
-  it('explains the daily loop until the first day is logged', async () => {
+  it('asks for a reassessment once the last one is three months old', async () => {
     await renderScreen();
-    await waitFor(() => expect(screen.getByText('How Today works')).toBeInTheDocument());
-    // The seed has an assessment but no goal, so only the goal is offered.
-    expect(screen.getByText(/Add a goal/)).toBeInTheDocument();
-    expect(screen.queryByText(/Take the self-assessment/)).not.toBeInTheDocument();
+    expect(screen.queryByText('Time to reassess')).not.toBeInTheDocument();
+    cleanup();
 
-    await click(screen.getByRole('button', { name: 'Got it' }));
-    expect(screen.queryByText('How Today works')).not.toBeInTheDocument();
+    repo = new InMemoryRepository();
+    await repo.init();
+    await repo.saveProfile({ onboardedAt: 1, aiCoachEnabled: false });
+    await repo.saveAssessment({
+      responses: {},
+      mental: 40,
+      technical: 40,
+      physical: 20,
+      weakestArea: 'physical',
+      createdAt: now() - 90 * DAY,
+    });
+    await renderScreen();
+    expect(screen.getByText('Time to reassess').closest('a')).toHaveAttribute(
+      'href',
+      '/assess/new',
+    );
   });
 });
 

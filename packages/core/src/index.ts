@@ -31,6 +31,7 @@ export * from './features/assess/fitness';
 export * from './features/assess/reassessment';
 export * from './features/today/recommend';
 export * from './features/today/nods';
+export * from './features/onboarding/nux';
 export { overlayAiPlan } from './features/today/sessionPlan';
 export * from './features/today/climbingPrescription';
 export * from './features/train/log';

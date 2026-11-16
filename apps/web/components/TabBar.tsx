@@ -15,6 +15,7 @@ export function TabBar() {
           <Link
             key={item.href}
             href={item.href}
+            data-nux={`tab-${item.href}`}
             className="flex flex-1 flex-col items-center gap-0.5 pt-2 pb-1.5 text-xs font-semibold"
             style={{ color: active ? item.accent : 'var(--color-muted)' }}
           >

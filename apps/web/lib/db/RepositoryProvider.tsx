@@ -34,6 +34,12 @@ interface SyncState {
   lastSyncedAt: number | null;
   /** Bumps after every completed sync so screens can re-read fresh data. */
   dataVersion: number;
+  /**
+   * Bumps on every local write. For app-wide watchers (the first-use tutorial)
+   * that must notice an assessment or goal saved on another screen. Screens
+   * re-read on their own writes already and should keep keying on dataVersion.
+   */
+  localVersion?: number;
   /** Trigger a sync now (used by the indicator's retry + manual refresh). */
   refresh: () => void;
 }
@@ -58,6 +64,7 @@ export function RepositoryProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<SyncStatus>('idle');
   const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
   const [dataVersion, setDataVersion] = useState(0);
+  const [localVersion, setLocalVersion] = useState(0);
   // Latest refresh fn, so the context value can stay stable.
   const refreshRef = useRef<() => void>(() => {});
 
@@ -156,7 +163,10 @@ export function RepositoryProvider({ children }: { children: ReactNode }) {
       }
     })();
 
-    repo.setOnMutate(scheduleSync);
+    repo.setOnMutate(() => {
+      if (!cancelled) setLocalVersion((v) => v + 1);
+      scheduleSync();
+    });
     const onVisible = () => {
       if (document.visibilityState === 'visible') void runOnce('visible');
     };
@@ -184,8 +194,14 @@ export function RepositoryProvider({ children }: { children: ReactNode }) {
   }, [repo]);
 
   const sync = useMemo<SyncState>(
-    () => ({ status, lastSyncedAt, dataVersion, refresh: () => refreshRef.current() }),
-    [status, lastSyncedAt, dataVersion],
+    () => ({
+      status,
+      lastSyncedAt,
+      dataVersion,
+      localVersion,
+      refresh: () => refreshRef.current(),
+    }),
+    [status, lastSyncedAt, dataVersion, localVersion],
   );
 
   if (error) {

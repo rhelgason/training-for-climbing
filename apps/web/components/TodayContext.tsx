@@ -106,7 +106,10 @@ export function TodayContext({ value, onChange, onConfirm, confirmed }: Props) {
 
   if (!draft) {
     return (
-      <div className="w-full rounded-xl border border-border/80 bg-surface/70 px-4 py-3 text-left shadow-sm backdrop-blur-sm">
+      <div
+        data-nux="checkin"
+        className="w-full rounded-xl border border-border/80 bg-surface/70 px-4 py-3 text-left shadow-sm backdrop-blur-sm"
+      >
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="text-sm font-bold uppercase tracking-wide text-muted">
@@ -153,7 +156,7 @@ export function TodayContext({ value, onChange, onConfirm, confirmed }: Props) {
   }
 
   return (
-    <Card className="flex flex-col gap-4">
+    <Card className="flex flex-col gap-4" data-nux="checkin">
       <div className="flex items-center justify-between">
         <p className="text-sm font-bold uppercase tracking-wide text-muted">Today</p>
         <button type="button" onClick={finish} className="text-sm font-semibold text-primary">

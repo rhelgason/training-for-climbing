@@ -4,6 +4,7 @@ import { RepositoryProvider } from '../lib/db/RepositoryProvider';
 import { TabBar } from '../components/TabBar';
 import { Sidebar } from '../components/Sidebar';
 import { SyncIndicator } from '../components/SyncIndicator';
+import { NuxGuide } from '../components/NuxGuide';
 
 export const metadata: Metadata = {
   title: 'Training for Climbing',
@@ -50,6 +51,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </div>
           </div>
           <SyncIndicator />
+          <NuxGuide />
         </RepositoryProvider>
       </body>
     </html>

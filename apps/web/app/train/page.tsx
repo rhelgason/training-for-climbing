@@ -4,8 +4,6 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
-  ACTIVITY_LABELS,
-  INTENSITY_LABELS,
   acceptInsight,
   activeGoals,
   buildDailyRecommendation,
@@ -21,6 +19,7 @@ import {
   pendingInsights,
   planNods,
   readinessFromEnergyEmotion,
+  reassessDue,
   resolveTrainingBlock,
   type GoalRecord,
   type Insight,
@@ -52,7 +51,6 @@ import {
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { Screen } from '../../components/Screen';
-import { FirstDay } from '../../components/FirstDay';
 import { BackupBanner } from '../../components/BackupBanner';
 import { TodayContext } from '../../components/TodayContext';
 import { InsightCard } from '../../components/InsightCard';
@@ -61,16 +59,7 @@ import { WhyThisPlan } from '../../components/WhyThisPlan';
 import { useRepository, useSync } from '../../lib/db/RepositoryProvider';
 import { useCoach } from '../../lib/coach/useCoach';
 import { useBackupNudge } from '../../lib/auth/useBackupNudge';
-import { useOnboarding } from '../../lib/onboarding/useOnboarding';
 import { useDailyContext } from '../../lib/today/useDailyContext';
-
-function formatDate(ms: number): string {
-  return new Date(ms).toLocaleDateString(undefined, {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-  });
-}
 
 function greeting(nowMs: number): string {
   const h = new Date(nowMs).getHours();
@@ -95,7 +84,8 @@ interface LoadState {
    * record of the day, not a request for a new session.
    */
   dayLogged: boolean;
-  hasAssessment: boolean;
+  /** Ninety days since the last self-assessment. */
+  reassessDue: boolean;
   goals: GoalRecord[];
   weakestArea: TriadArea | null;
   /** What the coach is given, in a line, so its plan isn't a black box. */
@@ -153,7 +143,6 @@ export default function TrainHome() {
   const router = useRouter();
   const [state, setState] = useState<LoadState | null>(null);
   const backup = useBackupNudge();
-  const onboarding = useOnboarding();
   const daily = useDailyContext(repo, dataVersion);
   const [feedback, setFeedback] = useState<'up' | 'down' | null>(null);
   const [marking, setMarking] = useState(false);
@@ -425,7 +414,7 @@ export default function TrainHome() {
           live,
           todayJournalId: todayJournal?.id ?? null,
           dayLogged: Boolean(todayJournal?.focus?.length),
-          hasAssessment: assessments.length > 0,
+          reassessDue: reassessDue(assessments, nowMs),
           goals,
           weakestArea,
           coachRead: [
@@ -479,7 +468,7 @@ export default function TrainHome() {
   }, [coach, state]);
 
   if (state === null || today === null) return <Screen />;
-  const { journals, todayJournalId, hasAssessment } = state;
+  const { todayJournalId } = state;
   const { rec, shownAi, restToday, injuries, coachLive } = resolvePlan(state, coach);
 
   /** Apply the climber's decision, then drop the card whichever way it went. */
@@ -503,7 +492,6 @@ export default function TrainHome() {
   const ai = coach.suggestion;
   const hint = coachLive && !shownAi ? rec.injuryHint : null;
 
-  const showFirstDay = !onboarding.dismissed && journals.length === 0;
   const nods = planNods({
     goals: state.goals,
     weakestArea: state.weakestArea,
@@ -534,12 +522,18 @@ export default function TrainHome() {
         )}
       </div>
 
-      {showFirstDay && (
-        <FirstDay
-          needsAssessment={!hasAssessment}
-          needsGoal={activeGoals(state.goals).length === 0}
-          onDismiss={onboarding.dismiss}
-        />
+      {state.reassessDue && (
+        <Link href="/assess/new">
+          <Card interactive className="border-primary">
+            <p className="text-sm font-bold uppercase tracking-wide text-primary">
+              Time to reassess
+            </p>
+            <p className="mt-1 text-sm leading-5">
+              It&apos;s been three months since your self-assessment. Five minutes, and your plan
+              re-aims at where you are now →
+            </p>
+          </Card>
+        </Link>
       )}
 
       {backup.visible && <BackupBanner onDismiss={backup.dismiss} />}
@@ -569,7 +563,9 @@ export default function TrainHome() {
             </span>
           ) : null}
         </div>
-        <h2 className="mt-1 text-lg font-bold">{shownAi ? shownAi.headline : rec.headline}</h2>
+        <h2 className="mt-1 text-lg font-bold" data-nux="plan">
+          {shownAi ? shownAi.headline : rec.headline}
+        </h2>
         <p className="mt-2 text-sm leading-5 text-muted">
           {shownAi ? shownAi.rationale || rec.detail : rec.detail}
         </p>
@@ -852,32 +848,6 @@ export default function TrainHome() {
           </Link>
         </div>
       </details>
-
-      <h2 className="mt-2 text-lg font-bold">Recent</h2>
-      {journals.length === 0 ? (
-        <p className="text-muted">No entries yet — log your day to start the streak.</p>
-      ) : (
-        journals.slice(0, 20).map((j) => (
-          <Link key={j.id} href={`/train/journal/${j.id}`}>
-            <Card>
-              <div className="flex justify-between">
-                <span className="font-semibold">{formatDate(j.date)}</span>
-                {j.intensity ? (
-                  <span className="text-sm text-muted">{INTENSITY_LABELS[j.intensity]}</span>
-                ) : null}
-              </div>
-              <p className="mt-1 text-sm text-primary">
-                {j.activities.length > 0
-                  ? j.activities.map((a) => ACTIVITY_LABELS[a]).join(' · ')
-                  : 'No activities'}
-              </p>
-              {j.summary ? (
-                <p className="mt-1 line-clamp-2 text-sm leading-5 text-muted">{j.summary}</p>
-              ) : null}
-            </Card>
-          </Link>
-        ))
-      )}
     </Screen>
   );
 }

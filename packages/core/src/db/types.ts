@@ -58,6 +58,11 @@ export interface ProfileRecord {
   sessionLength: SessionLength;
   /** Set when the guided sign-up flow was completed; drives the welcome redirect. */
   onboardedAt?: number;
+  /**
+   * Set when the first-use tutorial was finished (or skipped for an account
+   * that already had real history). Until then the app walks them through it.
+   */
+  nuxCompletedAt?: number;
 
   // --- Context the app inferred, as opposed to what the climber typed. ---
 
@@ -97,6 +102,7 @@ export type ProfilePatch = Partial<
     | 'trainingPush'
     | 'sessionLength'
     | 'onboardedAt'
+    | 'nuxCompletedAt'
     | 'dismissedInsights'
     | 'derivedContext'
   >
