@@ -51,6 +51,42 @@ describe('TodayContext', () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
+  it('holds every edit until Done, then saves the day once', () => {
+    const onChange = vi.fn();
+    const onConfirm = vi.fn();
+    render(
+      <TodayContext value={assumed} onChange={onChange} onConfirm={onConfirm} confirmed={true} />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Change' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Fresh' }));
+    fireEvent.change(screen.getByPlaceholderText(/friend's gym/), {
+      target: { value: '  slept badly ' },
+    });
+    // Half-way through the check-in: nothing saved, so nothing can ask the coach.
+    expect(onChange).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    expect(onChange).toHaveBeenCalledOnce();
+    expect(onChange).toHaveBeenCalledWith({ ...assumed, readiness: 'fresh', note: 'slept badly' });
+    expect(onConfirm).not.toHaveBeenCalled();
+  });
+
+  it('saves nothing when a confirmed day is reopened and closed unchanged', () => {
+    const onChange = vi.fn();
+    const onConfirm = vi.fn();
+    render(
+      <TodayContext value={assumed} onChange={onChange} onConfirm={onConfirm} confirmed={true} />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Change' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Fresh' }));
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    expect(onChange).not.toHaveBeenCalled();
+    expect(onConfirm).not.toHaveBeenCalled();
+  });
+
   it('hides the confirm prompt once today is saved', () => {
     render(
       <TodayContext value={assumed} onChange={vi.fn()} onConfirm={vi.fn()} confirmed={true} />,

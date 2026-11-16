@@ -59,10 +59,6 @@ import { useCoach } from '../../lib/coach/useCoach';
 import { useBackupNudge } from '../../lib/auth/useBackupNudge';
 import { useOnboarding } from '../../lib/onboarding/useOnboarding';
 import { useDailyContext } from '../../lib/today/useDailyContext';
-import { useDebouncedValue } from '../../lib/useDebouncedValue';
-
-/** How long the daily check-in must sit still before the coach is re-asked. */
-const COACH_SETTLE_MS = 2500;
 
 function formatDate(ms: number): string {
   return new Date(ms).toLocaleDateString(undefined, {
@@ -89,6 +85,12 @@ interface LoadState {
    */
   live: DailyRecommendation;
   todayJournalId: string | null;
+  /**
+   * Today's session was logged with "I did this". The plan has been used, so
+   * nothing about today asks the coach again — editing the log afterwards is a
+   * record of the day, not a request for a new session.
+   */
+  dayLogged: boolean;
   hasAssessment: boolean;
   hasGoal: boolean;
   benchmarks: BenchmarkRecord[];
@@ -163,9 +165,9 @@ export default function TrainHome() {
   const today = daily.value;
   // Fingerprints the picture the coach was generated for. A new calendar day,
   // a changed check-in, or new journal text each forces a fresh AI call.
-  // Debounced because toggling four equipment chips is one decision, not four.
   // Nothing is asked until today's row is confirmed — an assumed OK is not
-  // "I feel good", and the call must not go out before they say so.
+  // "I feel good", and the call must not go out before they say so. The
+  // check-in only commits on Done, so a half-edited row never gets here.
   // Content, not updatedAt. A sync rewrites timestamps without changing the
   // training picture, and that must not ask the coach for a new session.
   const journalStamp = (state?.journals ?? [])
@@ -203,7 +205,7 @@ export default function TrainHome() {
           'logic7',
         ].join('|')
       : undefined;
-  const coach = useCoach(repo, useDebouncedValue(contextKey, COACH_SETTLE_MS));
+  const coach = useCoach(repo, contextKey, { auto: !state?.dayLogged });
 
   const sendFeedback = (rating: 'up' | 'down') => {
     setFeedback(rating);
@@ -415,6 +417,7 @@ export default function TrainHome() {
           recommendation,
           live,
           todayJournalId: todayJournal?.id ?? null,
+          dayLogged: Boolean(todayJournal?.focus?.length),
           hasAssessment: assessments.length > 0,
           hasGoal: goals.length > 0,
           benchmarks,

@@ -3,8 +3,9 @@
 /**
  * useCoach (web) — surfaces the cached AI suggestion plus refresh.
  *
- * One AI call per distinct training picture: a new calendar day, a changed
- * check-in, or new journal text. The cache is only for identical context, so
+ * One AI call per distinct training picture: a new calendar day, a confirmed
+ * check-in, or new journal text. Once the day is logged (`auto: false`) the
+ * plan has been used and nothing calls again until tomorrow or a refresh. The cache is only for identical context, so
  * opening the app twice on the same day with the same logs is free; logging an
  * injury and coming back is not. Tapping "refresh" forces a call. Any failure
  * leaves the screen on the deterministic baseline.
@@ -12,6 +13,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   CoachUnavailableError,
+  dayIndex,
   log,
   now,
   isSyncConfigured,
@@ -61,7 +63,11 @@ export interface CoachState {
   refresh: () => void;
 }
 
-export function useCoach(repo: Repository, contextKey?: string): CoachState {
+export function useCoach(
+  repo: Repository,
+  contextKey?: string,
+  { auto = true }: { auto?: boolean } = {},
+): CoachState {
   const [suggestion, setSuggestion] = useState<CoachSuggestion | null>(null);
   const [generatedAt, setGeneratedAt] = useState<number | null>(null);
   const [status, setStatus] = useState<CoachStatus>('idle');
@@ -130,6 +136,23 @@ export function useCoach(repo: Repository, contextKey?: string): CoachState {
     }
     let on = true;
     const cached = getCachedSuggestion();
+    if (!auto) {
+      // Today's plan was followed and logged. Keep showing what they trained
+      // from, even though logging changed the key, and never ask again for it.
+      const fromToday = cached && dayIndex(cached.generatedAt) === dayIndex(now());
+      log.info('coach: day logged, no automatic call', { cached: Boolean(fromToday) });
+      if (fromToday) {
+        setSuggestion(cached.suggestion);
+        setGeneratedAt(cached.generatedAt);
+        setStatus('ready');
+      }
+      void repo.getProfile().then((profile) => {
+        if (on) setEnabled(Boolean(profile?.aiCoachEnabled) && isSyncConfigured(getSyncConfig()));
+      });
+      return () => {
+        on = false;
+      };
+    }
     // Show the saved plan before the profile read, so a route back to Train
     // does not flash a different session and then replace it.
     if (cached && cached.contextKey === contextKey) {
@@ -190,7 +213,7 @@ export function useCoach(repo: Repository, contextKey?: string): CoachState {
     return () => {
       on = false;
     };
-  }, [repo, runRefresh, contextKey]);
+  }, [repo, runRefresh, contextKey, auto]);
 
   const refresh = useCallback(() => {
     if (contextKey) {

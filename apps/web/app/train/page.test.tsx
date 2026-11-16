@@ -37,6 +37,31 @@ vi.mock('../../lib/db/RepositoryProvider', () => ({
   useSync: () => syncState,
 }));
 
+/**
+ * Records what the screen asks the coach hook for. The coach is off in these
+ * tests anyway; what matters is *when* a context key reaches it.
+ */
+const coachCalls = vi.hoisted(() => vi.fn());
+vi.mock('../../lib/coach/useCoach', () => ({
+  useCoach: (...args: unknown[]) => {
+    coachCalls(...args);
+    return {
+      suggestion: null,
+      generatedAt: null,
+      status: 'idle',
+      enabled: false,
+      errorMessage: null,
+      refresh: () => {},
+    };
+  },
+}));
+
+/** The context key and options of the newest render's coach request. */
+function lastCoachAsk(): { key: string | undefined; auto: boolean } {
+  const [, key, options] = coachCalls.mock.calls.at(-1) ?? [];
+  return { key, auto: (options as { auto?: boolean } | undefined)?.auto ?? true };
+}
+
 const DAY = 24 * 60 * 60 * 1000;
 
 /** Click and let the resulting state settle (no user-event available offline). */
@@ -73,6 +98,7 @@ async function renderScreen() {
 beforeEach(async () => {
   push.mockClear();
   replace.mockClear();
+  coachCalls.mockClear();
   window.localStorage.clear();
   await seed();
 });
@@ -140,6 +166,7 @@ describe('TrainHome — the daily check-in', () => {
     await renderScreen();
     await click(screen.getByRole('button', { name: /Change/ }));
     await click(screen.getByRole('button', { name: 'Something hurts' }));
+    await click(screen.getByRole('button', { name: 'Done' }));
 
     // "Something hurts" is a recovery verdict: the plan must become a rest day.
     await waitFor(() => expect(screen.getByText('Take a rest day')).toBeInTheDocument());
@@ -167,6 +194,33 @@ describe('TrainHome — the daily check-in', () => {
       const plan = screen.getByText("Today's plan").closest('div')?.parentElement;
       expect(plan?.textContent ?? '').not.toMatch(/hangboard|fingerboard|campus|pull-up/i);
     });
+  });
+});
+
+describe('TrainHome — when the coach is asked', () => {
+  it('asks nothing while the check-in is being filled in, then once on Done', async () => {
+    await renderScreen();
+    await click(screen.getByRole('button', { name: 'Change' }));
+    await click(screen.getByRole('button', { name: 'Fresh' }));
+    await click(screen.getByRole('button', { name: '2+ hours' }));
+    expect(lastCoachAsk().key).toBeUndefined();
+
+    await click(screen.getByRole('button', { name: 'Done' }));
+    await waitFor(() => expect(lastCoachAsk().key).toMatch(/\|fresh\|/));
+    const keys = new Set(coachCalls.mock.calls.map(([, key]) => key).filter(Boolean));
+    expect(keys.size).toBe(1);
+  });
+
+  it('stops asking once today is logged', async () => {
+    await renderScreen();
+    await click(screen.getByRole('button', { name: 'This is right' }));
+    await waitFor(() => expect(lastCoachAsk().key).toBeDefined());
+    expect(lastCoachAsk().auto).toBe(true);
+
+    await click(screen.getByRole('button', { name: /I did this/i }));
+    cleanup();
+    await renderScreen();
+    await waitFor(() => expect(lastCoachAsk().auto).toBe(false));
   });
 });
 

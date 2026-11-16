@@ -154,6 +154,34 @@ describe('buildCoachContext', () => {
     expect(ctx.goals.length).toBeLessThanOrEqual(5);
   });
 
+  it('sends everything the climber wrote on a goal, with days to the deadline', () => {
+    const goals: GoalRecord[] = [
+      {
+        id: 'g',
+        createdAt: 0,
+        updatedAt: 0,
+        horizon: 'medium',
+        title: 'Send V7',
+        mission: 'Prove the training works',
+        sacrifice: ' No weeknight drinking ',
+        targetDate: NOW + 41 * DAY,
+        triadArea: 'physical',
+        status: 'active',
+      },
+      { id: 'h', createdAt: 0, updatedAt: 0, horizon: 'short', title: 'Bare', status: 'active' },
+    ];
+    const ctx = buildCoachContext(input({ goals }));
+    expect(ctx.goals[0]).toMatchObject({
+      title: 'Send V7',
+      mission: 'Prove the training works',
+      sacrifice: 'No weeknight drinking',
+      daysLeft: 41,
+      triadArea: 'physical',
+    });
+    expect(ctx.goals[0].deadline).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(ctx.goals[1]).toEqual({ horizon: 'short', title: 'Bare' });
+  });
+
   it('respects the configured ability tier from the profile', () => {
     const profile: ProfileRecord = {
       id: 'profile',

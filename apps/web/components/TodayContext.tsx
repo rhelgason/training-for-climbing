@@ -4,9 +4,14 @@
  * The one-tap daily check-in that sits above today's plan.
  *
  * Collapsed by default and pre-filled from yesterday's gym and time. Feeling
- * starts at OK and is not carried over. The built-in plan uses those values
- * immediately. The coach does not run until the climber confirms the row, so
- * a rest-day call cannot go out before they say how today actually feels.
+ * starts at OK and is not carried over. The coach does not run until the
+ * climber confirms the row, so a rest-day call cannot go out before they say
+ * how today actually feels.
+ *
+ * While the editor is open every chip edits a local draft. Nothing is saved
+ * and nothing reaches the coach until Done: a half-filled check-in ("Indoor,
+ * 2 hours, …" before they've said how they feel) is not a picture worth an
+ * AI call, and a pause between taps used to be enough to send one.
  */
 import { useState } from 'react';
 import {
@@ -73,23 +78,33 @@ function summarise(value: TodayContextValue): string {
   ].join(' · ');
 }
 
+/** True when two check-ins describe the same day. Equipment order doesn't matter. */
+function sameDay(a: TodayContextValue, b: TodayContextValue): boolean {
+  return (
+    a.environment === b.environment &&
+    a.sessionLength === b.sessionLength &&
+    a.readiness === b.readiness &&
+    (a.note ?? '').trim() === (b.note ?? '').trim() &&
+    [...a.equipment].sort().join(',') === [...b.equipment].sort().join(',')
+  );
+}
+
 export function TodayContext({ value, onChange, onConfirm, confirmed }: Props) {
-  const [open, setOpen] = useState(false);
-  const [note, setNote] = useState(value.note ?? '');
+  const [draft, setDraft] = useState<TodayContextValue | null>(null);
   const set = <K extends keyof TodayContextValue>(key: K, next: TodayContextValue[K]) =>
-    onChange({ ...value, [key]: next });
+    setDraft((d) => ({ ...(d ?? value), [key]: next }));
+
+  const edit = () => setDraft(value);
 
   const finish = () => {
-    const trimmed = note.trim();
-    if (trimmed !== (value.note ?? '').trim()) {
-      onChange({ ...value, note: trimmed || undefined });
-    } else if (!confirmed) {
-      onConfirm();
-    }
-    setOpen(false);
+    if (!draft) return;
+    const next = { ...draft, note: draft.note?.trim() || undefined };
+    if (!sameDay(next, value)) onChange(next);
+    else if (!confirmed) onConfirm();
+    setDraft(null);
   };
 
-  if (!open) {
+  if (!draft) {
     return (
       <div className="w-full rounded-xl border border-border/80 bg-surface/70 px-4 py-3 text-left shadow-sm backdrop-blur-sm">
         <div className="flex items-center justify-between gap-3">
@@ -102,7 +117,7 @@ export function TodayContext({ value, onChange, onConfirm, confirmed }: Props) {
           {confirmed ? (
             <button
               type="button"
-              onClick={() => setOpen(true)}
+              onClick={edit}
               className="shrink-0 text-sm font-semibold text-primary"
             >
               Change
@@ -125,7 +140,7 @@ export function TodayContext({ value, onChange, onConfirm, confirmed }: Props) {
               </button>
               <button
                 type="button"
-                onClick={() => setOpen(true)}
+                onClick={edit}
                 className="rounded-xl border border-border px-4 py-2 text-sm font-semibold text-primary"
               >
                 Change
@@ -150,7 +165,7 @@ export function TodayContext({ value, onChange, onConfirm, confirmed }: Props) {
         <p className="mb-2 text-sm font-semibold">Where?</p>
         <OptionChips
           options={ENVIRONMENT_OPTIONS}
-          selected={value.environment}
+          selected={draft.environment}
           onSelect={(v) => set('environment', v)}
         />
       </div>
@@ -159,7 +174,7 @@ export function TodayContext({ value, onChange, onConfirm, confirmed }: Props) {
         <p className="mb-2 text-sm font-semibold">How long have you got?</p>
         <OptionChips
           options={LENGTH_CHIPS}
-          selected={value.sessionLength}
+          selected={draft.sessionLength}
           onSelect={(v) => set('sessionLength', v)}
         />
       </div>
@@ -168,7 +183,7 @@ export function TodayContext({ value, onChange, onConfirm, confirmed }: Props) {
         <p className="mb-2 text-sm font-semibold">How do you feel?</p>
         <OptionChips
           options={READINESS_CHIPS}
-          selected={value.readiness}
+          selected={draft.readiness}
           onSelect={(v) => set('readiness', v)}
         />
       </div>
@@ -176,7 +191,7 @@ export function TodayContext({ value, onChange, onConfirm, confirmed }: Props) {
       <div>
         <p className="mb-2 text-sm font-semibold">What&apos;s available?</p>
         <EquipmentPicker
-          selected={value.equipment}
+          selected={draft.equipment}
           onChange={(equipment) => set('equipment', equipment)}
           showPresets={false}
         />
@@ -184,16 +199,11 @@ export function TodayContext({ value, onChange, onConfirm, confirmed }: Props) {
 
       <div>
         <p className="mb-2 text-sm font-semibold">Anything else about today?</p>
-        {/* Held locally and committed on blur — each commit is a repo write and
-            a queued sync, which a per-keystroke handler would fire dozens of. */}
         <input
           className={inputClass}
           placeholder="e.g. at a friend's gym, slept badly"
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          onBlur={() => {
-            if (note.trim() !== (value.note ?? '').trim()) set('note', note.trim() || undefined);
-          }}
+          value={draft.note ?? ''}
+          onChange={(e) => set('note', e.target.value)}
         />
       </div>
     </Card>

@@ -149,7 +149,12 @@ export interface CoachContext {
     change: string | null;
     direction: 'up' | 'down' | 'flat' | 'new';
   }[];
-  goals: { horizon: string; title: string }[];
+  /**
+   * Active goals, everything the climber wrote. The mission and trade-off are
+   * optional in the form, but when they are filled in they are the most
+   * direct statement of what this training is for.
+   */
+  goals: CoachGoal[];
   /** Most recent journal entries (newest first), free text included. */
   journals: {
     date: number;
@@ -182,6 +187,21 @@ export interface CoachContext {
     upcoming: CoachMacrocycleBlock | null;
     periods: CoachMacrocycleBlock[];
   };
+}
+
+export interface CoachGoal {
+  horizon: string;
+  title: string;
+  /** Why it matters to them, in their words. */
+  mission?: string;
+  /** What they said they'd give up for it, e.g. "no drinking on weeknights". */
+  sacrifice?: string;
+  /** YYYY-MM-DD, when they set a deadline. */
+  deadline?: string;
+  /** Whole days to the deadline; negative once it has passed. */
+  daysLeft?: number;
+  /** The triad area they tied it to, if any. */
+  triadArea?: TriadArea;
 }
 
 export interface CoachMacrocycleBlock {

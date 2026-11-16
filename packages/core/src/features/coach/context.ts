@@ -337,7 +337,16 @@ export function buildCoachContext(input: CoachContextInput): CoachContext {
     })),
     goals: activeGoals(input.goals)
       .slice(0, MAX_GOALS)
-      .map((g) => ({ horizon: g.horizon, title: g.title })),
+      .map((g) => ({
+        horizon: g.horizon,
+        title: g.title,
+        mission: g.mission?.trim() || undefined,
+        sacrifice: g.sacrifice?.trim() || undefined,
+        deadline: g.targetDate !== undefined ? formatYmd(g.targetDate) : undefined,
+        daysLeft:
+          g.targetDate !== undefined ? dayIndex(g.targetDate) - dayIndex(input.nowMs) : undefined,
+        triadArea: g.triadArea,
+      })),
     journals: [...input.journals]
       .sort((a, b) => b.date - a.date)
       .slice(0, MAX_JOURNALS)
