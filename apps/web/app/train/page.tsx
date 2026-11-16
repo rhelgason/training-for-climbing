@@ -58,6 +58,8 @@ import { TodayContext } from '../../components/TodayContext';
 import { InsightCard } from '../../components/InsightCard';
 import { Debrief, type TomorrowPreview } from '../../components/Debrief';
 import { GoalCheckIn, type GoalOutcome } from '../../components/GoalCheckIn';
+import { SessionRun } from '../../components/SessionRun';
+import { clearRun, loadRun, saveRun, type RunState } from '../../lib/session/runState';
 import { ProtocolMetric } from '../../components/ProtocolMetric';
 import { WhyThisPlan } from '../../components/WhyThisPlan';
 import { useRepository, useSync } from '../../lib/db/RepositoryProvider';
@@ -195,6 +197,9 @@ export default function TrainHome() {
   const [showLight, setShowLight] = useState(false);
   /** Prescribed steps the climber has unticked as not done. */
   const [skippedSteps, setSkippedSteps] = useState<string[]>([]);
+  /** Today's guided run, kept while paused; `runOpen` is whether it's on screen. */
+  const [run, setRun] = useState<RunState | null>(null);
+  const [runOpen, setRunOpen] = useState(false);
   /** Protocol values for today, keyed by protocol id; seeded from last session. */
   const [metrics, setMetrics] = useState<Record<string, number>>({});
   /** Bumped after logging, so the screen re-reads into its debrief. */
@@ -262,8 +267,10 @@ export default function TrainHome() {
    * to *infer* load from activity tags; with it, "yesterday was max strength"
    * is a fact, and the 48-hour rule can be enforced rather than guessed at.
    */
-  const markDone = async () => {
+  const markDone = async (skippedOverride?: string[]) => {
     if (!state || marking) return;
+    // A guided run brings its own skips; otherwise the unticked steps.
+    const skipped = skippedOverride ?? skippedSteps;
     const { todayJournalId } = state;
     const resolved = resolvePlan(state, coach);
     const plan = resolved.rec;
@@ -296,7 +303,7 @@ export default function TrainHome() {
           focus,
           intensity,
           activities: [...activities],
-          skipped: skippedSteps,
+          skipped,
         });
       } else {
         const saved = await repo.saveJournal({
@@ -304,7 +311,7 @@ export default function TrainHome() {
           activities: [...activities],
           focus,
           intensity,
-          skipped: skippedSteps.length > 0 ? skippedSteps : undefined,
+          skipped: skipped.length > 0 ? skipped : undefined,
         });
         journalId = saved.id;
       }
@@ -317,7 +324,7 @@ export default function TrainHome() {
       const shown = new Set(shownSteps.map((s) => s.text));
       for (const step of shownSteps) {
         if (!step.protocolId) continue;
-        if (!shown.has(step.text) || skippedSteps.includes(step.text)) continue;
+        if (!shown.has(step.text) || skipped.includes(step.text)) continue;
         const value = metrics[step.protocolId];
         if (typeof value !== 'number') continue;
         await repo.saveBenchmark({ testId: step.protocolId, value, date: now() });
@@ -331,14 +338,43 @@ export default function TrainHome() {
       trackEvent('plan_completed', {
         focus: rest ? 'rest' : (plan.focus ?? 'rest'),
         kind: rest ? 'rest' : plan.kind,
-        skipped: skippedSteps.length,
+        skipped: skipped.length,
       });
       // Stay here: the debrief opens in place for the words the coach reads
       // tomorrow, rather than a separate form a page away.
+      clearRun();
+      setRun(null);
+      setRunOpen(false);
       setReload((n) => n + 1);
     } finally {
       setMarking(false);
     }
+  };
+
+  /** Snapshot the plan on screen and walk it one step at a time. */
+  const startRun = (steps: RunState['steps']) => {
+    const fresh: RunState = { day: dayIndex(now()), steps, index: 0, skipped: [] };
+    saveRun(fresh);
+    setRun(fresh);
+    setRunOpen(true);
+    trackEvent('session_run_started', { steps: steps.length });
+  };
+
+  const advanceRun = (skipped: boolean) => {
+    if (!run) return;
+    const step = run.steps[run.index];
+    const next: RunState = {
+      ...run,
+      index: run.index + 1,
+      skipped: skipped ? [...run.skipped, step.text] : run.skipped,
+    };
+    if (next.index >= run.steps.length) {
+      void markDone(next.skipped);
+      return;
+    }
+    saveRun(next);
+    setRun(next);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   useEffect(() => {
@@ -510,6 +546,11 @@ export default function TrainHome() {
     };
   }, [repo, dataVersion, router, today, reload]);
 
+  // A run paused yesterday is not today's; one paused this morning is.
+  useEffect(() => {
+    setRun(loadRun(now()));
+  }, [reload]);
+
   useEffect(() => {
     const suggestion = coach.suggestion;
     if (!state || !suggestion) return;
@@ -634,328 +675,367 @@ export default function TrainHome() {
         />
       )}
 
-      <TodayContext
-        value={today}
-        onChange={daily.update}
-        onConfirm={daily.confirm}
-        confirmed={daily.confirmed}
-      />
+      {runOpen && run && !state.dayLogged ? (
+        <SessionRun
+          run={run}
+          todayLogs={state.todayLogs}
+          benchmarks={state.benchmarks}
+          metrics={metrics}
+          onMetric={(id, value) => setMetrics((m) => ({ ...m, [id]: value }))}
+          onAdvance={advanceRun}
+          onPause={() => setRunOpen(false)}
+          finishing={marking}
+        />
+      ) : (
+        <>
+          <TodayContext
+            value={today}
+            onChange={daily.update}
+            onConfirm={daily.confirm}
+            confirmed={daily.confirmed}
+          />
 
-      <Card className={cardBorder}>
-        <div className="flex items-center justify-between">
-          <span
-            className={`text-sm font-bold uppercase tracking-wide ${ai ? 'text-success' : 'text-muted'}`}
-          >
-            {shownAi ? 'AI coach' : 'Today'}
-          </span>
-          {coach.status === 'loading' ? (
-            <span className="flex items-center gap-2 text-sm text-muted">
-              <span className="h-4 w-4 animate-spin rounded-full border-2 border-border border-t-success" />
-              Asking the coach…
-            </span>
-          ) : shownAi && coach.generatedAt ? (
-            <span className="text-sm text-muted">
-              updated {relativeTime(coach.generatedAt, now())}
-            </span>
-          ) : null}
-        </div>
-        <h2 className="mt-1 text-lg font-bold" data-nux="plan">
-          {shownAi ? shownAi.headline : rec.headline}
-        </h2>
-        <p className="mt-2 text-sm leading-5 text-muted">
-          {shownAi ? shownAi.rationale || rec.detail : rec.detail}
-        </p>
-        {nods.map((nod) => (
-          <p key={nod} className="mt-1.5 text-sm font-semibold text-primary">
-            {nod}
-          </p>
-        ))}
+          <Card className={cardBorder}>
+            <div className="flex items-center justify-between">
+              <span
+                className={`text-sm font-bold uppercase tracking-wide ${ai ? 'text-success' : 'text-muted'}`}
+              >
+                {shownAi ? 'AI coach' : 'Today'}
+              </span>
+              {coach.status === 'loading' ? (
+                <span className="flex items-center gap-2 text-sm text-muted">
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-border border-t-success" />
+                  Asking the coach…
+                </span>
+              ) : shownAi && coach.generatedAt ? (
+                <span className="text-sm text-muted">
+                  updated {relativeTime(coach.generatedAt, now())}
+                </span>
+              ) : null}
+            </div>
+            <h2 className="mt-1 text-lg font-bold" data-nux="plan">
+              {shownAi ? shownAi.headline : rec.headline}
+            </h2>
+            <p className="mt-2 text-sm leading-5 text-muted">
+              {shownAi ? shownAi.rationale || rec.detail : rec.detail}
+            </p>
+            {nods.map((nod) => (
+              <p key={nod} className="mt-1.5 text-sm font-semibold text-primary">
+                {nod}
+              </p>
+            ))}
 
-        {/* Judged live from today's call and never saved, so nothing here
+            {/* Judged live from today's call and never saved, so nothing here
             outlives the entries it came from. */}
-        {injuries.length > 0 && (
-          <div className="mt-4 rounded-xl border border-warning/40 bg-warning/10 px-3 py-2.5">
-            <p className="text-sm font-bold uppercase tracking-wide text-warning">Coach noticed</p>
-            {injuries.map((injury) => (
-              <div key={`${injury.bodyPart}:${injury.note}`} className="mt-1.5">
-                <p className="text-sm leading-5">{injury.note}</p>
-                {injury.evidence ? (
-                  <p className="mt-0.5 text-xs leading-4 text-muted">
-                    You wrote: “{injury.evidence}”
-                  </p>
-                ) : null}
+            {injuries.length > 0 && (
+              <div className="mt-4 rounded-xl border border-warning/40 bg-warning/10 px-3 py-2.5">
+                <p className="text-sm font-bold uppercase tracking-wide text-warning">
+                  Coach noticed
+                </p>
+                {injuries.map((injury) => (
+                  <div key={`${injury.bodyPart}:${injury.note}`} className="mt-1.5">
+                    <p className="text-sm leading-5">{injury.note}</p>
+                    {injury.evidence ? (
+                      <p className="mt-0.5 text-xs leading-4 text-muted">
+                        You wrote: “{injury.evidence}”
+                      </p>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            )}
+            {hint && (
+              <p className="mt-3 text-xs leading-4 text-muted">
+                You wrote “{hint.evidence}”.{' '}
+                {coach.status === 'loading'
+                  ? 'Asking the coach whether to train around it…'
+                  : 'Stop anything that hurts in that spot.'}
+              </p>
+            )}
+
+            {state.insights.map((insight) => (
+              <div key={insight.id} className="mt-4">
+                <InsightCard
+                  insight={insight}
+                  onAccept={(i) => void decideInsight(i, true)}
+                  onDismiss={(i) => void decideInsight(i, false)}
+                  busy={decidingInsight}
+                />
               </div>
             ))}
-          </div>
-        )}
-        {hint && (
-          <p className="mt-3 text-xs leading-4 text-muted">
-            You wrote “{hint.evidence}”.{' '}
-            {coach.status === 'loading'
-              ? 'Asking the coach whether to train around it…'
-              : 'Stop anything that hurts in that spot.'}
-          </p>
-        )}
 
-        {state.insights.map((insight) => (
-          <div key={insight.id} className="mt-4">
-            <InsightCard
-              insight={insight}
-              onAccept={(i) => void decideInsight(i, true)}
-              onDismiss={(i) => void decideInsight(i, false)}
-              busy={decidingInsight}
-            />
-          </div>
-        ))}
+            {rec.climbing && rec.kind === 'train' && !restToday && (
+              <div className="mt-4 rounded-xl border border-border/70 bg-surface-alt/40 px-3 py-2.5">
+                <p className="text-sm font-bold uppercase tracking-wide text-muted">
+                  What to climb
+                </p>
+                <p className="mt-1 text-sm leading-5">{rec.climbing.style}</p>
+                {rec.climbing.bands.work ? (
+                  <p className="mt-1.5 text-sm font-semibold">{formatBands(rec.climbing.bands)}</p>
+                ) : null}
+                <p className="mt-1 text-xs leading-4 text-muted">{rec.climbing.because}</p>
+              </div>
+            )}
 
-        {rec.climbing && rec.kind === 'train' && !restToday && (
-          <div className="mt-4 rounded-xl border border-border/70 bg-surface-alt/40 px-3 py-2.5">
-            <p className="text-sm font-bold uppercase tracking-wide text-muted">What to climb</p>
-            <p className="mt-1 text-sm leading-5">{rec.climbing.style}</p>
-            {rec.climbing.bands.work ? (
-              <p className="mt-1.5 text-sm font-semibold">{formatBands(rec.climbing.bands)}</p>
-            ) : null}
-            <p className="mt-1 text-xs leading-4 text-muted">{rec.climbing.because}</p>
-          </div>
-        )}
-
-        {planSteps.length > 0 && (
-          <div className="mt-4">
-            <div className="mb-1 flex items-baseline justify-between gap-2">
-              <p className="text-sm font-bold uppercase tracking-wide text-muted">
-                Today&apos;s plan
-              </p>
-              {rec.kind !== 'rest' && <p className="text-sm text-muted">untick what you skip</p>}
-            </div>
-            {/* Steps start ticked, so a normal day is still one tap to log.
+            {planSteps.length > 0 && (
+              <div className="mt-4">
+                <div className="mb-1 flex items-baseline justify-between gap-2">
+                  <p className="text-sm font-bold uppercase tracking-wide text-muted">
+                    Today&apos;s plan
+                  </p>
+                  {rec.kind !== 'rest' && (
+                    <p className="text-sm text-muted">untick what you skip</p>
+                  )}
+                </div>
+                {/* Steps start ticked, so a normal day is still one tap to log.
                 Unticking is how "ran out of time before the core work" gets
                 recorded — which the coach reads when planning tomorrow. */}
-            {displaySteps.map((planStep, i) => {
-              const step = planStep.text;
-              const done = !skippedSteps.includes(step);
-              const protocol = protocolById(planStep.protocolId ?? '');
-              const workout = planStep.workoutId ? workoutById(planStep.workoutId) : null;
-              const loggedToday = workout
-                ? state.todayLogs.find((l) => l.workoutId === workout.id)
-                : undefined;
-              return (
-                <div key={i}>
-                  <button
-                    type="button"
-                    onClick={() => toggleStep(step)}
-                    aria-pressed={done}
-                    className="mt-1 flex w-full gap-2 text-left"
-                  >
-                    <span
-                      className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border text-xs font-bold ${
-                        done
-                          ? 'border-primary bg-primary text-primary-text'
-                          : 'border-border text-transparent'
-                      }`}
-                    >
-                      ✓
-                    </span>
-                    <span
-                      className={`flex-1 text-sm leading-5 ${done ? '' : 'text-muted line-through'}`}
-                    >
-                      {step}
-                    </span>
-                  </button>
-                  {/* The workout runs in its own screen: timer, set-by-set log,
+                {displaySteps.map((planStep, i) => {
+                  const step = planStep.text;
+                  const done = !skippedSteps.includes(step);
+                  const protocol = protocolById(planStep.protocolId ?? '');
+                  const workout = planStep.workoutId ? workoutById(planStep.workoutId) : null;
+                  const loggedToday = workout
+                    ? state.todayLogs.find((l) => l.workoutId === workout.id)
+                    : undefined;
+                  return (
+                    <div key={i}>
+                      <button
+                        type="button"
+                        onClick={() => toggleStep(step)}
+                        aria-pressed={done}
+                        className="mt-1 flex w-full gap-2 text-left"
+                      >
+                        <span
+                          className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border text-xs font-bold ${
+                            done
+                              ? 'border-primary bg-primary text-primary-text'
+                              : 'border-border text-transparent'
+                          }`}
+                        >
+                          ✓
+                        </span>
+                        <span
+                          className={`flex-1 text-sm leading-5 ${done ? '' : 'text-muted line-through'}`}
+                        >
+                          {step}
+                        </span>
+                      </button>
+                      {/* The workout runs in its own screen: timer, set-by-set log,
                       and the next target. Logged sets are the record, so the
                       day's "log it" never writes a second number for them. */}
-                  {workout && planStep.target && done && (
-                    <div className="mt-2 ml-7 flex items-center gap-2">
-                      {loggedToday ? (
-                        <Link
-                          href={`/train/session/${workout.id}`}
-                          className="flex-1 truncate rounded-lg border border-success/50 bg-success/10 px-3 py-2 text-sm font-semibold text-success"
-                        >
-                          ✓ {describeSession(workout, summarizeSession(workout, loggedToday))}
-                        </Link>
-                      ) : (
-                        <Link
-                          href={`/train/session/${workout.id}`}
-                          aria-label={`Start ${workout.name}: ${
-                            planStep.target.kind === 'test' ? 'test' : planStep.target.label
-                          }`}
-                          className="flex items-center gap-2 rounded-lg bg-brand px-3 py-2 text-sm font-bold text-primary-text shadow shadow-primary/25 active:scale-[0.98]"
-                        >
-                          ▶ Start
-                          <span className="font-semibold opacity-90">
-                            {planStep.target.kind === 'test'
-                              ? 'test'
-                              : planStep.target.label.split(' · ')[0]}
-                          </span>
-                        </Link>
+                      {workout && planStep.target && done && (
+                        <div className="mt-2 ml-7 flex items-center gap-2">
+                          {loggedToday ? (
+                            <Link
+                              href={`/train/session/${workout.id}`}
+                              className="flex-1 truncate rounded-lg border border-success/50 bg-success/10 px-3 py-2 text-sm font-semibold text-success"
+                            >
+                              ✓ {describeSession(workout, summarizeSession(workout, loggedToday))}
+                            </Link>
+                          ) : (
+                            <Link
+                              href={`/train/session/${workout.id}`}
+                              aria-label={`Start ${workout.name}: ${
+                                planStep.target.kind === 'test' ? 'test' : planStep.target.label
+                              }`}
+                              className="flex items-center gap-2 rounded-lg bg-brand px-3 py-2 text-sm font-bold text-primary-text shadow shadow-primary/25 active:scale-[0.98]"
+                            >
+                              ▶ Start
+                              <span className="font-semibold opacity-90">
+                                {planStep.target.kind === 'test'
+                                  ? 'test'
+                                  : planStep.target.label.split(' · ')[0]}
+                              </span>
+                            </Link>
+                          )}
+                        </div>
+                      )}
+                      {protocol && done && (
+                        <ProtocolMetric
+                          protocol={protocol}
+                          value={metrics[protocol.id] ?? protocol.defaultValue}
+                          previous={latestForTest(state.benchmarks, protocol.id)?.value ?? null}
+                          onChange={(value) => setMetrics((m) => ({ ...m, [protocol.id]: value }))}
+                          disabled={marking}
+                        />
                       )}
                     </div>
-                  )}
-                  {protocol && done && (
-                    <ProtocolMetric
-                      protocol={protocol}
-                      value={metrics[protocol.id] ?? protocol.defaultValue}
-                      previous={latestForTest(state.benchmarks, protocol.id)?.value ?? null}
-                      onChange={(value) => setMetrics((m) => ({ ...m, [protocol.id]: value }))}
-                      disabled={marking}
-                    />
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {!shownAi && rec.focusItems.length > 0 && (
-          <div className="mt-4">
-            <p className="text-sm font-semibold text-muted">Target your weak spots</p>
-            {rec.focusItems.map((item) => (
-              <p key={item} className="mt-1 text-sm">
-                • {item}
-              </p>
-            ))}
-          </div>
-        )}
-
-        {shownAi && shownAi.watchOuts.length > 0 && (
-          <div className="mt-4">
-            <p className="text-sm font-semibold text-muted">Watch out for</p>
-            {shownAi.watchOuts.map((w) => (
-              <p key={w} className="mt-1 text-sm">
-                • {w}
-              </p>
-            ))}
-          </div>
-        )}
-
-        {shownAi && (
-          <p className="mt-4 text-xs leading-4 text-muted">
-            Coach read {state.coachRead.join(' · ')}
-            {today.note ? ' · today’s note' : ''}
-          </p>
-        )}
-
-        {shownAi && (
-          <div className="mt-2 flex items-center gap-4 border-t border-border pt-2">
-            {feedback ? (
-              <span className="text-sm italic text-muted">
-                Thanks — this helps tune your coach.
-              </span>
-            ) : (
-              <>
-                <span className="text-sm text-muted">Was this helpful?</span>
-                <button type="button" onClick={() => sendFeedback('up')} className="text-lg">
-                  👍
-                </button>
-                <button type="button" onClick={() => sendFeedback('down')} className="text-lg">
-                  👎
-                </button>
-              </>
+                  );
+                })}
+              </div>
             )}
-          </div>
-        )}
-      </Card>
 
-      {/* A budget rest day is a promise the climber made to themselves, not
+            {!shownAi && rec.focusItems.length > 0 && (
+              <div className="mt-4">
+                <p className="text-sm font-semibold text-muted">Target your weak spots</p>
+                {rec.focusItems.map((item) => (
+                  <p key={item} className="mt-1 text-sm">
+                    • {item}
+                  </p>
+                ))}
+              </div>
+            )}
+
+            {shownAi && shownAi.watchOuts.length > 0 && (
+              <div className="mt-4">
+                <p className="text-sm font-semibold text-muted">Watch out for</p>
+                {shownAi.watchOuts.map((w) => (
+                  <p key={w} className="mt-1 text-sm">
+                    • {w}
+                  </p>
+                ))}
+              </div>
+            )}
+
+            {shownAi && (
+              <p className="mt-4 text-xs leading-4 text-muted">
+                Coach read {state.coachRead.join(' · ')}
+                {today.note ? ' · today’s note' : ''}
+              </p>
+            )}
+
+            {shownAi && (
+              <div className="mt-2 flex items-center gap-4 border-t border-border pt-2">
+                {feedback ? (
+                  <span className="text-sm italic text-muted">
+                    Thanks — this helps tune your coach.
+                  </span>
+                ) : (
+                  <>
+                    <span className="text-sm text-muted">Was this helpful?</span>
+                    <button type="button" onClick={() => sendFeedback('up')} className="text-lg">
+                      👍
+                    </button>
+                    <button type="button" onClick={() => sendFeedback('down')} className="text-lg">
+                      👎
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+          </Card>
+
+          {/* A budget rest day is a promise the climber made to themselves, not
           physiology — so if they're standing in the gym anyway, give them
           somewhere to go rather than sending them home. */}
-      {rec.kind === 'rest' && rec.lightAlternative && (
-        <Card className="border-muted/40">
-          <p className="text-sm font-bold uppercase tracking-wide text-muted">
-            If you&apos;re training anyway
-          </p>
-          <p className="mt-1 text-sm leading-5">
-            Keep it genuinely easy — {rec.lightAlternative.label.toLowerCase()}, nothing near your
-            limit.
-          </p>
-          {showLight ? (
-            <div className="mt-3">
-              {rec.lightAlternative.plan.map((step, i) => (
-                <div key={i} className="mt-1 flex">
-                  <span className="w-5 text-sm font-bold text-muted">{i + 1}</span>
-                  <span className="flex-1 text-sm leading-5">{step}</span>
+          {rec.kind === 'rest' && rec.lightAlternative && (
+            <Card className="border-muted/40">
+              <p className="text-sm font-bold uppercase tracking-wide text-muted">
+                If you&apos;re training anyway
+              </p>
+              <p className="mt-1 text-sm leading-5">
+                Keep it genuinely easy — {rec.lightAlternative.label.toLowerCase()}, nothing near
+                your limit.
+              </p>
+              {showLight ? (
+                <div className="mt-3">
+                  {rec.lightAlternative.plan.map((step, i) => (
+                    <div key={i} className="mt-1 flex">
+                      <span className="w-5 text-sm font-bold text-muted">{i + 1}</span>
+                      <span className="flex-1 text-sm leading-5">{step}</span>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setShowLight(true)}
-              className="mt-2 text-sm font-semibold text-primary"
-            >
-              Show the light session
-            </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowLight(true)}
+                  className="mt-2 text-sm font-semibold text-primary"
+                >
+                  Show the light session
+                </button>
+              )}
+            </Card>
           )}
-        </Card>
-      )}
 
-      <WhyThisPlan
-        microcycle={rec.microcycle}
-        because={rec.because}
-        blockLabel={state.blockLabel}
-      />
+          <WhyThisPlan
+            microcycle={rec.microcycle}
+            because={rec.because}
+            blockLabel={state.blockLabel}
+          />
 
-      {coach.enabled && (
-        <Button variant="secondary" onClick={coach.refresh} disabled={coach.status === 'loading'}>
-          {coach.status === 'loading'
-            ? 'Asking your coach…'
-            : ai
-              ? 'Refresh AI suggestion'
-              : 'Get AI suggestion'}
-        </Button>
-      )}
-      {coach.status === 'error' && (
-        <p className="rounded-xl border border-warning/40 bg-warning/10 px-3 py-2 text-sm leading-5 text-warning">
-          Coach error: {coach.errorMessage ?? "Couldn't reach the coach."} Showing the built-in plan
-          instead.
-        </p>
-      )}
+          {coach.enabled && (
+            <Button
+              variant="secondary"
+              onClick={coach.refresh}
+              disabled={coach.status === 'loading'}
+            >
+              {coach.status === 'loading'
+                ? 'Asking your coach…'
+                : ai
+                  ? 'Refresh AI suggestion'
+                  : 'Get AI suggestion'}
+            </Button>
+          )}
+          {coach.status === 'error' && (
+            <p className="rounded-xl border border-warning/40 bg-warning/10 px-3 py-2 text-sm leading-5 text-warning">
+              Coach error: {coach.errorMessage ?? "Couldn't reach the coach."} Showing the built-in
+              plan instead.
+            </p>
+          )}
 
-      {!state.dayLogged && (
-        <Button onClick={markDone} disabled={marking}>
-          {marking
-            ? 'Saving…'
-            : restToday
-              ? 'Log today as a rest day'
-              : skippedSteps.length > 0
-                ? `Log it — ${planSteps.length - skippedSteps.length} of ${planSteps.length} done`
-                : 'I did this — log it'}
-        </Button>
-      )}
+          {!state.dayLogged && !restToday && displaySteps.length > 0 && (
+            <Button
+              onClick={() => (run ? setRunOpen(true) : startRun(displaySteps))}
+              disabled={marking}
+            >
+              {run
+                ? `▶ Resume session — step ${run.index + 1} of ${run.steps.length}`
+                : '▶ Start session'}
+            </Button>
+          )}
+          {!state.dayLogged && (
+            <Button
+              variant={restToday ? 'primary' : 'secondary'}
+              onClick={() => void markDone()}
+              disabled={marking}
+            >
+              {marking
+                ? 'Saving…'
+                : restToday
+                  ? 'Log today as a rest day'
+                  : skippedSteps.length > 0
+                    ? `Already done? Log it — ${planSteps.length - skippedSteps.length} of ${planSteps.length}`
+                    : 'Already done? Log it'}
+            </Button>
+          )}
 
-      <Link
-        href={
-          todayJournalId && !state.dayLogged
-            ? `/train/journal/${todayJournalId}`
-            : '/train/journal/new'
-        }
-      >
-        <Button variant="secondary">
-          {state.dayLogged
-            ? 'Log another session'
-            : todayJournalId
-              ? "Edit today's log"
-              : 'Log something else'}
-        </Button>
-      </Link>
-      {/* Off the main path: the plan already says what to run. These are for
+          <Link
+            href={
+              todayJournalId && !state.dayLogged
+                ? `/train/journal/${todayJournalId}`
+                : '/train/journal/new'
+            }
+          >
+            <Button variant="secondary">
+              {state.dayLogged
+                ? 'Log another session'
+                : todayJournalId
+                  ? "Edit today's log"
+                  : 'Log something else'}
+            </Button>
+          </Link>
+          {/* Off the main path: the plan already says what to run. These are for
           a day that goes off-script, and they shouldn't compete with it. */}
-      <details className="rounded-xl border border-border/70 px-4 py-2">
-        <summary className="cursor-pointer text-sm font-semibold text-muted">
-          Off-plan tools
-        </summary>
-        <div className="mt-2 flex flex-col gap-2 pb-2">
-          <Link href="/train/session" className="text-sm font-semibold text-primary">
-            Run any workout →
-          </Link>
-          <Link href="/train/energy-emotion" className="text-sm font-semibold text-primary">
-            Energy &amp; emotion check-in →
-          </Link>
-          <Link href="/train/exercises" className="text-sm font-semibold text-primary">
-            Exercise library →
-          </Link>
-        </div>
-      </details>
+          <details className="rounded-xl border border-border/70 px-4 py-2">
+            <summary className="cursor-pointer text-sm font-semibold text-muted">
+              Off-plan tools
+            </summary>
+            <div className="mt-2 flex flex-col gap-2 pb-2">
+              <Link href="/train/session" className="text-sm font-semibold text-primary">
+                Run any workout →
+              </Link>
+              <Link href="/train/energy-emotion" className="text-sm font-semibold text-primary">
+                Energy &amp; emotion check-in →
+              </Link>
+              <Link href="/train/exercises" className="text-sm font-semibold text-primary">
+                Exercise library →
+              </Link>
+            </div>
+          </details>
+        </>
+      )}
     </Screen>
   );
 }

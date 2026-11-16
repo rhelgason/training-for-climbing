@@ -94,7 +94,7 @@ function cueFor(step: NuxStep, pathname: string): Cue {
       if (pathname === '/train')
         return {
           target: 'plan',
-          text: 'Your session. Do it top to bottom — ▶ Start runs the timer and logs your sets. When you’re done, tap “I did this” and say how it went. That’s the whole app.',
+          text: 'Your session. Tap ▶ Start session and it walks you through each step, timers included. At the end, say how it went. That’s the whole app.',
           finish: 'Got it — let’s train',
         };
       return { target: 'tab-/train', text: 'Your plan is ready. Tap Today.' };

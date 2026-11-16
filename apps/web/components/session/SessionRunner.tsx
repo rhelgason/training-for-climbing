@@ -102,7 +102,18 @@ function setupFrom(workout: Workout, t: WorkoutTarget): Setup {
   };
 }
 
-export function SessionRunner({ workoutId }: { workoutId: string }) {
+export function SessionRunner({
+  workoutId,
+  onFinish,
+}: {
+  workoutId: string;
+  /**
+   * Set when the runner is one step of Today's session run-through. Saving
+   * then hands back to the run instead of offering its own way out.
+   */
+  onFinish?: () => void;
+}) {
+  const wrap = onFinish ? 'flex flex-col gap-4' : 'flex flex-col gap-4 px-4 pt-4 pb-6';
   const repo = useRepository();
   const router = useRouter();
   const [loaded, setLoaded] = useState<Loaded | null>(null);
@@ -316,7 +327,7 @@ export function SessionRunner({ workoutId }: { workoutId: string }) {
   // ── Saved ───────────────────────────────────────────────────────────────
   if (stage === 'saved' && saved) {
     return (
-      <div className="flex flex-col gap-4 px-4 pt-4 pb-6">
+      <div className={wrap}>
         <Card className="border-success">
           <p className="text-sm font-bold uppercase tracking-wide text-success">Logged</p>
           <h2 className="mt-1 text-lg font-bold">{workout.name}</h2>
@@ -333,10 +344,16 @@ export function SessionRunner({ workoutId }: { workoutId: string }) {
             <p className="mt-2 text-sm leading-5 text-warning">{saved.next.advice}</p>
           ) : null}
         </Card>
-        <Button onClick={() => router.push('/train')}>Back to today</Button>
-        <Button variant="secondary" onClick={() => router.push('/train/session')}>
-          Another workout
-        </Button>
+        {onFinish ? (
+          <Button onClick={onFinish}>Next step →</Button>
+        ) : (
+          <>
+            <Button onClick={() => router.push('/train')}>Back to today</Button>
+            <Button variant="secondary" onClick={() => router.push('/train/session')}>
+              Another workout
+            </Button>
+          </>
+        )}
       </div>
     );
   }
@@ -351,7 +368,7 @@ export function SessionRunner({ workoutId }: { workoutId: string }) {
   // ── Setup ───────────────────────────────────────────────────────────────
   if (stage === 'setup') {
     return (
-      <div className="flex flex-col gap-4 px-4 pt-4 pb-6">
+      <div className={wrap}>
         <Card
           className={
             target.kind === 'progress'
@@ -519,7 +536,7 @@ export function SessionRunner({ workoutId }: { workoutId: string }) {
   const currentGrip = phase ? sets[phase.set]?.grip : undefined;
 
   return (
-    <div className="flex flex-col gap-4 px-4 pt-4 pb-6">
+    <div className={wrap}>
       {stage === 'timer' && (
         <Card>
           <TimerRing

@@ -99,6 +99,8 @@ beforeEach(async () => {
   push.mockClear();
   replace.mockClear();
   coachCalls.mockClear();
+  // jsdom has no layout; the run scrolls each new step into view.
+  window.scrollTo = vi.fn() as unknown as typeof window.scrollTo;
   window.localStorage.clear();
   await seed();
 });
@@ -108,7 +110,7 @@ afterEach(cleanup);
 describe('TrainHome — logging the day', () => {
   it('records the prescribed focus, so tomorrow can honour recovery gaps', async () => {
     await renderScreen();
-    await click(screen.getByRole('button', { name: /I did this/i }));
+    await click(screen.getByRole('button', { name: /Already done\? Log it/ }));
 
     await waitFor(async () => {
       const journals = await repo.listJournals();
@@ -125,7 +127,7 @@ describe('TrainHome — logging the day', () => {
     await click(steps[0]);
 
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: /Log it — \d+ of \d+ done/ })).toBeInTheDocument(),
+      expect(screen.getByRole('button', { name: /Log it — \d+ of \d+/ })).toBeInTheDocument(),
     );
     await click(screen.getByRole('button', { name: /Log it —/ }));
 
@@ -137,10 +139,10 @@ describe('TrainHome — logging the day', () => {
 
   it('debriefs in place: effort and a sentence, then a look at tomorrow', async () => {
     await renderScreen();
-    await click(screen.getByRole('button', { name: /I did this/i }));
+    await click(screen.getByRole('button', { name: /Already done\? Log it/ }));
     await waitFor(() => expect(screen.getByText('Done for today ✓')).toBeInTheDocument());
     expect(push).not.toHaveBeenCalled();
-    expect(screen.queryByRole('button', { name: /I did this/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Already done\? Log it/ })).not.toBeInTheDocument();
     expect(screen.getByText('Tomorrow')).toBeInTheDocument();
 
     await click(screen.getByRole('button', { name: 'Hard' }));
@@ -159,7 +161,7 @@ describe('TrainHome — logging the day', () => {
 
   it('keeps the day logged when a second session is added by hand', async () => {
     await renderScreen();
-    await click(screen.getByRole('button', { name: /I did this/i }));
+    await click(screen.getByRole('button', { name: /Already done\? Log it/ }));
     await waitFor(() => expect(screen.getByText('Done for today ✓')).toBeInTheDocument());
     await repo.saveJournal({ date: now(), activities: ['cardio'], summary: 'Evening run' });
     cleanup();
@@ -172,12 +174,58 @@ describe('TrainHome — logging the day', () => {
   it('edits the day’s existing entry instead of creating a second', async () => {
     await repo.saveJournal({ date: now(), activities: ['climbing'] });
     await renderScreen();
-    await click(screen.getByRole('button', { name: /I did this/i }));
+    await click(screen.getByRole('button', { name: /Already done\? Log it/ }));
 
     await waitFor(async () => {
       expect((await repo.listJournals())[0].focus?.length).toBeGreaterThan(0);
     });
     expect(await repo.listJournals()).toHaveLength(1);
+  });
+});
+
+describe('TrainHome — the guided session', () => {
+  /** Walk to the end of the run, tapping Done (or Skip on the steps listed). */
+  async function walk(skip: number[] = []) {
+    for (let i = 0; i < 20; i++) {
+      const finish = screen.queryByRole('button', { name: 'Done — finish session' });
+      if (skip.includes(i)) await click(screen.getByRole('button', { name: 'Skip' }));
+      else await click(finish ?? screen.getByRole('button', { name: 'Done — next' }));
+      if (finish) return;
+    }
+    throw new Error('run never finished');
+  }
+
+  it('walks the plan one step at a time, records skips, and ends in the debrief', async () => {
+    await renderScreen();
+    await click(screen.getByRole('button', { name: 'This is right' }));
+    await click(screen.getByRole('button', { name: '▶ Start session' }));
+    expect(screen.getByText(/^Step 1 of \d+$/)).toBeInTheDocument();
+    const first = screen
+      .getByText(/^Step 1 of/)
+      .closest('div')!
+      .parentElement!.querySelector('p.text-base')!.textContent;
+
+    await click(screen.getByRole('button', { name: 'Skip' }));
+    expect(screen.getByText(/^Step 2 of/)).toBeInTheDocument();
+    await walk();
+
+    await waitFor(() => expect(screen.getByText('Done for today ✓')).toBeInTheDocument());
+    const [journal] = await repo.listJournals();
+    expect(journal.skipped).toEqual([first]);
+    expect(journal.focus?.length).toBeGreaterThan(0);
+  });
+
+  it('pauses and resumes at the same step, even after the app is closed', async () => {
+    await renderScreen();
+    await click(screen.getByRole('button', { name: '▶ Start session' }));
+    await click(screen.getByRole('button', { name: 'Done — next' }));
+    await click(screen.getByRole('button', { name: '⏸ Pause' }));
+    expect(screen.getByRole('button', { name: /Resume session — step 2 of/ })).toBeInTheDocument();
+
+    cleanup();
+    await renderScreen();
+    await click(screen.getByRole('button', { name: /Resume session — step 2 of/ }));
+    expect(screen.getByText(/^Step 2 of/)).toBeInTheDocument();
   });
 });
 
@@ -302,7 +350,7 @@ describe('TrainHome — when the coach is asked', () => {
     await waitFor(() => expect(lastCoachAsk().key).toBeDefined());
     expect(lastCoachAsk().auto).toBe(true);
 
-    await click(screen.getByRole('button', { name: /I did this/i }));
+    await click(screen.getByRole('button', { name: /Already done\? Log it/ }));
     cleanup();
     await renderScreen();
     await waitFor(() => expect(lastCoachAsk().auto).toBe(false));
