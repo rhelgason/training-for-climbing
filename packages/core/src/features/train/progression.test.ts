@@ -1,6 +1,11 @@
 import { workoutById } from '../../content/workouts';
 import type { ExerciseLogRecord, SetLog } from '../../db/types';
-import { adjustAfterFirstSet, progressWorkout, summarizeSession } from './progression';
+import {
+  adjustAfterFirstSet,
+  progressWorkout,
+  summarizeSession,
+  workoutHistory,
+} from './progression';
 
 const DAY = 24 * 60 * 60 * 1000;
 const NOW = Date.UTC(2026, 9, 23);
@@ -250,5 +255,25 @@ describe('adjustAfterFirstSet', () => {
     expect(adjustAfterFirstSet(maxHang, { loadLb: 30 }, failed(30))?.loadLb).toBe(25);
     expect(adjustAfterFirstSet(maxHang, { loadLb: 30 }, clean(30, 7))?.loadLb).toBe(35);
     expect(adjustAfterFirstSet(maxHang, { loadLb: 30 }, clean(30, 8.5))).toBeNull();
+  });
+});
+
+describe('workoutHistory', () => {
+  it('lists the last few sessions of this workout, newest first, leaving today out', () => {
+    const logs = [
+      log('max-hang-10', 9, [clean(20, 8)], { edgeMm: 20 }),
+      log('max-hang-10', 2, [clean(25, 8), failed(25)], { edgeMm: 20 }),
+      log('max-hang-10', 0, [clean(30, 9)], { edgeMm: 20 }),
+      log('repeaters-short', 1, [clean(0, 7)]),
+      log('max-hang-10', 30, [clean(10, 7)]),
+      log('max-hang-10', 40, [clean(5, 7)]),
+    ];
+    const history = workoutHistory(maxHang, logs, NOW);
+    expect(history.map((h) => h.when)).toEqual(['2 days ago', '9 days ago', '4 weeks ago']);
+    expect(history[0].line).toBe('+25 lb on 20 mm, 1/2 sets clean, top RPE 10');
+  });
+
+  it('is empty the first time', () => {
+    expect(workoutHistory(maxHang, [], NOW)).toEqual([]);
   });
 });

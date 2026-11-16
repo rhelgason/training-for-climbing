@@ -27,6 +27,7 @@ import { protocolById } from '../../content/protocols';
 import { GRIP_LABELS, type Workout, workoutById, type WorkoutMetric } from '../../content/workouts';
 import type { BenchmarkRecord, ExerciseLogRecord, GripId, SetLog } from '../../db/types';
 import { resolveBaseline } from './baseline';
+import { dayIndex } from '../../lib/day';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** After this long away, start a step lighter. */
@@ -212,6 +213,32 @@ export function describeSession(workout: Workout, s: SessionSummary): string {
   if (s.topRpe !== null) bits.push(`top RPE ${s.topRpe}`);
   if (log.pain) bits.push('with pain');
   return bits.join(', ').replace(', on', ' on').replace(', at', ' at');
+}
+
+export interface HistoryLine {
+  when: string;
+  line: string;
+}
+
+/**
+ * The last few times this exact workout was logged, newest first: what a
+ * climber glances at mid-session to know the number to beat. Today's own
+ * sets are left out — they're on screen already.
+ */
+export function workoutHistory(
+  workout: Workout,
+  logs: ExerciseLogRecord[],
+  nowMs: number,
+  limit = 3,
+): HistoryLine[] {
+  return logs
+    .filter((l) => l.workoutId === workout.id && dayIndex(l.date) < dayIndex(nowMs))
+    .sort((a, b) => b.date - a.date)
+    .slice(0, limit)
+    .map((l) => ({
+      when: ago(dayIndex(nowMs) - dayIndex(l.date)),
+      line: describeSession(workout, summarizeSession(workout, l)),
+    }));
 }
 
 /** Today's target as a single line. */

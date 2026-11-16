@@ -47,7 +47,7 @@ describe('SessionRunner', () => {
     await click(await screen.findByRole('button', { name: 'Log without the timer' }));
 
     // Two sets by default (the bottom of the book range): rate both clean at 8.
-    for (const group of screen.getAllByText('RPE')) {
+    for (const group of screen.getAllByText(/^RPE — how hard/)) {
       const chips = group.parentElement!;
       await click(Array.from(chips.querySelectorAll('button')).find((b) => b.textContent === '8')!);
     }

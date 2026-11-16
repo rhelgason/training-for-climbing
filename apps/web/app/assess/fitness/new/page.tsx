@@ -10,7 +10,8 @@ import { TestTimer } from '@/components/session/TestTimer';
 import { useRepository } from '@/lib/db/RepositoryProvider';
 
 /** Tests the app can time, so the result fills itself in. */
-const TIMED: Record<string, 'stopwatch' | 'repeaters'> = {
+const TIMED: Record<string, 'stopwatch' | 'repeaters' | 'hang5'> = {
+  'finger-strength-hang': 'hang5',
   'finger-endurance-repeaters': 'repeaters',
   'finger-endurance-hang': 'stopwatch',
   'rope-climb-power': 'stopwatch',
@@ -52,9 +53,17 @@ export default function FitnessFormScreen() {
   /** Latest recorded body weight, which the ratio tests divide by. */
   const [lastWeight, setLastWeight] = useState<number | null>(null);
   const [weight, setWeight] = useState('');
+  /** Each test's last result, so a timed test has a number to beat. */
+  const [previous, setPrevious] = useState<Record<string, number>>({});
 
   useEffect(() => {
     let on = true;
+    repo.listBenchmarks().then((all) => {
+      if (!on) return;
+      const latest: Record<string, number> = {};
+      for (const b of [...all].sort((a, b) => a.date - b.date)) latest[b.testId] = b.value;
+      setPrevious(latest);
+    });
     repo.listBodyWeights().then((weights) => {
       const latest = [...weights].sort((a, b) => b.date - a.date)[0];
       if (!on || !latest) return;
@@ -144,6 +153,7 @@ export default function FitnessFormScreen() {
               </div>
             ) : test.unit === 'ratio' && bodyWeight ? (
               <>
+                {TIMED[test.id] ? <TestTimer mode={TIMED[test.id]} onResult={() => {}} /> : null}
                 <p className="mt-2 text-sm text-muted">Added weight (lb)</p>
                 <NumberField value={values[test.id] ?? ''} onChange={(v) => set(test.id, v)} />
                 {parseValue(values[test.id]) !== null ? (
@@ -155,7 +165,11 @@ export default function FitnessFormScreen() {
             ) : (
               <>
                 {TIMED[test.id] ? (
-                  <TestTimer mode={TIMED[test.id]} onResult={(sec) => set(test.id, String(sec))} />
+                  <TestTimer
+                    mode={TIMED[test.id]}
+                    onResult={(sec) => set(test.id, String(sec))}
+                    previous={previous[test.id]}
+                  />
                 ) : null}
                 <NumberField value={values[test.id] ?? ''} onChange={(v) => set(test.id, v)} />
               </>

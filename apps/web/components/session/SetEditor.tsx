@@ -10,6 +10,18 @@ import { Stepper } from './Stepper';
 
 export const RPE_CHIPS = [6, 7, 7.5, 8, 8.5, 9, 9.5, 10];
 
+/** Rate of perceived exertion, said the way it feels at the end of a set. */
+const RPE_HINT: Record<number, string> = {
+  6: 'comfortable, four or more left',
+  7: 'three more in the tank',
+  7.5: 'two or three more',
+  8: 'two more in the tank',
+  8.5: 'one or two more',
+  9: 'one more, just',
+  9.5: 'maybe one more',
+  10: 'nothing left',
+};
+
 interface Props {
   index: number;
   workout: Workout;
@@ -128,7 +140,12 @@ export function SetEditor({
       ) : null}
 
       <div className="mt-2">
-        <p className="text-xs font-semibold text-muted">RPE</p>
+        <p className="text-xs font-semibold text-muted">
+          RPE — how hard, out of 10{' '}
+          <span className="font-normal">
+            ({RPE_HINT[set.rpe ?? 0] ?? '10 = nothing left, 8 = two more in the tank'})
+          </span>
+        </p>
         <div className="mt-1 flex flex-wrap gap-1.5">
           {RPE_CHIPS.map((r) => (
             <button

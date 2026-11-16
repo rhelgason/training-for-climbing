@@ -73,15 +73,37 @@ export function playCue(cue: Cue, sound: boolean): void {
 
 type WakeLock = { release: () => Promise<void> };
 
-/** Keep the screen awake while the timer runs. Returns a release function. */
+/**
+ * Keep the screen awake while the timer runs. Returns a release function.
+ *
+ * The browser drops the lock whenever the page is hidden (a text, the lock
+ * button), so it's taken again each time the page comes back.
+ */
 export async function holdWakeLock(): Promise<() => void> {
-  try {
-    const nav = navigator as unknown as {
-      wakeLock?: { request: (type: 'screen') => Promise<WakeLock> };
-    };
-    const lock = await nav.wakeLock?.request('screen');
-    return () => void lock?.release().catch(() => undefined);
-  } catch {
-    return () => undefined;
-  }
+  const nav = navigator as unknown as {
+    wakeLock?: { request: (type: 'screen') => Promise<WakeLock> };
+  };
+  if (!nav.wakeLock) return () => undefined;
+  let lock: WakeLock | null = null;
+  let held = true;
+  const take = async () => {
+    try {
+      const next = await nav.wakeLock!.request('screen');
+      if (held) lock = next;
+      else void next.release().catch(() => undefined);
+    } catch {
+      // Denied (low battery, no gesture yet): the timer still works.
+    }
+  };
+  const onVisible = () => {
+    if (held && document.visibilityState === 'visible') void take();
+  };
+  await take();
+  document.addEventListener('visibilitychange', onVisible);
+  return () => {
+    held = false;
+    document.removeEventListener('visibilitychange', onVisible);
+    void lock?.release().catch(() => undefined);
+    lock = null;
+  };
 }

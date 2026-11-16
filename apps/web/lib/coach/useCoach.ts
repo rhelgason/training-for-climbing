@@ -58,6 +58,12 @@ export interface CoachState {
   status: CoachStatus;
   /** True when the AI coach is opted-in (profile) and the server is configured. */
   enabled: boolean;
+  /**
+   * A plan for today's check-in is on its way: the call is out, or about to
+   * be. Screens show nothing in place of a plan while this is true, so the
+   * built-in plan never sits there looking like today's answer.
+   */
+  writing: boolean;
   /** The real failure reason when status is `error`; null otherwise. */
   errorMessage: string | null;
   refresh: () => void;
@@ -73,6 +79,8 @@ export function useCoach(
   const [status, setStatus] = useState<CoachStatus>('idle');
   const [enabled, setEnabled] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // Between a new check-in and the fetch decision (one profile read).
+  const [deciding, setDeciding] = useState(false);
   /** The context key we last auto-fetched for, so we try each one only once. */
   const autoTriedKey = useRef<string | null>(null);
 
@@ -159,10 +167,13 @@ export function useCoach(
       setSuggestion(cached.suggestion);
       setGeneratedAt(cached.generatedAt);
       setStatus('ready');
+    } else {
+      setDeciding(true);
     }
     (async () => {
       const profile = await repo.getProfile();
       if (!on) return;
+      setDeciding(false);
       const config = getSyncConfig();
       const isEnabled = Boolean(profile?.aiCoachEnabled) && isSyncConfigured(config);
       setEnabled(isEnabled);
@@ -212,6 +223,7 @@ export function useCoach(
     })();
     return () => {
       on = false;
+      setDeciding(false);
     };
   }, [repo, runRefresh, contextKey, auto]);
 
@@ -225,5 +237,13 @@ export function useCoach(
     void runRefresh('manual');
   }, [runRefresh, contextKey]);
 
-  return { suggestion, generatedAt, status, enabled, errorMessage, refresh };
+  return {
+    suggestion,
+    generatedAt,
+    status,
+    enabled,
+    errorMessage,
+    refresh,
+    writing: status === 'loading' || deciding,
+  };
 }

@@ -122,7 +122,9 @@ export function AssessResults({ id }: { id: string }) {
           <Button variant="secondary" onClick={() => router.replace('/assess/history')}>
             View history
           </Button>
-          <Button onClick={() => router.push('/you')}>Done</Button>
+          <Button onClick={() => router.push('/you')} data-nux="results-done">
+            Done
+          </Button>
         </div>
       </Screen>
     </>

@@ -121,6 +121,7 @@ export function TodayContext({ value, onChange, onConfirm, confirmed }: Props) {
             <button
               type="button"
               onClick={edit}
+              data-nux="checkin-change"
               className="shrink-0 text-sm font-semibold text-primary"
             >
               Change
@@ -144,6 +145,7 @@ export function TodayContext({ value, onChange, onConfirm, confirmed }: Props) {
               <button
                 type="button"
                 onClick={edit}
+                data-nux="checkin-change"
                 className="rounded-xl border border-border px-4 py-2 text-sm font-semibold text-primary"
               >
                 Change
@@ -157,12 +159,7 @@ export function TodayContext({ value, onChange, onConfirm, confirmed }: Props) {
 
   return (
     <Card className="flex flex-col gap-4" data-nux="checkin">
-      <div className="flex items-center justify-between">
-        <p className="text-sm font-bold uppercase tracking-wide text-muted">Today</p>
-        <button type="button" onClick={finish} className="text-sm font-semibold text-primary">
-          Done
-        </button>
-      </div>
+      <p className="text-sm font-bold uppercase tracking-wide text-muted">Today</p>
 
       <div>
         <p className="mb-2 text-sm font-semibold">Where?</p>
@@ -204,11 +201,21 @@ export function TodayContext({ value, onChange, onConfirm, confirmed }: Props) {
         <p className="mb-2 text-sm font-semibold">Anything else about today?</p>
         <input
           className={inputClass}
+          data-nux="checkin-note"
           placeholder="e.g. at a friend's gym, slept badly"
           value={draft.note ?? ''}
           onChange={(e) => set('note', e.target.value)}
         />
       </div>
+
+      <button
+        type="button"
+        onClick={finish}
+        data-nux="checkin-done"
+        className="rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-primary-text"
+      >
+        Done
+      </button>
     </Card>
   );
 }

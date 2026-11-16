@@ -25,6 +25,7 @@ import {
   trackEvent,
   trackableValue,
   workoutById,
+  workoutHistory,
   type BenchmarkRecord,
   type ExerciseLogRecord,
   type GripId,
@@ -105,8 +106,11 @@ function setupFrom(workout: Workout, t: WorkoutTarget): Setup {
 export function SessionRunner({
   workoutId,
   onFinish,
+  onDirtyChange,
 }: {
   workoutId: string;
+  /** Told whenever there are sets on screen that haven't been saved yet. */
+  onDirtyChange?: (dirty: boolean) => void;
   /**
    * Set when the runner is one step of Today's session run-through. Saving
    * then hands back to the run instead of offering its own way out.
@@ -197,6 +201,17 @@ export function SessionRunner({
       release?.();
     };
   }, [timer.running]);
+
+  const dirty = (stage === 'timer' || stage === 'log') && sets.length > 0;
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+  }, [dirty, onDirtyChange]);
+  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
+
+  const history = useMemo(
+    () => (workout && loaded ? workoutHistory(workout, loaded.prior, now()) : []),
+    [workout, loaded],
+  );
 
   if (missing) {
     return <p className="px-4 pt-6 text-muted">That workout isn’t in the catalog.</p>;
@@ -396,6 +411,17 @@ export function SessionRunner({
           ) : null}
         </Card>
 
+        {history.length > 0 && (
+          <Card>
+            <p className="text-sm font-bold uppercase tracking-wide text-muted">Last time</p>
+            {history.map((h, i) => (
+              <p key={i} className={`mt-1 text-sm leading-5 ${i === 0 ? '' : 'text-muted'}`}>
+                <span className="font-semibold">{h.when}:</span> {h.line}
+              </p>
+            ))}
+          </Card>
+        )}
+
         <Card>
           <p className="text-sm font-bold uppercase tracking-wide text-muted">Set up</p>
           <div className="mt-1 divide-y divide-border/60">
@@ -557,6 +583,11 @@ export function SessionRunner({
                 : ''}
               {nextPhase ? ` · next: ${phaseName(nextPhase, workout)}` : ''}
             </p>
+            {history[0] ? (
+              <p className="mt-1 text-xs leading-4 text-muted">
+                Last time ({history[0].when}): {history[0].line}
+              </p>
+            ) : null}
           </div>
           {!done && (
             <div className="mt-4 flex items-center justify-center gap-3">

@@ -67,7 +67,7 @@ export default function GoalsScreen() {
   return (
     <Screen>
       <h1 className="text-2xl font-bold">Goals</h1>
-      <Link href="/plan/goals/new" className="block">
+      <Link href="/plan/goals/new" className="block" data-nux="goals-add">
         <Button>+ Add a goal</Button>
       </Link>
 

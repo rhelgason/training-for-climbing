@@ -52,9 +52,12 @@ vi.mock('../../lib/coach/useCoach', () => ({
       enabled: false,
       errorMessage: null,
       refresh: () => {},
+      writing: coachWriting.value,
     };
   },
 }));
+/** Flip to pretend a coach call is in flight. */
+const coachWriting = { value: false };
 
 /** The context key and options of the newest render's coach request. */
 function lastCoachAsk(): { key: string | undefined; auto: boolean } {
@@ -99,6 +102,7 @@ beforeEach(async () => {
   push.mockClear();
   replace.mockClear();
   coachCalls.mockClear();
+  coachWriting.value = false;
   // jsdom has no layout; the run scrolls each new step into view.
   window.scrollTo = vi.fn() as unknown as typeof window.scrollTo;
   window.localStorage.clear();
@@ -180,6 +184,19 @@ describe('TrainHome — logging the day', () => {
       expect((await repo.listJournals())[0].focus?.length).toBeGreaterThan(0);
     });
     expect(await repo.listJournals()).toHaveLength(1);
+  });
+});
+
+describe('TrainHome — while the coach writes', () => {
+  it('shows no plan, and nothing to start, until the coach answers', async () => {
+    coachWriting.value = true;
+    render(<TrainHome />);
+    expect(await screen.findByText(/coach is writing today/i)).toBeInTheDocument();
+    expect(screen.queryByText("Today's plan")).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Start session/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Already done/ })).not.toBeInTheDocument();
+    // Logging your own session stays one tap away.
+    expect(screen.getByRole('button', { name: 'Log something else' })).toBeInTheDocument();
   });
 });
 

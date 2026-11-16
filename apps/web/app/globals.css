@@ -94,3 +94,28 @@ body {
 .display {
   letter-spacing: -0.02em;
 }
+
+/* First-use tutorial: the ring around the one thing to tap breathes, so the
+   eye finds it even on a busy screen. */
+@keyframes nux-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 3px var(--color-primary),
+      0 0 0 6px color-mix(in srgb, var(--color-primary) 35%, transparent);
+  }
+  50% {
+    box-shadow:
+      0 0 0 3px var(--color-primary),
+      0 0 0 14px color-mix(in srgb, var(--color-primary) 0%, transparent);
+  }
+}
+.nux-ring {
+  animation: nux-pulse 1.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .nux-ring {
+    animation: none;
+    box-shadow: 0 0 0 3px var(--color-primary);
+  }
+}

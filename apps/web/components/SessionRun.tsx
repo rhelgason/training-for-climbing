@@ -9,6 +9,7 @@
  * and cool-down are just a tick. The last Done logs the day and opens the
  * debrief.
  */
+import { useState } from 'react';
 import {
   latestForTest,
   protocolById,
@@ -49,6 +50,13 @@ export function SessionRun({
   const workout = step.workoutId && step.target ? workoutById(step.workoutId) : null;
   const logged = workout ? todayLogs.some((l) => l.workoutId === workout.id) : false;
   const protocol = step.protocolId ? protocolById(step.protocolId) : null;
+  // Sets on screen that aren't saved: leaving the step would throw them away.
+  const [dirty, setDirty] = useState(false);
+  const leave = (go: () => void) => () => {
+    if (dirty && !window.confirm('Leave this workout? The sets you haven’t saved will be lost.'))
+      return;
+    go();
+  };
 
   return (
     <Card className="border-primary" data-nux="run">
@@ -56,7 +64,7 @@ export function SessionRun({
         <p className="text-sm font-bold uppercase tracking-wide text-primary">
           Step {run.index + 1} of {total}
         </p>
-        <button type="button" onClick={onPause} className="text-sm font-semibold text-muted">
+        <button type="button" onClick={leave(onPause)} className="text-sm font-semibold text-muted">
           ⏸ Pause
         </button>
       </div>
@@ -85,6 +93,7 @@ export function SessionRun({
             key={`${run.index}:${workout.id}`}
             workoutId={workout.id}
             onFinish={() => onAdvance(false)}
+            onDirtyChange={setDirty}
           />
         </div>
       )}
@@ -103,7 +112,7 @@ export function SessionRun({
       <div className="mt-5 flex gap-2">
         <button
           type="button"
-          onClick={() => onAdvance(true)}
+          onClick={leave(() => onAdvance(true))}
           disabled={finishing}
           className="rounded-xl border border-border px-4 py-2.5 text-sm font-semibold text-muted disabled:opacity-60"
         >
@@ -111,7 +120,7 @@ export function SessionRun({
         </button>
         <button
           type="button"
-          onClick={() => onAdvance(false)}
+          onClick={leave(() => onAdvance(false))}
           disabled={finishing}
           className="flex-1 rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-primary-text disabled:opacity-60"
         >
