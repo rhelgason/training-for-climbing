@@ -8,7 +8,7 @@
  * closes it out either way, and an empty goal list asks for the next one.
  */
 import Link from 'next/link';
-import type { GoalRecord } from '@tfc/core';
+import { goalExtension, type GoalRecord } from '@tfc/core';
 import { Card } from './Card';
 
 export type GoalOutcome = 'done' | 'extend' | 'drop';
@@ -60,7 +60,7 @@ export function GoalCheckIn({
           onClick={() => onDecide(goal, 'extend')}
           className={`${chip} text-primary`}
         >
-          Extend 4 weeks
+          Extend {goalExtension(goal).label}
         </button>
         <button
           type="button"

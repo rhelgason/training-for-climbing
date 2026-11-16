@@ -38,3 +38,28 @@ export function completedGoals(goals: GoalRecord[]): GoalRecord[] {
 export function isOverdue(goal: GoalRecord, now: number): boolean {
   return goal.status === 'active' && typeof goal.targetDate === 'number' && goal.targetDate < now;
 }
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+/** A missed goal's window, when it never had a usable one, by horizon. */
+const FALLBACK_SPAN_DAYS: Record<GoalHorizon, number> = { short: 7, medium: 90, long: 365 };
+
+/**
+ * How much more time a missed goal gets: a third of the window it was given,
+ * at least a week and at most six months. A one-week goal gets another week,
+ * a three-month goal another month, a year-long goal another four months —
+ * enough to finish what was close, not so much that a stale goal steers the
+ * season. Rounded to weeks, or to months past four weeks, so it reads cleanly.
+ */
+export function goalExtension(goal: GoalRecord): { days: number; label: string } {
+  const span =
+    goal.targetDate !== undefined && goal.targetDate > goal.createdAt
+      ? Math.round((goal.targetDate - goal.createdAt) / DAY_MS)
+      : FALLBACK_SPAN_DAYS[goal.horizon];
+  const raw = Math.min(180, Math.max(7, span / 3));
+  if (raw < 28) {
+    const weeks = Math.ceil(raw / 7);
+    return { days: weeks * 7, label: weeks === 1 ? '1 week' : `${weeks} weeks` };
+  }
+  const months = Math.round(raw / 30);
+  return { days: months * 30, label: months === 1 ? '1 month' : `${months} months` };
+}

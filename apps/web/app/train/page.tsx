@@ -12,6 +12,7 @@ import {
   describeSession,
   detectAbilityDrift,
   dismissInsight,
+  goalExtension,
   isOverdue,
   formatBands,
   latestReadingForDay,
@@ -554,7 +555,7 @@ export default function TrainHome() {
         outcome === 'done'
           ? { status: 'done', completedAt: nowMs }
           : outcome === 'extend'
-            ? { targetDate: nowMs + 28 * DAY_MS }
+            ? { targetDate: nowMs + goalExtension(goal).days * DAY_MS }
             : { status: 'archived' },
       );
       trackEvent('goal_resolved', { outcome });

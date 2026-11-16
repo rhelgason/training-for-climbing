@@ -240,13 +240,21 @@ describe('TrainHome — tied back to what they set up', () => {
     expect(await screen.findByText(/What.s next\?/)).toBeInTheDocument();
   });
 
-  it('extends a lapsed goal by four weeks', async () => {
-    await repo.saveGoal({ title: 'Send V7', horizon: 'medium', targetDate: now() - 2 * DAY });
+  it('extends a lapsed goal by a third of the time it was first given', async () => {
+    // Set 92 days ago for a 90-day window: another month.
+    await repo.saveGoal({
+      title: 'Send V7',
+      horizon: 'medium',
+      createdAt: now() - 92 * DAY,
+      targetDate: now() - 2 * DAY,
+    });
     await renderScreen();
-    await click(screen.getByRole('button', { name: 'Extend 4 weeks' }));
-    await waitFor(async () =>
-      expect((await repo.listGoals())[0].targetDate).toBeGreaterThan(now() + 27 * DAY),
-    );
+    await click(screen.getByRole('button', { name: 'Extend 1 month' }));
+    await waitFor(async () => {
+      const target = (await repo.listGoals())[0].targetDate!;
+      expect(target).toBeGreaterThan(now() + 29 * DAY);
+      expect(target).toBeLessThan(now() + 31 * DAY);
+    });
     await waitFor(() => expect(screen.queryByText('Deadline passed')).not.toBeInTheDocument());
   });
 
