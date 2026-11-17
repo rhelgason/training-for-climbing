@@ -698,7 +698,9 @@ export default function TrainHome() {
             confirmed={daily.confirmed}
           />
 
-          {coachWriting ? (
+          {/* Logged: the debrief above is the day. The plan would recompute
+          with today on the books and show tomorrow's session as today's. */}
+          {state.dayLogged ? null : coachWriting ? (
             <Card className="border-success" data-nux="coach-writing">
               <div className="flex items-center gap-3">
                 <span className="h-5 w-5 shrink-0 animate-spin rounded-full border-2 border-border border-t-success" />
@@ -728,6 +730,24 @@ export default function TrainHome() {
                     </span>
                   ) : null}
                 </div>
+                {coach.status === 'error' && (
+                  <div className="mt-3 rounded-xl border border-warning/40 bg-warning/10 px-3 py-3">
+                    <p className="text-sm leading-5 text-warning">
+                      Couldn&apos;t reach your coach, so this is the built-in plan. It follows the
+                      same book rules, just without today&apos;s note.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={coach.refresh}
+                      className="mt-3 rounded-xl border border-warning/60 px-4 py-2 text-sm font-semibold text-warning active:scale-[0.98]"
+                    >
+                      Try the coach again
+                    </button>
+                    {coach.errorMessage && (
+                      <p className="mt-2 text-xs leading-4 text-muted">{coach.errorMessage}</p>
+                    )}
+                  </div>
+                )}
                 <h2 className="mt-1 text-lg font-bold" data-nux="plan">
                   {shownAi ? shownAi.headline : rec.headline}
                 </h2>
@@ -796,7 +816,7 @@ export default function TrainHome() {
 
                 {planSteps.length > 0 && (
                   <div className="mt-4">
-                    <div className="mb-1 flex items-baseline justify-between gap-2">
+                    <div className="mb-2 flex items-baseline justify-between gap-2">
                       <p className="text-sm font-bold uppercase tracking-wide text-muted">
                         Today&apos;s plan
                       </p>
@@ -807,82 +827,93 @@ export default function TrainHome() {
                     {/* Steps start ticked, so a normal day is still one tap to log.
                 Unticking is how "ran out of time before the core work" gets
                 recorded — which the coach reads when planning tomorrow. */}
-                    {displaySteps.map((planStep, i) => {
-                      const step = planStep.text;
-                      const done = !skippedSteps.includes(step);
-                      const protocol = protocolById(planStep.protocolId ?? '');
-                      const workout = planStep.workoutId ? workoutById(planStep.workoutId) : null;
-                      const loggedToday = workout
-                        ? state.todayLogs.find((l) => l.workoutId === workout.id)
-                        : undefined;
-                      return (
-                        <div key={i}>
-                          <button
-                            type="button"
-                            onClick={() => toggleStep(step)}
-                            aria-pressed={done}
-                            className="mt-1 flex w-full gap-2 text-left"
-                          >
-                            <span
-                              className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border text-xs font-bold ${
-                                done
-                                  ? 'border-primary bg-primary text-primary-text'
-                                  : 'border-border text-transparent'
-                              }`}
+                    <div className="divide-y divide-border/50">
+                      {displaySteps.map((planStep, i) => {
+                        const step = planStep.text;
+                        const done = !skippedSteps.includes(step);
+                        const protocol = protocolById(planStep.protocolId ?? '');
+                        const workout = planStep.workoutId ? workoutById(planStep.workoutId) : null;
+                        const loggedToday = workout
+                          ? state.todayLogs.find((l) => l.workoutId === workout.id)
+                          : undefined;
+                        return (
+                          <div key={i} className="py-3 first:pt-1 last:pb-0">
+                            <button
+                              type="button"
+                              onClick={() => toggleStep(step)}
+                              aria-pressed={done}
+                              className="flex w-full gap-2.5 text-left"
                             >
-                              ✓
-                            </span>
-                            <span
-                              className={`flex-1 text-sm leading-5 ${done ? '' : 'text-muted line-through'}`}
-                            >
-                              {step}
-                            </span>
-                          </button>
-                          {/* The workout runs in its own screen: timer, set-by-set log,
+                              <span
+                                className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border text-xs font-bold ${
+                                  done
+                                    ? 'border-primary bg-primary text-primary-text'
+                                    : 'border-border text-transparent'
+                                }`}
+                              >
+                                ✓
+                              </span>
+                              <span
+                                className={`flex-1 text-sm leading-5 ${done ? '' : 'text-muted line-through'}`}
+                              >
+                                {step}
+                              </span>
+                            </button>
+                            {/* The workout runs in its own screen: timer, set-by-set log,
                       and the next target. Logged sets are the record, so the
                       day's "log it" never writes a second number for them. */}
-                          {workout && planStep.target && done && (
-                            <div className="mt-2 ml-7 flex items-center gap-2">
-                              {loggedToday ? (
-                                <Link
-                                  href={`/train/session/${workout.id}`}
-                                  className="flex-1 truncate rounded-lg border border-success/50 bg-success/10 px-3 py-2 text-sm font-semibold text-success"
-                                >
-                                  ✓{' '}
-                                  {describeSession(workout, summarizeSession(workout, loggedToday))}
-                                </Link>
-                              ) : (
-                                <Link
-                                  href={`/train/session/${workout.id}`}
-                                  aria-label={`Start ${workout.name}: ${
-                                    planStep.target.kind === 'test' ? 'test' : planStep.target.label
-                                  }`}
-                                  className="flex items-center gap-2 rounded-lg bg-brand px-3 py-2 text-sm font-bold text-primary-text shadow shadow-primary/25 active:scale-[0.98]"
-                                >
-                                  ▶ Start
-                                  <span className="font-semibold opacity-90">
-                                    {planStep.target.kind === 'test'
-                                      ? 'test'
-                                      : planStep.target.label.split(' · ')[0]}
-                                  </span>
-                                </Link>
-                              )}
-                            </div>
-                          )}
-                          {protocol && done && (
-                            <ProtocolMetric
-                              protocol={protocol}
-                              value={metrics[protocol.id] ?? protocol.defaultValue}
-                              previous={latestForTest(state.benchmarks, protocol.id)?.value ?? null}
-                              onChange={(value) =>
-                                setMetrics((m) => ({ ...m, [protocol.id]: value }))
-                              }
-                              disabled={marking}
-                            />
-                          )}
-                        </div>
-                      );
-                    })}
+                            {workout && planStep.target && done && (
+                              <div className="mt-3 ml-7.5 flex items-center gap-2">
+                                {loggedToday ? (
+                                  <Link
+                                    href={`/train/session/${workout.id}`}
+                                    className="flex-1 truncate rounded-xl border border-success/50 bg-success/10 px-4 py-2.5 text-sm font-semibold text-success"
+                                  >
+                                    ✓{' '}
+                                    {describeSession(
+                                      workout,
+                                      summarizeSession(workout, loggedToday),
+                                    )}
+                                  </Link>
+                                ) : (
+                                  <Link
+                                    href={`/train/session/${workout.id}`}
+                                    aria-label={`Start ${workout.name}: ${
+                                      planStep.target.kind === 'test'
+                                        ? 'test'
+                                        : planStep.target.label
+                                    }`}
+                                    className="flex items-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-sm font-bold text-primary-text shadow shadow-primary/25 active:scale-[0.98]"
+                                  >
+                                    ▶ Start
+                                    <span className="font-semibold opacity-90">
+                                      {planStep.target.kind === 'test'
+                                        ? 'test'
+                                        : planStep.target.label.split(' · ')[0]}
+                                    </span>
+                                  </Link>
+                                )}
+                              </div>
+                            )}
+                            {protocol && done && (
+                              <div className="ml-7.5">
+                                <ProtocolMetric
+                                  protocol={protocol}
+                                  value={metrics[protocol.id] ?? protocol.defaultValue}
+                                  previous={
+                                    latestForTest(state.benchmarks, protocol.id)?.value ?? null
+                                  }
+                                  onChange={(value) =>
+                                    setMetrics((m) => ({ ...m, [protocol.id]: value }))
+                                  }
+                                  disabled={marking}
+                                />
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
 
@@ -995,12 +1026,6 @@ export default function TrainHome() {
                       ? 'Refresh AI suggestion'
                       : 'Get AI suggestion'}
                 </Button>
-              )}
-              {coach.status === 'error' && (
-                <p className="rounded-xl border border-warning/40 bg-warning/10 px-3 py-2 text-sm leading-5 text-warning">
-                  Coach error: {coach.errorMessage ?? "Couldn't reach the coach."} Showing the
-                  built-in plan instead.
-                </p>
               )}
 
               {!state.dayLogged && !restToday && displaySteps.length > 0 && (

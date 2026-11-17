@@ -139,7 +139,7 @@ export function JournalForm({ journalId }: { journalId?: string }) {
             fields are as long as the climber wants — a sentence is fine, a
             paragraph is better. */}
         <div>
-          <p className="mb-1 font-semibold">What did you do?</p>
+          <p className="mb-1 font-semibold">How did it go?</p>
           <p className="mb-2 text-sm leading-5 text-muted">
             Grades, sets, how much of the plan you got through. The more concrete, the better
             tomorrow&apos;s session fits.

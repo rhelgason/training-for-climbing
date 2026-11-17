@@ -48,16 +48,17 @@ vi.mock('../../lib/coach/useCoach', () => ({
     return {
       suggestion: null,
       generatedAt: null,
-      status: 'idle',
-      enabled: false,
-      errorMessage: null,
-      refresh: () => {},
+      status: coachWriting.status,
+      enabled: coachWriting.status === 'error',
+      errorMessage: coachWriting.status === 'error' ? 'Gemini quota exceeded' : null,
+      refresh: coachRefresh,
       writing: coachWriting.value,
     };
   },
 }));
 /** Flip to pretend a coach call is in flight. */
-const coachWriting = { value: false };
+const coachWriting = { value: false, status: 'idle' as 'idle' | 'error' };
+const coachRefresh = vi.fn();
 
 /** The context key and options of the newest render's coach request. */
 function lastCoachAsk(): { key: string | undefined; auto: boolean } {
@@ -95,7 +96,12 @@ async function seed(): Promise<void> {
 
 async function renderScreen() {
   render(<TrainHome />);
-  await waitFor(() => expect(screen.getByText("Today's plan")).toBeInTheDocument());
+  // A logged day shows its debrief in place of the plan.
+  await waitFor(() =>
+    expect(
+      screen.queryByText("Today's plan") ?? screen.queryByText('Done for today ✓'),
+    ).not.toBeNull(),
+  );
 }
 
 beforeEach(async () => {
@@ -103,6 +109,8 @@ beforeEach(async () => {
   replace.mockClear();
   coachCalls.mockClear();
   coachWriting.value = false;
+  coachWriting.status = 'idle';
+  coachRefresh.mockClear();
   // jsdom has no layout; the run scrolls each new step into view.
   window.scrollTo = vi.fn() as unknown as typeof window.scrollTo;
   window.localStorage.clear();
@@ -197,6 +205,27 @@ describe('TrainHome — while the coach writes', () => {
     expect(screen.queryByRole('button', { name: /Already done/ })).not.toBeInTheDocument();
     // Logging your own session stays one tap away.
     expect(screen.getByRole('button', { name: 'Log something else' })).toBeInTheDocument();
+  });
+});
+
+describe('TrainHome — after logging', () => {
+  it('shows the debrief, not a recomputed plan that is really tomorrow', async () => {
+    await renderScreen();
+    await click(screen.getByRole('button', { name: /Already done\? Log it/ }));
+    await waitFor(() => expect(screen.getByText('Done for today ✓')).toBeInTheDocument());
+    expect(screen.queryByText("Today's plan")).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Log another session' })).toBeInTheDocument();
+  });
+});
+
+describe('TrainHome — when the coach fails', () => {
+  it('falls back to the built-in plan and offers a retry', async () => {
+    coachWriting.status = 'error';
+    await renderScreen();
+    expect(screen.getByText(/Couldn.t reach your coach/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Start session/ })).toBeInTheDocument();
+    await click(screen.getByRole('button', { name: 'Try the coach again' }));
+    expect(coachRefresh).toHaveBeenCalled();
   });
 });
 

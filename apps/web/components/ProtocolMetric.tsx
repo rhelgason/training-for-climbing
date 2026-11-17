@@ -41,7 +41,7 @@ export function ProtocolMetric({
     delta === null || delta === 0 ? null : protocol.lowerIsBetter ? delta < 0 : delta > 0;
 
   return (
-    <div className="mt-2 rounded-lg border border-border/70 bg-surface-alt/40 px-3 py-2">
+    <div className="mt-3 rounded-xl border border-border/70 bg-surface-alt/40 px-3 py-2.5">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <p className="text-sm font-semibold">{protocol.metricLabel}</p>

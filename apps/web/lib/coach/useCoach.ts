@@ -193,7 +193,15 @@ export function useCoach(
       }
       if (decision.action === 'skip') {
         const pending = inflight.get(contextKey);
-        if (!pending) return;
+        if (!pending) {
+          // This check-in already failed once this session. Say so, so the
+          // built-in plan isn't mistaken for the coach's and a retry is offered.
+          if (isEnabled && readFailedKey() === contextKey) {
+            setErrorMessage('The last try failed.');
+            setStatus('error');
+          }
+          return;
+        }
         setStatus('loading');
         void pending
           .then((fresh) => {
